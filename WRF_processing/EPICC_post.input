@@ -1,0 +1,63 @@
+# File with EPICC postprocessing input arguments
+# To be used with EPICC WRF postprocessing package based on WRF-python
+
+path_in = /vg6/dargueso-NO-BKUP/WRF_OUT/EPICC/
+path_out = /vg5/dargueso-NO-BKUP/postprocessed/EPICC/
+institution = UIB
+wrun = EPICC_2km_ERA5_HVC_GWD
+
+
+patt = wrfprec
+dom  = d01
+
+syear = 2020
+eyear = 2020
+smonth = 7
+emonth = 8
+
+acc_dt = 10.
+
+
+
+#### Requested output variables (DO NOT CHANGE THIS LINE) ####
+
+#TAS
+PR
+#TD2
+#PRNC
+#PSL
+#HUSS
+#SST
+#OLR
+#CLOUDFRAC
+#SWDOWN
+#WDIR10
+#WSPD10
+#UA
+#VA
+#TC
+#P
+#Z
+#SPECHUM
+#ET
+#GEOPOT
+#CAPE2D
+#TD
+#RH
+#Q2DIV
+#SMOIS
+#PBLH
+#THETAE
+#QVAPOR
+#LH
+#QCLOUD
+#CTT
+#QICE
+#CLDFRA
+#U10MET
+#V10MET
+#W5L
+#OMEGA
+#PW
+#TVAVG
+#PSFC
