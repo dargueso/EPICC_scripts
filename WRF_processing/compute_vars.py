@@ -17,12 +17,12 @@
 #
 #####################################################################
 """
-import xarray as xr
+
 import netCDF4 as nc
 import numpy as np
 import datetime as dt
 import wrf as wrf
-from atmopy.constants import const as const
+from constants import const as const
 from scipy.ndimage import gaussian_filter
 
 #wrf.set_cache_size(0)
