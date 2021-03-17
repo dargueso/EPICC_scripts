@@ -15,14 +15,14 @@ eyear = 2020
 smonth = 7
 emonth = 8
 
-acc_dt = 10.
+acc_dt = 10
 
 
 
 #### Requested output variables (DO NOT CHANGE THIS LINE) ####
 
 #TAS
-PR
+PRNC
 #TD2
 #PRNC
 #PSL

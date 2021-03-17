@@ -189,8 +189,8 @@ def postproc_var(inputinf,varn):
 
             # ## Creating netcdf files
             fileout = "%s/%s_%s_%s.nc" %(fullpathout,institution,varn,str(sdate))
-
-            ref_file = nc.Dataset(filesin[0])
+            fileref = sorted(glob('%s/%s_%s_%s*' %(fullpathin,'wrfout',dom,sdate)))[0]
+            ref_file = nc.Dataset(fileref)
             lat=ref_file.variables['XLAT'][0,:]
             lon=ref_file.variables['XLONG'][0,:]
 
@@ -279,8 +279,8 @@ def postproc_var_byday(inputinf,varn,date):
 
     # ## Creating netcdf files
     fileout = "%s/%s_%s_%s.nc" %(fullpathout,institution,varn,str(sdate))
-
-    ref_file = nc.Dataset(filesin[0])
+    fileref = sorted(glob('%s/%s_%s_%s*' %(fullpathin,'wrfout',dom,sdate)))[0]
+    ref_file = nc.Dataset(fileref)
     lat=ref_file.variables['XLAT'][0,:]
     lon=ref_file.variables['XLONG'][0,:]
 
@@ -340,7 +340,7 @@ for wrun in wrun_all:
     for n,syear in enumerate(syear_all):
         eyear = eyear_all[n]
         fullpathin = path_in + "/" + wrun + "/out"
-        fullpathout = path_out + "/" + wrun + "/" + syear + "-" + eyear
+        fullpathout = path_out + "/" + wrun + "/" + syear
         inputinf['fullpathin']=fullpathin
         inputinf['fullpathout']=fullpathout
 
@@ -359,12 +359,12 @@ for wrun in wrun_all:
 
         for varn in varnames:
 
-            d1 = dt.datetime(int(syear),smonth,1)
+            d1 = dt.datetime(int(syear),smonth,22)
             d2 = dt.datetime(int(eyear),emonth,calendar.monthrange(int(eyear), emonth)[1])+dt.timedelta(days=1)
             total_hours = (d2-d1).days*24+(d2-d1).seconds//3600
             total_days = (d2-d1).days
             date_list= [d1 + dt.timedelta(days=x) for x in range(0, total_days)]
-            Parallel(n_jobs=10)(delayed(postproc_var_byday)(inputinf,varn,date) for date in date_list)
+            Parallel(n_jobs=1)(delayed(postproc_var_byday)(inputinf,varn,date) for date in date_list)
 
         ctime=checkpoint(ctime_i)
 
