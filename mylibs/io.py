@@ -23,7 +23,9 @@ from glob import glob
 import pandas as pd
 import numpy as np
 import netCDF4 as nc
+import pdb; pdb.set_trace()
 
+import epicc_config as cfg
 
 def load_wrf(wrun,freq,var,levs=[]):
 
