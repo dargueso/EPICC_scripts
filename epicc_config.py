@@ -37,7 +37,7 @@ loc = 'PMI'
 ref_res = '2'
 
 wrun_ref = 'EPICC_%skm_ERA5_HVC_GWD' %(ref_res)
-geofile_ref = '%s/geo_em.d01.EPICC_2km_ERA5_HVC_GWD.nc'%(geoem_in,ref_res)
+geofile_ref = '%s/geo_em.d01.EPICC_2km_ERA5_HVC_GWD.nc'%(geoem_in)
 
 zb = 5 #Buffer zone in maps
 

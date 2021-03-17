@@ -28,9 +28,9 @@ import matplotlib.pyplot as plt
 import wrf
 import string
 
-from ..lib import visualization as vis
-from ..lib import io
-from .. import config as cfg
+from mylibs import visualization as vis
+from mylibs import io
+import epicc_config as cfg
 
 
 varname = ['PRNC']
