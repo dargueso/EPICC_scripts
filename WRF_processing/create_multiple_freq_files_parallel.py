@@ -77,11 +77,11 @@ for wrun in WRF_runs:
 
             if freq == '10MIN':
                 patt="%s_%s"%(patt_inst,'10MIN')
-                Parallel(n_jobs=10)(delayed(wrfu.create_10min_files)(fullpathin,fullpathout,syear,eyear,smonth,emonth,patt_inst,varn) for varn in varnames_hreq)
+                Parallel(n_jobs=10)(delayed(wrfu.create_10min_files)(fullpathin,fullpathout,syear,eyear,smonth,emonth,patt_inst,varn) for varn in varnames_hfreq)
 
             if freq == '01H':
                 patt="%s_%s"%(patt_inst,'10MIN')
-                Parallel(n_jobs=10)(delayed(wrfu.create_hourly_files_cdo)(fullpathin,fullpathout,syear,eyear,smonth,emonth,patt_inst,varn) for varn in varnames_hreq)
+                Parallel(n_jobs=10)(delayed(wrfu.create_hourly_files_cdo)(fullpathin,fullpathout,syear,eyear,smonth,emonth,patt_inst,varn) for varn in varnames_hfreq)
 
                 patt="%s_%s"%(patt_inst,'01H')
                 Parallel(n_jobs=10)(delayed(wrfu.create_hourly_files)(fullpathin,fullpathout,syear,eyear,smonth,emonth,patt_inst,varn) for varn in varnames_lreq)
