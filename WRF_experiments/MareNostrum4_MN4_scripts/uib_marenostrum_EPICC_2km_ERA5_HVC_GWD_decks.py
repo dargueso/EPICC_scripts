@@ -93,12 +93,12 @@ import datetime as dt
 import calendar
 
 # Start month of the simulation. Will start at day 1.
-start_month = 08
-start_year = 2021
+start_month = 8
+start_year = 2020
 
 # End month of the simulation (included).
-end_month = 08
-end_year = 2021
+end_month =9 
+end_year = 2020
 
 # If starting from scratch (not a continuation run)
 isrestart = False
@@ -190,11 +190,11 @@ while (year < end_year or (year == end_year and month < end_month)):
 
         # Replace template fields by values
         lines = lines.replace("%BDYdir%", BDY_dir)
-        lines = lines.replace("%BDYuser%", BDY_user)
+        #lines = lines.replace("%BDYuser%", BDY_user)
         lines = lines.replace("%OUTdir%", OUT_dir)
-        lines = lines.replace("%OUTuser%", OUT_user)
+        #lines = lines.replace("%OUTuser%", OUT_user)
         lines = lines.replace("%RSTdir%", RST_dir)
-        lines = lines.replace("%RSTuser%", RST_user)
+        #lines = lines.replace("%RSTuser%", RST_user)
         lines = lines.replace("%email%", email)
         lines = lines.replace("%syear%", str(s_simyea))
         lines = lines.replace("%smonth%", smonstr)

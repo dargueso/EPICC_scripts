@@ -4,7 +4,7 @@
 # @Date:   2017-10-30T17:40:49+01:00
 # @Email:  d.argueso@uib.es
 # @Last modified by:   daniel
-# @Last modified time: 2021-03-14T20:51:35+01:00
+# @Last modified time: 2021-03-16T22:26:50+01:00
 
 # create 3 slurm scripts to run a WRF job
 # including getting the boundary data and sending the output data
@@ -43,16 +43,13 @@ io_form_restart                     = 2
 io_form_input                       = 2
 io_form_boundary                    = 2
 debug_level                         = 0
-output_diagnostics                  = 1
-auxhist3_outname                    = "wrfxtrm_d<domain>_<date>"
-auxhist3_interval                   = 1440,
-frames_per_auxhist3                 = 10,
-io_form_auxhist3                    = 2
+auxhist7_outname                    = "wrfprec_d<domain>_<date>"
+auxhist7_interval                   = 10,
+frames_per_auxhist7                 = 144,
+io_form_auxhist7                    = 2
 auxinput4_inname                    = "wrflowinp_d<domain>"
 auxinput4_interval                  = 360,
 io_form_auxinput4                   = 2,
-iofields_filename                   = "myoutfields.txt",
-ignore_iofields_warning             = .true.,
 /
 
 
@@ -114,8 +111,8 @@ rdlai2d                             =.true.,
 slope_rad                           = 1,
 topo_shading                        = 1,
 shadlen                             = 25000.,
-prec_acc_dt                         = 60.,
-bucket_mm                           = 100.,
+prec_acc_dt                         = 10.,
+bucket_mm                           = 1000.,
 bucket_J                            = 1.e9,
 do_radar_ref                        = 1,
 /
@@ -160,8 +157,8 @@ nested                              = .false.,
 /
 
 &namelist_quilt
-nio_tasks_per_group = 48,
-nio_groups = 1,
+nio_tasks_per_group = 24,
+nio_groups = 2,
 /
 EOF_namelist
 
@@ -173,7 +170,7 @@ cat << EOF_WRF > ./E2%syear%%smonth%%sday%.slurm
 #SBATCH --workdir=.
 #SBATCH --output=WRF%syear%%smonth%%sday%-%j.out
 #SBATCH --error=WRF%syear%%smonth%%sday%-%j.err
-#SBATCH --time=2-00:00:00
+#SBATCH --time=16:00:00
 #SBATCH --ntasks=768
 
 module load netcdf/4.4.1.1
@@ -193,9 +190,8 @@ cat << \EOF_po > ./po%syear%%smonth%%sday%.slurm
 #SBATCH --job-name=po4%syear%%smonth%%sday%
 #SBATCH --output=po%syear%%smonth%%sday%-%j.out
 #SBATCH --error=po%syear%%smonth%%sday%-%j.err
-#SBATCH --time=20:00:00 # walltime, abbreviated by -t
+#SBATCH --time=01:00:00 # walltime, abbreviated by -t
 #SBATCH --tasks=1
-#SBATCH --constraint=highmem
 
 sh ./runwrf_%eyear%_%emonth%_%eday%.sh
 
@@ -207,7 +203,10 @@ tempdir=wrftemp%syear%%smonth%%sday%
 
 mkdir ${tempdir}
 
+rm ./wrfout_d01_%eyear%-%emonth%-%eday%*
+rm ./wrfprec_d01_%eyear%-%emonth%-%eday%*
 mv ./wrfout* $tempdir
+mv ./wrfprec* $tempdir
 
 mv $tempdir/* %OUTdir%/
 
@@ -228,10 +227,9 @@ ln -sf %RSTdir%/wrfrst_d01_%eyear%-%emonth%-%eday%* .
 EOF_po
 
 rm -fr ./wrf*d01
-ln -sf %BDYdir%/wrffdda_d0?_%syear%-%smonth%-%sday% wrffdda_d01
-ln -sf %BDYdir%/wrfinput_d0?_%syear%-%smonth%-%sday% wrfinput_d01
-ln -sf %BDYdir%/wrflowinp_d0?_%syear%-%smonth%-%sday% wrflowinp_d01
-ln -sf %BDYdir%/wrfbdy_d0?_%syear%-%smonth%-%sday% wrfbdy_d01
+ln -sf %BDYdir%/wrfinput_d01_%syear%-%smonth%-%sday% wrfinput_d01
+ln -sf %BDYdir%/wrflowinp_d01_%syear%-%smonth%-%sday% wrflowinp_d01
+ln -sf %BDYdir%/wrfbdy_d01_%syear%-%smonth%-%sday% wrfbdy_d01
 
 mjid=$(sbatch  ./E2%syear%%smonth%%sday%.slurm | cut -f 4 -d' ')
 sbatch --depend=afterok:${mjid} ./po%syear%%smonth%%sday%.slurm
