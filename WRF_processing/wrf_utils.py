@@ -601,6 +601,52 @@ def zlevs_interp_byday(fullpathin,fullpathout,path_geo,date,zlevs,patt,patt_wrf,
 ###########################################################
 ###########################################################
 
+
+def create_10min_files(fullpathin,fullpathout,syear,eyear,smonth,emonth,patt_inst,varn):
+
+    y = syear
+    m = smonth
+
+    while (y < eyear or (y == eyear and m <= emonth)):
+
+        sdate="%s-%s" %(y,str(m).rjust(2,"0"))
+
+        print("%s/%s_%s_%s*" %(fullpathin,patt_inst,varn,sdate))
+
+        fin = "%s/%s_%s_%s*" %(fullpathin,patt_inst,varn,sdate)
+        fout = "%s/%s_10MIN_%s_%s.nc" %(fullpathout,patt_inst,varn,sdate)
+
+        os.system("ncrcat %s %s" %(fin,fout))
+
+        edate = dt.datetime(y,m,0o1) + relativedelta(months=1)
+
+        y = edate.year
+        m = edate.month
+
+###########################################################
+###########################################################
+def create_hourly_files_cdo(fullpathin,fullpathout,syear,eyear,smonth,emonth,patt_inst,varn):
+
+    y = syear
+    m = smonth
+
+    while (y < eyear or (y == eyear and m <= emonth)):
+
+        sdate="%s-%s" %(y,str(m).rjust(2,"0"))
+
+        print("%s/%s_%s_%s*" %(fullpathin,patt_inst,varn,sdate))
+
+        fin = "%s/%s_%s_%s*" %(fullpathin,patt_inst,varn,sdate)
+        fout = "%s/%s_01H_%s_%s.nc" %(fullpathout,patt_inst,varn,sdate)
+
+        os.system("cdo hourmean %s %s" %(fin,fout))
+
+        edate = dt.datetime(y,m,0o1) + relativedelta(months=1)
+
+        y = edate.year
+        m = edate.month
+###########################################################
+###########################################################
 def create_hourly_files(fullpathin,fullpathout,syear,eyear,smonth,emonth,patt_inst,varn):
 
     y = syear
