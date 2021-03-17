@@ -63,8 +63,8 @@ for wrun in WRF_runs:
     for syear in periods:
         eyear = syear+1
 
-        fullpathin = "%s/%s/%s-%s/" %(path_in,wrun,syear,eyear)
-        fullpathout = "%s/%s/%s-%s/" %(path_out,wrun,syear,eyear)
+        fullpathin = "%s/%s/%s/" %(path_in,wrun,syear)
+        fullpathout = "%s/%s/%s/" %(path_out,wrun,syear)
 
         if not os.path.exists(fullpathout):
             os.makedirs(fullpathout)
