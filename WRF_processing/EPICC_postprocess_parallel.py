@@ -34,7 +34,7 @@ import sys
 from joblib import Parallel, delayed
 
 import compute_vars as cvars
-from awrf_utils import wrftime2date,sel_wrfout_files
+from wrf_utils import wrftime2date,sel_wrfout_files
 
 
 
