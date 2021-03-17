@@ -25,7 +25,7 @@ import numpy as np
 import netCDF4 as nc
 
 
-from ..config import config as cfg
+import config as cfg
 
 def get_corners_region(region):
     lats = np.asarray(cfg.reg_coords[region])[np.array([0,2])]

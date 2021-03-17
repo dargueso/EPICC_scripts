@@ -18,8 +18,8 @@
 #####################################################################
 """
 
-from . import geo_info
-from .. import config as cfg
+from mylibs import geo_info
+import config as cfg
 import wrf
 import cartopy.crs as ccrs
 import xarray as xr
