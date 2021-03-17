@@ -84,7 +84,7 @@ for wrun in WRF_runs:
                 Parallel(n_jobs=10)(delayed(wrfu.create_hourly_files_cdo)(fullpathin,fullpathout,syear,eyear,smonth,emonth,patt_inst,varn) for varn in varnames_hfreq)
 
                 patt="%s_%s"%(patt_inst,'01H')
-                Parallel(n_jobs=10)(delayed(wrfu.create_hourly_files)(fullpathin,fullpathout,syear,eyear,smonth,emonth,patt_inst,varn) for varn in varnames_lreq)
+                Parallel(n_jobs=10)(delayed(wrfu.create_hourly_files)(fullpathin,fullpathout,syear,eyear,smonth,emonth,patt_inst,varn) for varn in varnames_lfreq)
 
             if freq == 'DAY':
                 patt="%s_%s"%(patt_inst,'01H')
