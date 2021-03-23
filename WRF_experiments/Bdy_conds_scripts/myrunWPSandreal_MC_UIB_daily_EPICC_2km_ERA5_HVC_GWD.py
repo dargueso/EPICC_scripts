@@ -73,11 +73,11 @@ def sel_grbfiles(filelist,sdate,edate):
 # Start month of the simulation. Will start at day 1.
 
 start_month =8
-start_year = 2020
+start_year = 2019
 
 # End month of the simulation (included).
-end_month = 12
-end_year = 2020
+end_month = 8
+end_year = 2019
 
 
 #How many days in advance (spin-up)?
@@ -306,11 +306,11 @@ while (year < end_year or (year == end_year and month < end_month)):
 
         subprocess.call("ln -sf %s/met_em.d0?.*.nc ." %(wps_dir), shell=True)
 
-        flogname = "real.log"
-        flog = open(flogname,"w")
-        subprocess.call("./real.exe ",stdout=flog,shell=True)
-        flog.close()
 
+        #flog = open(flogname,"r")
+        subprocess.call("./real.exe ",shell=True)#,stdout=flog,shell=True)
+        #flog.close()
+        flogname = "rsl.out.0000"
         completed = check_output(flogname,4,"SUCCESS COMPLETE REAL_EM INIT")
 
         if completed:
