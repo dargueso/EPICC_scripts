@@ -42,7 +42,7 @@ import wrf_utils as wrfu
 WRF_runs=['EPICC_2km_ERA5_HVC_GWD']#,'Oned_4km_ERA5_CMIP5anom_HVC_NC']#,'Oned_16km_ERA5_HVC','Oned_8km_ERA5_HVC','Oned_4km_ERA5_HVC']#,'Oned_4km_ERA5_HVC']#,'Allres_8km_ERA5_HVC','Allres_16km_ERA5_HVC','Allres_32km_ERA5_HVC','Allres_32km_ERA5_HVC_SN']
 #varnames=['UA','VA','TC','Z','SPECHUM','ET','TAS','PR','PRNC','PSL','HUSS','SST','OLR','CLOUDFRAC','WDIR10','WSPD10']
 varnames_hfreq=['PRNC']
-varnames_lfreq=['TAS']
+varnames_lfreq=[]
 varnames = varnames_hfreq + varnames_lfreq
 
 frequencies=['10MIN','01H','DAY','MON','DCYCLE']

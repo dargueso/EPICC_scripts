@@ -7,7 +7,7 @@ institution = UIB
 wrun = EPICC_2km_ERA5_HVC_GWD
 
 
-patt = wrfprec
+patt = wrfout
 dom  = d01
 
 syear = 2020
@@ -21,8 +21,8 @@ acc_dt = 10
 
 #### Requested output variables (DO NOT CHANGE THIS LINE) ####
 
-#TAS
-PRNC
+TAS
+#PRNC
 #TD2
 #PRNC
 #PSL

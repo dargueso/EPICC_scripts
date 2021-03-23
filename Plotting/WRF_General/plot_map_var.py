@@ -35,8 +35,6 @@ import epicc_config as cfg
 
 varname = ['PRNC']
 
-var = io.load_wrf(cfg.wrf_runs[0],'01H','PRNC')
+var = io.load_wrf(cfg.wrf_runs[0],'01H','TAS')
 
 import pdb; pdb.set_trace()
-
-
