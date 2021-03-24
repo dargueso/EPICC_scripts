@@ -1,6 +1,7 @@
-path_in = "/vg5/dargueso-NO-BKUP/postprocessed/EPICC/"
+path_in = "/vg5/dargueso-NO-BKUP/postprocessed/unified/EPICC/"
 patt_in = "UIB"
 path_out = "/home/dargueso/Analyses/EPICC/"
+path_cmaps = "/home/dargueso/share/colormaps/"
 geoem_in = "/home/dargueso/share/geo_em_files/EPICC"
 path_bdy = "/home/dargueso/OBS_DATA/ERA5/"
 patt_bdy = "era5_monthly_prec"
@@ -20,13 +21,12 @@ emonth = 12
 
 wrf_runs = ['EPICC_2km_ERA5_HVC_GWD']
 
-38.608286,0.911865,40.279526,4.647217
 
 reg_coords = {'BA':[38.6,0.9,40.3,4.7]}
 
 crosssect_coords = {'BA':[38.8,0.95,40.2,4.4]}
 
-38.856820,0.966797,40.237605,4.581299
+
 
 loc_coords = {'PMI': [39.56,2.74]}
 
@@ -38,6 +38,7 @@ ref_res = '2'
 
 wrun_ref = 'EPICC_%skm_ERA5_HVC_GWD' %(ref_res)
 geofile_ref = '%s/geo_em.d01.EPICC_2km_ERA5_HVC_GWD.nc'%(geoem_in)
+file_ref = 'wrfout_d01_2020-08-01_00:00:00'
 
 zb = 5 #Buffer zone in maps
 
