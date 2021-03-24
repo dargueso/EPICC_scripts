@@ -85,36 +85,34 @@ def compute_div_dx(u,v,dx,dy):
 
 ###########################################################
 ###########################################################
-
 def create_netcdf(var,filename):
     print((('\n Create output file %s') %(filename)))
 
     otimes = var['times']
     outfile = nc.Dataset(filename,'w',format='NETCDF4_CLASSIC',zlib=True, complevel=5)
-
     outfile.createDimension('time',None)
-    outfile.createDimension('bnds',2)
+    #outfile.createDimension('bnds',2)
     if var['values'].ndim == 4:
 
         outfile.createDimension('y',var['values'].shape[2])
         outfile.createDimension('x',var['values'].shape[3])
         outfile.createDimension('lev',var['values'].shape[1])
 
-        outvar  = outfile.createVariable(var['varname'],'f',('time','lev','y','x'),fill_value=const.missingval)
+        outvar  = outfile.createVariable(var['varname'],'f',('time','lev','y','x'),zlib=True,complevel=5,fill_value=const.missingval)
 
     if var['values'].ndim == 3:
         outfile.createDimension('y',var['values'].shape[1])
         outfile.createDimension('x',var['values'].shape[2])
 
-        outvar  = outfile.createVariable(var['varname'],'f',('time','y','x'),fill_value=const.missingval)
+        outvar  = outfile.createVariable(var['varname'],'f',('time','y','x'),zlib=True,complevel=5,fill_value=const.missingval)
 
-    outtime = outfile.createVariable('time','f8','time',fill_value=const.missingval)
-    outtime_bnds = outfile.createVariable('time_bnds','f8',('time','bnds'),fill_value=const.missingval)
-    outlat  = outfile.createVariable('lat','f',('y','x'),fill_value=const.missingval)
-    outlon  = outfile.createVariable('lon','f',('y','x'),fill_value=const.missingval)
+    outtime = outfile.createVariable('time','f','time',zlib=True,complevel=5,fill_value=const.missingval)
+    #outtime_bnds = outfile.createVariable('time_bnds','f8',('time','bnds'),fill_value=const.missingval)
+    outlat  = outfile.createVariable('lat','f',('y','x'),zlib=True,complevel=5,fill_value=const.missingval)
+    outlon  = outfile.createVariable('lon','f',('y','x'),zlib=True,complevel=5,fill_value=const.missingval)
 
     if var['values'].ndim == 4:
-        outlev = outfile.createVariable('levels','f',('lev'),fill_value=const.missingval)
+        outlev = outfile.createVariable('levels','f',('lev'),zlib=True,complevel=5,fill_value=const.missingval)
         if var['varname']=='cloudfrac':
             setattr(outlev,"standard_name","cloud-level")
             setattr(outlev,"long_name","Clouds level")
@@ -142,10 +140,10 @@ def create_netcdf(var,filename):
     setattr(outtime,"units","hours since 1949-12-01 00:00:00")
     setattr(outtime,"calendar","standard")
 
-    setattr(outtime_bnds,"standard_name","time_bnds")
-    setattr(outtime_bnds,"long_name","time_bounds")
-    setattr(outtime_bnds,"units","hours since 1949-12-01 00:00:00")
-    setattr(outtime_bnds,"calendar","standard")
+    # setattr(outtime_bnds,"standard_name","time_bnds")
+    # setattr(outtime_bnds,"long_name","time_bounds")
+    # setattr(outtime_bnds,"units","hours since 1949-12-01 00:00:00")
+    # setattr(outtime_bnds,"calendar","standard")
 
 
     if len(otimes)==1:
@@ -156,8 +154,8 @@ def create_netcdf(var,filename):
 
     outtime[:] = nc.date2num([otimes[x] for x in range(len(otimes))],units='hours since 1949-12-01 00:00:00',calendar='standard')
 
-    outtime_bnds[:,0]=nc.date2num([otimes[x]-dt.timedelta(seconds=step_seconds/2.) for x in range(len(otimes))],units='hours since 1949-12-01 00:00:00',calendar='standard')
-    outtime_bnds[:,1]=nc.date2num([otimes[x]+dt.timedelta(seconds=step_seconds/2.) for x in range(len(otimes))],units='hours since 1949-12-01 00:00:00',calendar='standard')
+    #outtime_bnds[:,0]=nc.date2num([otimes[x]-dt.timedelta(seconds=step_seconds/2.) for x in range(len(otimes))],units='hours since 1949-12-01 00:00:00',calendar='standard')
+    #outtime_bnds[:,1]=nc.date2num([otimes[x]+dt.timedelta(seconds=step_seconds/2.) for x in range(len(otimes))],units='hours since 1949-12-01 00:00:00',calendar='standard')
 
 
     outlat[:]  = var['lat'][:]
