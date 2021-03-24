@@ -25,7 +25,6 @@ from glob import glob
 import datetime as dt
 import calendar
 import os
-import atmopy as ap
 from optparse import OptionParser
 import re
 from dateutil.relativedelta import relativedelta
@@ -134,6 +133,7 @@ def postproc_var(inputinf,varn):
     emonth = int(inputinf['emonth'])
     dom = inputinf['dom']
 
+
     ctime_var=checkpoint(0)
 
     y = syear
@@ -189,8 +189,7 @@ def postproc_var(inputinf,varn):
 
             # ## Creating netcdf files
             fileout = "%s/%s_%s_%s.nc" %(fullpathout,institution,varn,str(sdate))
-            fileref = sorted(glob('%s/%s_%s_%s*' %(fullpathin,'wrfout',dom,sdate)))[0]
-            ref_file = nc.Dataset(fileref)
+            ref_file = nc.Dataset(inputinf['fullfileref'])
             lat=ref_file.variables['XLAT'][0,:]
             lon=ref_file.variables['XLONG'][0,:]
 
@@ -279,8 +278,7 @@ def postproc_var_byday(inputinf,varn,date):
 
     # ## Creating netcdf files
     fileout = "%s/%s_%s_%s.nc" %(fullpathout,institution,varn,str(sdate))
-    fileref = sorted(glob('%s/%s_%s_%s*' %(fullpathin,'wrfout',dom,sdate)))[0]
-    ref_file = nc.Dataset(fileref)
+    ref_file = nc.Dataset(inputinf['fullfileref'])
     lat=ref_file.variables['XLAT'][0,:]
     lon=ref_file.variables['XLONG'][0,:]
 
@@ -343,6 +341,7 @@ for wrun in wrun_all:
         fullpathout = path_out + "/" + wrun + "/" + syear
         inputinf['fullpathin']=fullpathin
         inputinf['fullpathout']=fullpathout
+        inputinf['fullfileref'] = fullpathin+"/"+inputinf['file_ref']
 
         if not os.path.exists(fullpathout):
             os.makedirs(fullpathout)
@@ -359,7 +358,7 @@ for wrun in wrun_all:
 
         for varn in varnames:
 
-            d1 = dt.datetime(int(syear),smonth,22)
+            d1 = dt.datetime(int(syear),smonth,1)
             d2 = dt.datetime(int(eyear),emonth,calendar.monthrange(int(eyear), emonth)[1])+dt.timedelta(days=1)
             total_hours = (d2-d1).days*24+(d2-d1).seconds//3600
             total_days = (d2-d1).days
