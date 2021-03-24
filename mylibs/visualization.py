@@ -30,9 +30,9 @@ from copy import copy
 from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
 import shapely.geometry as sgeom
 
-def get_info_from_geo_em():
+def get_info_from_geo_em(geo_file_name):
 
-    geo_file = xr.open_dataset(cfg.geofile_ref)
+    geo_file = xr.open_dataset(geo_file_name)
     lats = geo_file.XLAT_M.squeeze().values
     lons = geo_file.XLONG_M.squeeze().values
     xbounds = wrf.cartopy_xlim(wrfin=nc.Dataset(cfg.geofile_ref))
@@ -42,7 +42,7 @@ def get_info_from_geo_em():
     lats = geo_file.XLAT_M.squeeze().values
     lons = geo_file.XLONG_M.squeeze().values
 
-    return geo_proj
+    return geo_proj,xbounds,ybounds,lats,lons
 
 def find_side(ls, side):
     """
