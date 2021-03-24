@@ -625,7 +625,8 @@ def create_10min_files(fullpathin,fullpathout,syear,eyear,smonth,emonth,patt_ins
 
 ###########################################################
 ###########################################################
-def create_hourly_files_cdo(fullpathin,fullpathout,syear,eyear,smonth,emonth,patt_inst,varn):
+def create_hourly_files_cdo(fullpathout,syear,eyear,smonth,emonth,patt,varn):
+
 
     y = syear
     m = smonth
@@ -634,14 +635,18 @@ def create_hourly_files_cdo(fullpathin,fullpathout,syear,eyear,smonth,emonth,pat
 
         sdate="%s-%s" %(y,str(m).rjust(2,"0"))
 
-        print("%s/%s_%s_%s*" %(fullpathin,patt_inst,varn,sdate))
+        print("%s/%s_%s_%s.nc" %(fullpathout,patt,varn,sdate))
 
-        fin = "%s/%s_%s_%s*" %(fullpathin,patt_inst,varn,sdate)
-        fout = "%s/%s_01H_%s_%s.nc" %(fullpathout,patt_inst,varn,sdate)
+        fin = "%s/%s_%s_%s.nc" %(fullpathout,patt,varn,sdate)
+
+        fout = fin.replace("10MIN_%s" %(varn),"01H_%s" %(varn))
+
+        print("Input: ", fin)
+        print("Output: ", fout)
 
         os.system("cdo hourmean %s %s" %(fin,fout))
 
-        edate = dt.datetime(y,m,0o1) + relativedelta(months=1)
+        edate = dt.datetime(y,m,1) + relativedelta(months=1)
 
         y = edate.year
         m = edate.month
