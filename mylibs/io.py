@@ -38,10 +38,10 @@ def load_wrf(wrun,freq,var,levs=[]):
     filesin = sorted(glob('%s/%s/20??/%s_%s_%s_*.nc' %(cfg.path_in,wrun,patt_in,freq,var)))
     fin = xr.open_mfdataset(filesin,combine='by_coords')
 
-    fin.coords['y']=fin.lat.values[0,:,0]
-    fin.coords['x']=fin.lon.values[0,0,:]
-    if var == 'PRNC':
-        fin.PR.values = fin.PR.values*3600.
-        fin.PR.attrs['units']='mm -hr-1'
+    # fin.coords['y']=fin.lat.values[0,:,0]
+    # fin.coords['x']=fin.lon.values[0,0,:]
+    # if var == 'PRNC':
+    #     fin.PRNC.values = fin.PRNC.values*3600.
+    #     fin.PRNC.attrs['units']='mm -hr-1'
 
     return fin
