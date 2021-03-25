@@ -76,8 +76,8 @@ start_month =8
 start_year = 2019
 
 # End month of the simulation (included).
-end_month = 8
-end_year = 2019
+end_month = 1
+end_year = 2020
 
 
 #How many days in advance (spin-up)?
@@ -94,7 +94,7 @@ grb_dir = "/vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/"
 bdy_dir = "/vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/WRF-boundary/EPICC/EPICC_2km_ERA5_HVC_GWD/"
 
 run_geogrid = False
-run_ungrib = True
+run_ungrib = True 
 run_metgrid = True
 
 run_real = True
