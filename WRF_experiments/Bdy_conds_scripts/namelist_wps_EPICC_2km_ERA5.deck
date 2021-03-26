@@ -35,4 +35,5 @@
 &metgrid
  fg_name = 'ERA5'
  io_form_metgrid = 2,
+ constants_name='LSERA5:2012-12-22_00',
 /
