@@ -1,29 +1,28 @@
 # File with EPICC postprocessing input arguments
 # To be used with EPICC WRF postprocessing package based on WRF-python
 
-path_in = /vg6/dargueso-NO-BKUP/WRF_OUT/EPICC/
-path_out = /vg5/dargueso-NO-BKUP/postprocessed/EPICC/
-file_ref = wrfout_d01_2020-08-01_00:00:00
-institution = UIB
-wrun = EPICC_2km_ERA5_HVC_GWD
+path_in = '/vg6/dargueso-NO-BKUP/WRF_OUT/EPICC/'
+path_out = '/vg5/dargueso-NO-BKUP/postprocessed/EPICC/'
+file_ref = 'wrfout_d01_2020-08-01_00:00:00'
+institution = 'UIB'
+wruns = ['EPICC_2km_ERA5_HVC_GWD']
 
 
-patt = wrfprec
-dom  = d01
+patt = 'wrfprec'
+dom  = 'd01'
 
-syear = 2020
-eyear = 2020
-smonth =8 
-emonth =9 
-
+syears = ['2020']
+eyears = ['2020']
+smonth =8
+emonth =12
 acc_dt = 10
 
-
+variables = ['PRNC']
 
 #### Requested output variables (DO NOT CHANGE THIS LINE) ####
 
 #TAS
-PRNC
+#PRNC
 #TD2
 #PRNC
 #PSL

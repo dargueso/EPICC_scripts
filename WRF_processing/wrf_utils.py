@@ -90,12 +90,14 @@ def wrftime2date(files):
 ###########################################################
 ###########################################################
 
-def plevs_interp(path_in,path_out,path_geo,syear,eyear,smonth,emonth,plevs,patt,patt_wrf,dom,wrun,varn):
+def plevs_interp(path_in,path_out,geofile_ref,syear,eyear,smonth,emonth,plevs,patt,patt_wrf,dom,wrun,varn):
 
     fullpathin = path_in + "/" + wrun + "/out"
     fullpathout = path_out + "/" + wrun + "/" + str(syear) + "-" + str(eyear)
 
-    geofile = nc.Dataset("%s/geo_em.d01.Oned_32km_ERA5.nc" %(path_geo))
+    inputinf={}
+    inputinf['geofile']=geofile_ref
+    geofile = nc.Dataset(geofile_ref)
 
     y = syear
     m = smonth
@@ -112,11 +114,17 @@ def plevs_interp(path_in,path_out,path_geo,syear,eyear,smonth,emonth,plevs,patt,
 
         for thour in range(len(filesin_wrf)):
 
-            fwrf = nc.Dataset(filesin_wrf[thour])
-            fwrf.variables['F']=geofile.variables['F']
+            fwrf3d = nc.Dataset(filesin_wrf[thour])
+            fwrf2d = nc.Dataset(filesin_wrf[thour].replace(patt_wrf,'wrfout'))
+
+            fwrf3d.variables['F']=geofile.variables['F']
+            for varname in fwrf2d.variable.keys():
+                fwrf3d.variables[varname]=fwrf2d.variables[varname]
+
             tFragment = wrftime2date(filesin_wrf[thour].split())[:]
-            field,atts = cvars.compute_WRFvar(filesin_wrf[thour],varn)
-            zFragment = wrf.vinterp(fwrf,np.squeeze(field),vert_coord='pressure',interp_levels=plevs)
+
+            field,atts = cvars.compute_WRFvar(fwrf3d,varn)
+            zFragment = wrf.vinterp(fwrf3d,np.squeeze(field),vert_coord='pressure',interp_levels=plevs)
 
             zFragment=np.expand_dims(zFragment,axis=0)
             z.append(zFragment)
@@ -144,13 +152,11 @@ def plevs_interp(path_in,path_out,path_geo,syear,eyear,smonth,emonth,plevs,patt,
 ###########################################################
 ###########################################################
 
-def plevs_interp_byday(fullpathin,fullpathout,path_geo,date,plevs,patt,patt_wrf,dom,wrun,varn):
+def plevs_interp_byday(fullpathin,fullpathout,geofile_ref,date,plevs,patt,patt_wrf,dom,wrun,varn):
 
-    # fullpathin = path_in + "/" + wrun + "/out"
-    # fullpathout = path_out + "/" + wrun + "/" + str(syear) + "-" + str(eyear)
-
-
-    geofile = nc.Dataset("%s/geo_em.d01.Oned_32km_ERA5.nc" %(path_geo))
+    inputinf={}
+    inputinf['geofile']=geofile_ref
+    geofile = nc.Dataset(geofile_ref)
 
     y = date.year
     m = date.month
@@ -160,18 +166,21 @@ def plevs_interp_byday(fullpathin,fullpathout,path_geo,date,plevs,patt,patt_wrf,
     sdate="%s-%s-%s" %(y,str(m).rjust(2,"0"),str(d).rjust(2,"0"))
     filesin_wrf = sorted(glob('%s/%s_%s_%s*' %(fullpathin,patt_wrf,dom,sdate)))
 
-
     z = []
     t = []
 
     for thour in range(len(filesin_wrf)):
+        fwrf3d = nc.Dataset(filesin_wrf[thour])
+        fwrf2d = nc.Dataset(filesin_wrf[thour].replace(patt_wrf,'wrfout'))
 
-        fwrf = nc.Dataset(filesin_wrf[thour])
-        fwrf.variables['F']=geofile.variables['F']
+        fwrf3d.variables['F']=geofile.variables['F']
+        for varname in fwrf2d.variables.keys():
+            fwrf3d.variables[varname]=fwrf2d.variables[varname]
+
         tFragment = wrftime2date(filesin_wrf[thour].split())[:]
-        field,atts = cvars.compute_WRFvar(filesin_wrf[thour],varn)
-        zFragment = wrf.vinterp(fwrf,np.squeeze(field),vert_coord='pressure',interp_levels=plevs)
 
+        field,atts = cvars.compute_WRFvar(fwrf3d,varn)
+        zFragment = wrf.vinterp(fwrf3d,np.squeeze(field),vert_coord='pressure',interp_levels=plevs)
         zFragment=np.expand_dims(zFragment,axis=0)
         z.append(zFragment)
         t.append(tFragment)
@@ -183,13 +192,14 @@ def plevs_interp_byday(fullpathin,fullpathout,path_geo,date,plevs,patt,patt_wrf,
                 'varname': varn,
                 'plevs': plevs,
                 'atts':atts,
-                'lat': fwrf.variables['XLAT'][0,:],
-                'lon': fwrf.variables['XLONG'][0,:],
+                'lat': fwrf2d.variables['XLAT'][0,:],
+                'lon': fwrf2d.variables['XLONG'][0,:],
                 'times': otimes}
 
     fileout = "%s/%s_PLEVS_%s_%s.nc" %(fullpathout,patt,varn,sdate)
     create_plevs_netcdf(varinfo,fileout)
-
+    fwrf3d.close()
+    fwrf2d.close()
 
 
 ###########################################################
@@ -495,12 +505,14 @@ def create_netcdf(var,filename):
     outfile.close()
 ###########################################################
 ###########################################################
-def zlevs_interp(path_in,path_out,path_geo,syear,eyear,smonth,emonth,zlevs,patt,patt_wrf,dom,wrun,varn):
+def zlevs_interp(path_in,path_out,geofile_ref,syear,eyear,smonth,emonth,zlevs,patt,patt_wrf,dom,wrun,varn):
 
     fullpathin = path_in + "/" + wrun + "/out"
     fullpathout = path_out + "/" + wrun + "/" + str(syear) + "-" + str(eyear)
 
-    geofile = nc.Dataset("%s/geo_em.d01.Oned_32km_ERA5.nc" %(path_geo))
+    inputinf={}
+    inputinf['geofile']=geofile_ref
+    geofile = nc.Dataset(geofile_ref)
 
     y = syear
     m = smonth
@@ -549,14 +561,15 @@ def zlevs_interp(path_in,path_out,path_geo,syear,eyear,smonth,emonth,zlevs,patt,
 ###########################################################
 ###########################################################
 
-def zlevs_interp_byday(fullpathin,fullpathout,path_geo,date,zlevs,patt,patt_wrf,dom,wrun,varn):
+def zlevs_interp_byday(fullpathin,fullpathout,geofile_ref,date,zlevs,patt,patt_wrf,dom,wrun,varn):
 
 
 
     # fullpathin = path_in + "/" + wrun + "/out"
     # fullpathout = path_out + "/" + wrun + "/" + str(syear) + "-" + str(eyear)
-
-    geofile = nc.Dataset("%s/geo_em.d01.Oned_32km_ERA5.nc" %(path_geo))
+    inputinf={}
+    inputinf['geofile']=geofile_ref
+    geofile = nc.Dataset(geofile_ref)
 
     y = date.year
     m = date.month

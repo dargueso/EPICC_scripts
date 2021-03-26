@@ -51,8 +51,8 @@ frequencies=['10MIN','01H','DAY','MON','DCYCLE']
 path_in = "/vg5/dargueso-NO-BKUP/postprocessed/EPICC"
 path_out = "/vg5/dargueso-NO-BKUP/postprocessed/unified/EPICC"
 periods=[2020]#,2014,2015]
-smonth = 7
-emonth = 8
+smonth = 8
+emonth = 12
 
 patt_inst="UIB"
 
@@ -61,7 +61,7 @@ patt_inst="UIB"
 
 for wrun in WRF_runs:
     for syear in periods:
-        eyear = syear+1
+        eyear = syear
 
         fullpathin = "%s/%s/%s/" %(path_in,wrun,syear)
         fullpathout = "%s/%s/%s/" %(path_out,wrun,syear)
