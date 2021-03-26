@@ -52,7 +52,7 @@ lats, lons = latlon_coords(hgt)
 cart_proj = get_cartopy(hgt)
 
 
-filesin = sorted(glob(f'{cfg.path_in}/{wrun}/20??/{cfg.patt_in}_10MIN_PRNC*.nc'))
+filesin = sorted(glob(f'{cfg.path_in}/{wrun}/20??/{cfg.patt_in}_MON_PRNC*.nc'))
 fin = xr.open_mfdataset(filesin,combine='by_coords')
 
 
@@ -72,7 +72,7 @@ ax.coastlines('10m', linewidth=0.8)
 # pressure.
 #plt.contour(to_np(lons), to_np(lats), to_np(hgt), 10, colors="black",
 #            transform=ccrs.PlateCarree())
-plt.contourf(to_np(lons), to_np(lats), fin.PRNC.max('time')*3600., 10,
+plt.contourf(to_np(lons), to_np(lats), fin.PRNC.sum('time')*3600., 10,
              transform=ccrs.PlateCarree(),
              cmap=cmap)
 
@@ -82,12 +82,12 @@ plt.colorbar(ax=ax, shrink=.98)
 # Set the map bounds
 
 
-reg_bounds = GeoBounds(CoordPair(lat=cfg.reg_coords['BA'][0], lon=cfg.reg_coords['BA'][1]),
-                       CoordPair(lat=cfg.reg_coords['BA'][2], lon=cfg.reg_coords['BA'][3]))
-ax.set_xlim(cartopy_xlim(hgt, geobounds=reg_bounds))
-ax.set_ylim(cartopy_ylim(hgt, geobounds=reg_bounds))
-# ax.set_xlim(cartopy_xlim(hgt))
-# ax.set_ylim(cartopy_ylim(hgt))
+# reg_bounds = GeoBounds(CoordPair(lat=cfg.reg_coords['BA'][0], lon=cfg.reg_coords['BA'][1]),
+#                        CoordPair(lat=cfg.reg_coords['BA'][2], lon=cfg.reg_coords['BA'][3]))
+# ax.set_xlim(cartopy_xlim(hgt, geobounds=reg_bounds))
+# ax.set_ylim(cartopy_ylim(hgt, geobounds=reg_bounds))
+ax.set_xlim(cartopy_xlim(hgt))
+ax.set_ylim(cartopy_ylim(hgt))
 
 # Add the gridlines
 ax.gridlines(color="black", linestyle="dotted")
