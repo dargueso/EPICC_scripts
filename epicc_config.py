@@ -22,16 +22,18 @@ emonth = 12
 wrf_runs = ['EPICC_2km_ERA5_HVC_GWD']
 
 
-reg_coords = {'BA':[38.6,0.9,40.3,4.7]}
+reg_coords = {'BAL':[38.6,0.9,40.3,4.7],
+              'CAT':[40.3,0,43,3.5]}
 
-crosssect_coords = {'BA':[38.8,0.95,40.2,4.4]}
+crosssect_coords = {'BAL':[38.8,0.95,40.2,4.4],
+                    'CAT':None}
 
 
 
 loc_coords = {'PMI': [39.56,2.74]}
 
 region = 'EPICC'
-csect  = 'BA'
+csect  = 'BAL'
 loc = 'PMI'
 
 ref_res = '2'
@@ -53,5 +55,7 @@ acc_dt = 10.
 vcross = 'p'
 
 vars_post = ['PRNC']
+
+
 
 #
