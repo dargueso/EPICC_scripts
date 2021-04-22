@@ -25,7 +25,9 @@ import netCDF4 as nc
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
+#import proplot as plot
 from optparse import OptionParser
+import dateparser
 import datetime as dt
 import sys
 
@@ -72,10 +74,15 @@ edatestr  = opts.edatestr
 reg = opts.reg
 freq=opts.freq
 
+
 freq_seconds = {'10MIN':600.,'01H':3600.,'DAY':86400}
 
-sdate=dt.datetime.strptime(sdatestr,'%Y-%m-%d %H:%M')
-edate=dt.datetime.strptime(edatestr,'%Y-%m-%d %H:%M')
+# sdate=dt.datetime.strptime(sdatestr,'%Y-%m-%d %H:%M')
+# edate=dt.datetime.strptime(edatestr,'%Y-%m-%d %H:%M')
+sdate=dateparser.parse(sdatestr)
+edate=dateparser.parse(edatestr)
+
+
 
 if freq not in ['10MIN','01H','DAY','MON']:
     sys.exit("Frequency not available, choose between 10MIN,01H,DAY and MON")
@@ -95,6 +102,7 @@ else:
 wrun = cfg.wrf_runs[0]
 
 cmap = utils.rgb2cmap(f'{cfg.path_cmaps}/precip_11lev.rgb')
+#cmap = plot.Colormap('IceFire')
 fileref = nc.Dataset(f'{cfg.path_wrfout}/{wrun}/out/{cfg.file_ref}')
 # Get the sea level pressure
 hgt = getvar(fileref, "ter")
@@ -104,13 +112,12 @@ lats, lons = latlon_coords(hgt)
 cart_proj = get_cartopy(hgt)
 
 if sdate.year != edate.year:
-    filesin = sorted(glob(f'{cfg.path_in}/{wrun}/????/{cfg.patt_in}_{freq}_{varname}_{date.year}-{date.month:02d}.nc'))
+    filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_{freq}_{varname}_*.nc'))
 else:
     if sdate.month != edate.month:
-        filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{sdate.year}/{cfg.patt_in}_{freq}_{varname}_{sdate.year}-*.nc'))
+        filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_{freq}_{varname}_{sdate.year}-*.nc'))
     else:
-        filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{sdate.year}/{cfg.patt_in}_{freq}_{varname}_{sdate.year}-{sdate.month:02d}.nc'))
-
+        filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_{freq}_{varname}_{sdate.year}-{sdate.month:02d}.nc'))
 
 fin_all = xr.open_mfdataset(filesin,combine='by_coords')
 fin = fin_all.sel(time=slice(sdate,edate)).squeeze()
@@ -121,11 +128,13 @@ fig = plt.figure(figsize=(12,5))
 spec = fig.add_gridspec(ncols=2, nrows=1)
 # Set the GeoAxes to the projection used by WRF
 ax0 = fig.add_subplot(spec[0, 0],projection=cart_proj)
-ax0.coastlines('10m', linewidth=0.8)
+#ax0.coastlines('10m', linewidth=0.8)
+ax0.add_feature(cfeature.COASTLINE,linewidth=0.5)
+ax0.add_feature(cfeature.BORDERS,linewidth=0.5)
 ax0.text(0.5,1.02,f'Mean Rate', fontsize='x-large', horizontalalignment='center', transform=ax0.transAxes)
 ax0.text(0.98,0.92,f'{labeltop}', fontsize='medium', horizontalalignment='right', transform=ax0.transAxes)
 #ax0.plot(-0.9480,38.0856,marker='o',mfc='r',mec=None,transform=ccrs.PlateCarree())
-CS = ax0.contour(to_np(lons), to_np(lats), fin[varname].mean('time')*tot_seconds, 11)
+CS = ax0.contour(to_np(lons), to_np(lats), fin[varname].mean('time')*tot_seconds,linewidth=0)
 plt.contourf(to_np(lons), to_np(lats), fin[varname].mean('time')*tot_seconds, CS.levels[1:],
                 transform=ccrs.PlateCarree(),
                 cmap=cmap)
@@ -150,7 +159,7 @@ ax1.coastlines('10m', linewidth=0.8)
 ax1.text(0.5,1.02,f'{freq} Maximum Rate', fontsize='x-large', horizontalalignment='center', transform=ax1.transAxes)
 ax1.text(0.98,0.92,f'{labeltop}', fontsize='medium', horizontalalignment='right', transform=ax1.transAxes)
 
-CS = ax1.contour(to_np(lons), to_np(lats), fin[varname].max('time')*tot_seconds, 11)
+CS = ax1.contour(to_np(lons), to_np(lats), fin[varname].max('time')*tot_seconds)
 plt.contourf(to_np(lons), to_np(lats), fin[varname].max('time')*tot_seconds, CS.levels[1:],
                 transform=ccrs.PlateCarree(),
                 cmap=cmap)
