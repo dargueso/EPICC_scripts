@@ -109,12 +109,12 @@ lats, lons = latlon_coords(hgt)
 cart_proj = get_cartopy(hgt)
 
 if sdate.year != edate.year:
-    filesin = sorted(glob(f'{cfg.path_in}/{wrun}/????/{cfg.patt_in}_{freq}_{varname}_{date.year}-{date.month:02d}.nc'))
+    filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_{freq}_{varname}_*.nc'))
 else:
     if sdate.month != edate.month:
-        filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{sdate.year}/{cfg.patt_in}_{freq}_{varname}_{sdate.year}-*.nc'))
+        filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_{freq}_{varname}_{sdate.year}-*.nc'))
     else:
-        filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{sdate.year}/{cfg.patt_in}_{freq}_{varname}_{sdate.year}-{sdate.month:02d}.nc'))
+        filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_{freq}_{varname}_{sdate.year}-{sdate.month:02d}.nc'))
 
 
 fin_all = xr.open_mfdataset(filesin,combine='by_coords')
