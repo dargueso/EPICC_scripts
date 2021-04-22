@@ -30,69 +30,129 @@ from joblib import Parallel, delayed
 import xarray as xr
 from dateutil.relativedelta import relativedelta
 import numpy as np
-import wrf_utils as wrfu
 import EPICC_post_config as cfg
+import calendar
+import pandas as pd
 
 
 ###########################################################
 ###########################################################
 
-
-
-
-WRF_runs=['EPICC_2km_ERA5_HVC_GWD']#,'Oned_4km_ERA5_CMIP5anom_HVC_NC']#,'Oned_16km_ERA5_HVC','Oned_8km_ERA5_HVC','Oned_4km_ERA5_HVC']#,'Oned_4km_ERA5_HVC']#,'Allres_8km_ERA5_HVC','Allres_16km_ERA5_HVC','Allres_32km_ERA5_HVC','Allres_32km_ERA5_HVC_SN']
-#varnames=['UA','VA','TC','Z','SPECHUM','ET','TAS','PR','PRNC','PSL','HUSS','SST','OLR','CLOUDFRAC','WDIR10','WSPD10']
-varnames_hfreq=['PRNC']
+varnames_hfreq=['RAIN']
 varnames_lfreq=[]
 varnames = varnames_hfreq + varnames_lfreq
-
 frequencies=['10MIN','01H','DAY','MON','DCYCLE']
-
-
 path_in = "/vg5/dargueso-NO-BKUP/postprocessed/EPICC"
 path_out = "/vg5/dargueso-NO-BKUP/postprocessed/unified/EPICC"
-syear = cfg.syear
-eyear = cfg.eyear
-smonth = cfg.smonth
-emonth = cfg.emonth
 patt_inst=cfg.institution
 
-periods = range(syear,eyear+1)
-
-for wrun in WRF_runs:
-    for thisyear in periods:
-
-        fullpathin = "%s/%s/%s/" %(path_in,wrun,thisyear)
-        fullpathout = "%s/%s/" %(path_out,wrun)
-
-        if not os.path.exists(fullpathout):
-            os.makedirs(fullpathout)
+def main():
 
 
 
-        for freq in frequencies:
-            print(thisyear,wrun,freq)
+    eday = calendar.monthrange(cfg.eyear,cfg.emonth)[1]
+    datelist = pd.date_range(f'{cfg.syear}-{cfg.smonth}-01',f'{cfg.eyear}-{cfg.emonth}-{eday}',freq='MS').strftime("%Y-%m").tolist()
 
 
-            if freq == '10MIN':
-                patt="%s_%s"%(patt_inst,'10MIN')
-                Parallel(n_jobs=10)(delayed(wrfu.create_10min_files)(fullpathin,fullpathout,thisyear,thisyear,smonth,emonth,patt_inst,varn) for varn in varnames_hfreq)
 
-            if freq == '01H':
-                patt="%s_%s"%(patt_inst,'10MIN')
-                Parallel(n_jobs=10)(delayed(wrfu.create_hourly_files_cdo)(fullpathout,thisyear,thisyear,smonth,emonth,patt,varn) for varn in varnames_hfreq)
+    for varn in varnames:
+        for wrun in cfg.wruns:
 
-                patt="%s_%s"%(patt_inst,'01H')
-                Parallel(n_jobs=10)(delayed(wrfu.create_hourly_files)(fullpathin,fullpathout,thisyear,thisyear,smonth,emonth,patt_inst,varn) for varn in varnames_lfreq)
+            fullpathin = "%s/%s/" %(path_in,wrun)
+            fullpathout = "%s/%s/" %(path_out,wrun)
 
-            if freq == 'DAY':
-                patt="%s_%s"%(patt_inst,'01H')
-                Parallel(n_jobs=10)(delayed(wrfu.create_daily_files)(fullpathout,thisyear,thisyear,smonth,emonth,patt,varn) for varn in varnames)
+            if not os.path.exists(fullpathout):
+                os.makedirs(fullpathout)
 
-            if freq == 'MON':
-                patt="%s_%s"%(patt_inst,'DAY')
-                Parallel(n_jobs=10)(delayed(wrfu.create_monthly_files)(fullpathout,thisyear,thisyear,smonth,emonth,patt,varn) for varn in varnames)
 
-            if freq == 'DCYCLE':
-                patt="%s_%s"%(patt_inst,'01H')
-                Parallel(n_jobs=10)(delayed(wrfu.create_diurnalcycle_files_cdo)(fullpathout,thisyear,thisyear,smonth,emonth,patt,varn) for varn in varnames)
+
+            for freq in frequencies:
+
+                if freq == '10MIN':
+                    if varn in varnames_hfreq:
+                        patt="%s_%s"%(patt_inst,'10MIN')
+                        Parallel(n_jobs=12)(delayed(create_10min_files_from_pp)(fullpathin,fullpathout,yearmonth,patt_inst,varn) for yearmonth in datelist)
+
+                if freq == '01H':
+                    if varn in varnames_hfreq:
+                        patt="%s_%s"%(patt_inst,'10MIN')
+                        Parallel(n_jobs=12)(delayed(create_hourly_files)(fullpathout,yearmonth,patt,varn) for yearmonth in datelist)
+
+                    if varn in varnames_lfreq:
+                        patt="%s_%s"%(patt_inst,'01H')
+                        Parallel(n_jobs=12)(delayed(create_hourly_files_from_pp)(fullpathin,fullpathout,yearmonth,patt_inst,varn) for yearmonth in datelist)
+
+                if freq == 'DAY':
+                    patt="%s_%s"%(patt_inst,'01H')
+                    Parallel(n_jobs=12)(delayed(create_daily_files)(fullpathout,yearmonth,patt,varn) for yearmonth in datelist)
+
+                if freq == 'MON':
+                    patt="%s_%s"%(patt_inst,'DAY')
+                    Parallel(n_jobs=12)(delayed(create_monthly_files)(fullpathout,yearmonth,patt,varn) for yearmonth in datelist)
+
+###########################################################
+###########################################################
+
+def create_10min_files_from_pp(fullpathin,fullpathout,yearmonth,patt_inst,varn):
+
+    """Create 10min files from original postprocessed"""
+
+    fin = f'{fullpathin}/{yearmonth[:4]}/{patt_inst}_{varn}_{yearmonth}*'
+    fout = f'{fullpathout}/{patt_inst}_10MIN_{varn}_{yearmonth}.nc'
+    print(fin)
+    subprocess.call(f"ncrcat {fin} {fout}",shell=True)
+
+def create_hourly_files_from_pp(fullpathin,fullpathout,yearmonth,patt_inst,varn):
+
+    """Create hourly files from original postprocessed"""
+
+    fin = f'{fullpathin}/{yearmonth[:4]}/{patt_inst}_{varn}_{yearmonth}*'
+    fout = f'{fullpathout}/{patt_inst}_01H_{varn}_{yearmonth}.nc'
+    print(fin)
+    subprocess.call(f"ncrcat {fin} {fout}",shell=True)
+
+def create_hourly_files(fullpathout,yearmonth,patt,varn):
+
+    """Create hourly files from 10min files"""
+
+    fin = f'{fullpathout}/{patt}_{varn}_{yearmonth}.nc'
+    fout = fin.replace("10MIN_%s" %(varn),"01H_%s" %(varn))
+    print("Input: ", fin)
+    print("Output: ", fout)
+    if varn == 'RAIN':
+        subprocess.call(f"cdo hoursum {fin} {fout}",shell=True)
+    else:
+        subprocess.call(f"cdo hourmean {fin} {fout}",shell=True)
+
+def create_daily_files(fullpathout,yearmonth,patt,varn):
+    """Create daily files from hourly files"""
+
+    fin = f'{fullpathout}/{patt}_{varn}_{yearmonth}.nc'
+    fout = fin.replace("01H_%s" %(varn),"DAY_%s" %(varn))
+    print("Input: ", fin)
+    print("Output: ", fout)
+    if varn == 'RAIN':
+        subprocess.call(f"cdo daysum {fin} {fout}",shell=True)
+    else:
+        subprocess.call(f"cdo daymean {fin} {fout}",shell=True)
+
+def create_monthly_files(fullpathout,yearmonth,patt,varn):
+    """Create monthly files from daily files"""
+    fin = f'{fullpathout}/{patt}_{varn}_{yearmonth}.nc'
+    fout = fin.replace("DAY_%s" %(varn),"MON_%s" %(varn))
+    print("Input: ", fin)
+    print("Output: ", fout)
+    if varn == 'RAIN':
+        subprocess.call(f"cdo monsum {fin} {fout}",shell=True)
+    else:
+        subprocess.call(f"cdo monmean {fin} {fout}",shell=True)
+
+###############################################################################
+##### __main__  scope
+###############################################################################
+
+if __name__ == "__main__":
+
+    main()
+
+###############################################################################
