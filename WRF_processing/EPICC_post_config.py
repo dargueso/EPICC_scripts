@@ -11,9 +11,9 @@ wruns = ['EPICC_2km_ERA5_HVC_GWD']
 patt = 'wrfprec'
 dom  = 'd01'
 
-syears = ['2020']
-eyears = ['2020']
-smonth =8
+syear = 2017
+eyear = 2017
+smonth =1
 emonth =12
 acc_dt = 10
 

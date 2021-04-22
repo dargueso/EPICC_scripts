@@ -31,6 +31,7 @@ import xarray as xr
 from dateutil.relativedelta import relativedelta
 import numpy as np
 import wrf_utils as wrfu
+import EPICC_post_config as cfg
 
 
 ###########################################################
@@ -50,21 +51,19 @@ frequencies=['10MIN','01H','DAY','MON','DCYCLE']
 
 path_in = "/vg5/dargueso-NO-BKUP/postprocessed/EPICC"
 path_out = "/vg5/dargueso-NO-BKUP/postprocessed/unified/EPICC"
-periods=[2020]#,2014,2015]
-smonth = 8
-emonth = 12
+syear = cfg.syear
+eyear = cfg.eyear
+smonth = cfg.smonth
+emonth = cfg.emonth
+patt_inst=cfg.institution
 
-patt_inst="UIB"
-
-
-
+periods = range(syear,eyear+1)
 
 for wrun in WRF_runs:
-    for syear in periods:
-        eyear = syear
+    for thisyear in periods:
 
-        fullpathin = "%s/%s/%s/" %(path_in,wrun,syear)
-        fullpathout = "%s/%s/%s/" %(path_out,wrun,syear)
+        fullpathin = "%s/%s/%s/" %(path_in,wrun,thisyear)
+        fullpathout = "%s/%s/" %(path_out,wrun)
 
         if not os.path.exists(fullpathout):
             os.makedirs(fullpathout)
@@ -72,28 +71,28 @@ for wrun in WRF_runs:
 
 
         for freq in frequencies:
-            print(syear,eyear,wrun,freq)
+            print(thisyear,wrun,freq)
 
 
             if freq == '10MIN':
                 patt="%s_%s"%(patt_inst,'10MIN')
-                Parallel(n_jobs=10)(delayed(wrfu.create_10min_files)(fullpathin,fullpathout,syear,eyear,smonth,emonth,patt_inst,varn) for varn in varnames_hfreq)
+                Parallel(n_jobs=10)(delayed(wrfu.create_10min_files)(fullpathin,fullpathout,thisyear,thisyear,smonth,emonth,patt_inst,varn) for varn in varnames_hfreq)
 
             if freq == '01H':
                 patt="%s_%s"%(patt_inst,'10MIN')
-                Parallel(n_jobs=10)(delayed(wrfu.create_hourly_files_cdo)(fullpathout,syear,eyear,smonth,emonth,patt,varn) for varn in varnames_hfreq)
+                Parallel(n_jobs=10)(delayed(wrfu.create_hourly_files_cdo)(fullpathout,thisyear,thisyear,smonth,emonth,patt,varn) for varn in varnames_hfreq)
 
                 patt="%s_%s"%(patt_inst,'01H')
-                Parallel(n_jobs=10)(delayed(wrfu.create_hourly_files)(fullpathin,fullpathout,syear,eyear,smonth,emonth,patt_inst,varn) for varn in varnames_lfreq)
+                Parallel(n_jobs=10)(delayed(wrfu.create_hourly_files)(fullpathin,fullpathout,thisyear,thisyear,smonth,emonth,patt_inst,varn) for varn in varnames_lfreq)
 
             if freq == 'DAY':
                 patt="%s_%s"%(patt_inst,'01H')
-                Parallel(n_jobs=10)(delayed(wrfu.create_daily_files)(fullpathout,syear,eyear,smonth,emonth,patt,varn) for varn in varnames)
+                Parallel(n_jobs=10)(delayed(wrfu.create_daily_files)(fullpathout,thisyear,thisyear,smonth,emonth,patt,varn) for varn in varnames)
 
             if freq == 'MON':
                 patt="%s_%s"%(patt_inst,'DAY')
-                Parallel(n_jobs=10)(delayed(wrfu.create_monthly_files)(fullpathout,syear,eyear,smonth,emonth,patt,varn) for varn in varnames)
+                Parallel(n_jobs=10)(delayed(wrfu.create_monthly_files)(fullpathout,thisyear,thisyear,smonth,emonth,patt,varn) for varn in varnames)
 
             if freq == 'DCYCLE':
                 patt="%s_%s"%(patt_inst,'01H')
-                Parallel(n_jobs=10)(delayed(wrfu.create_diurnalcycle_files_cdo)(fullpathout,syear,eyear,smonth,emonth,patt,varn) for varn in varnames)
+                Parallel(n_jobs=10)(delayed(wrfu.create_diurnalcycle_files_cdo)(fullpathout,thisyear,thisyear,smonth,emonth,patt,varn) for varn in varnames)
