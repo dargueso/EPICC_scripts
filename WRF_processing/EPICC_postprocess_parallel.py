@@ -73,7 +73,7 @@ def postproc_var_byday(wrun,varn,date):
     patt    = cfg.patt
     dom = cfg.dom
     fullpathin = path_in + "/" + wrun + "/out"
-    fullpathout = path_out + "/" + wrun + "/" + syear
+    fullpathout = path_out + "/" + wrun + "/" + str(year)
     file_refname = fullpathin+"/"+cfg.file_ref
 
     ctime_var=checkpoint(0)
@@ -171,32 +171,49 @@ varnames = cfg.variables
 wrun_all = cfg.wruns
 path_in = cfg.path_in
 path_out = cfg.path_out
-syear_all = cfg.syears
-eyear_all = cfg.eyears
+syear = cfg.syear
+eyear = cfg.eyear
 smonth = cfg.smonth
 emonth = cfg.emonth
 
+
+
+
 for wrun in wrun_all:
-    for n,syear in enumerate(syear_all):
-        eyear = eyear_all[n]
-        fullpathin = path_in + "/" + wrun + "/out"
-        fullpathout = path_out + "/" + wrun + "/" + syear
+
+    fullpathin = path_in + "/" + wrun + "/out"
 
 
+    init_date = dt.datetime(syear,smonth,1)
+    year = init_date.year
+    month= init_date.month
+    day = init_date.day
 
+
+    while (year < eyear or (year == eyear and month < emonth)):
+        start_date = dt.datetime(year,month,day)
+        end_date   = dt.datetime(year,month,day) + relativedelta(years=1)
+        if end_date>dt.datetime(eyear,emonth,1):
+            end_date = dt.datetime(eyear,emonth,calendar.monthrange(int(eyear), emonth)[1])+dt.timedelta(days=1)
+
+        fullpathout = path_out + "/" + wrun + "/" + str(year)
         if not os.path.exists(fullpathout):
             os.makedirs(fullpathout)
-        datenow=dt.datetime.now().strftime("%Y-%m-%d_%H:%M")
+
+        # datenow=dt.datetime.now().strftime("%Y-%m-%d_%H:%M")
 
         for varn in varnames:
-
-            d1 = dt.datetime(int(syear),smonth,1)
-            d2 = dt.datetime(int(eyear),emonth,calendar.monthrange(int(eyear), emonth)[1])+dt.timedelta(days=1)
+            d1 = dt.datetime(year,month,1)
+            d2 = dt.datetime(end_date.year,end_date.month,end_date.day)
             total_hours = (d2-d1).days*24+(d2-d1).seconds//3600
             total_days = (d2-d1).days
             date_list= [d1 + dt.timedelta(days=x) for x in range(0, total_days)]
             Parallel(n_jobs=10)(delayed(postproc_var_byday)(wrun,varn,date) for date in date_list)
 
         ctime=checkpoint(ctime_i)
+
+        year  = end_date.year
+        month = end_date.month
+        day   = end_date.day
 
         #sys.stdout.close()
