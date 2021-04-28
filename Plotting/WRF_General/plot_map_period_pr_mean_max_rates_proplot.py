@@ -50,7 +50,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-s", "--start",dest="sdatestr",type=str,help="Starting date  of the period to plot in format 2019-09-11 09:00\n partial datestrings such as 2019-09 also valid\n [default: 2019-09-11 09:00]",metavar="DATE",default='2019-09-11 09:00')
 parser.add_argument("-e", "--end"  ,dest="edatestr",type=str,help="Ending date  of the period to plot in format 2019-09-11 09:00\n partial datestrings such as 2019-09 also valid\n [default: 2019-09-15 09:30]",metavar="DATE",default='2019-09-15 09:30')
 parser.add_argument("-f", "--freq", dest="freq",help="Frequency to plot from 10min to monthly\n [default: hourly]",metavar="FREQ",default='01H',choices=['10MIN','01H','DAY','MON'])
-parser.add_argument("-v", "--var", dest="var", help="Variable to plot \n [default: PRNC]",metavar="VAR",default='PRNC')
+parser.add_argument("-v", "--var", dest="var", help="Variable to plot \n [default: RAIN]",metavar="VAR",default='RAIN')
 parser.add_argument("-r", "--reg", dest="reg", help="Region to plot \n [default: EPICC]",metavar="REG",default='EPICC',choices=cfg.reg_coords.keys())
 
 args = parser.parse_args()
@@ -72,7 +72,10 @@ labeltop={'10MIN': f'{sdate.strftime("%H:%M %d %b %Y")}-{edate.strftime("%H:%M %
               '01H'  : f'{sdate.strftime("%H:00 %d %b %Y")}-{edate.strftime("%H:00 %d %b %Y")}',
               'DAY'  : f'{sdate.strftime("%d %b %Y")}-{edate.strftime("%d %b %Y")}',
               'MON'  : f'{sdate.strftime("%b %Y")}-{edate.strftime("%d %b %Y")}'}
-
+units = {'10MIN': f'mm/10min',
+              '01H'  : f'mm hr-1',
+              'DAY'  : f'mm day-1',
+              'MON'  : f'mm month-1'}
 
 def get_geoinfo():
 
@@ -108,7 +111,7 @@ mbounds = map_bounds(reg)
 filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_{freq}_{varname}_*.nc'))
 fin_all = xr.open_mfdataset(filesin,combine='by_coords')
 fin = fin_all.sel(time=slice(sdate,edate)).squeeze()
-tot_seconds = int((fin.isel(time=-1).time-fin.isel(time=0).time)*1e-9)
+#tot_seconds = int((fin.isel(time=-1).time-fin.isel(time=0).time)*1e-9)
 if reg!='EPICC':
     fin_reg =  fin.where((fin.lat>=cfg.reg_coords[reg][0]) &\
                          (fin.lat<=cfg.reg_coords[reg][2]) &\
@@ -118,11 +121,12 @@ if reg!='EPICC':
 else:
     fin_reg = fin
 
-xmax = fin_reg.PRNC.max(skipna=True).values*3600.
-mmax = fin_reg.PRNC.mean(dim='time').max(skipna=True).values*3600.
+xmax = fin_reg.RAIN.max(skipna=True).values
+mmax = fin_reg.RAIN.mean(dim='time').max(skipna=True).values
 
 lmean = MaxNLocator(nbins=15).tick_values(0,mmax)
 lmax = MaxNLocator(nbins=15).tick_values(0,xmax)
+
 
 
 ###########################################################
@@ -135,7 +139,7 @@ fig, axs = plot.subplots(width=12,height=5,ncols=2,proj=cart_proj)
 #fig.suptitle.size='x-large'
 
 axs.format(
-        suptitle="Precipitation (mm)",
+        suptitle="Precipitation",
         suptitlesize='xx-large',
         abc=True, abcloc='ul',
         #grid=False, xticks=25, yticks=5
@@ -145,19 +149,19 @@ axs.format(
 ###########################################################
 axs[0].add_feature(cfeature.COASTLINE,linewidth=0.5)
 axs[0].add_feature(cfeature.BORDERS,linewidth=0.5)
-axs[0].text(0.5,1.02,f'Mean Rate', fontsize='x-large', horizontalalignment='center', transform=axs[0].transAxes)
-axs[0].text(0.98,0.92,f'{labeltop[freq]}', fontsize='medium', horizontalalignment='right', transform=axs[0].transAxes)
+axs[0].text(0.5,1.02,f'Mean', fontsize='x-large', horizontalalignment='center', transform=axs[0].transAxes)
+#axs[0].text(0.98,0.92,f'{labeltop[freq]}', fontsize='medium', horizontalalignment='right', transform=axs[0].transAxes)
 #CS = axs[0].contour(to_np(lons), to_np(lats), fin[varname].mean('time')*tot_seconds,levels=11,linewidth=0)
-dplot0= fin[varname].mean('time')*3600.
+dplot0= fin[varname].mean('time')
 m0=axs[0].contourf(to_np(lons), to_np(lats), dplot0.where(dplot0>0.1),levels=lmean,
              transform=ccrs.PlateCarree(),
              cmap=cmap,extend='max')
 axs[0].set_xlim(cartopy_xlim(hgt,geobounds=mbounds))
 axs[0].set_ylim(cartopy_ylim(hgt,geobounds=mbounds))
-gl0=axs[0].gridlines(color="black", linestyle="dotted",linewidth=0.5,draw_labels=True,x_inline=False, y_inline=False,xlocs=range(-10,10,1), ylocs=range(20,60,1))
+gl0=axs[0].gridlines(color="black", linestyle="dotted",linewidth=0.5,draw_labels=True,x_inline=False, y_inline=False)#,xlocs=range(-10,10,1), ylocs=range(20,60,1))
 gl0.right_labels=False
 gl0.top_labels=False
-axs[0].colorbar(m0,length=0.7, loc='b',label=('mm hr-1'))
+axs[0].colorbar(m0,length=0.7, loc='b',label=(units[freq]))
 ###########################################################
 ###########################################################
 
@@ -165,10 +169,10 @@ axs[0].colorbar(m0,length=0.7, loc='b',label=('mm hr-1'))
 axs[1].add_feature(cfeature.COASTLINE,linewidth=0.5)
 axs[1].add_feature(cfeature.BORDERS,linewidth=0.5)
 axs[1].text(0.5,1.02,f'{freq} Maximum Rate', fontsize='x-large', horizontalalignment='center', transform=axs[1].transAxes)
-axs[1].text(0.98,0.92,f'{labeltop[freq]}', fontsize='medium', horizontalalignment='right', transform=axs[1].transAxes)
+axs[1].text(0.98,0.02,f'{labeltop[freq]}', fontsize='medium', horizontalalignment='right', transform=axs[1].transAxes)
 #CS = axs[1].contour(to_np(lons), to_np(lats), fin[varname].max('time')*tot_seconds,levels=11,linewidth=0)
 
-dplot1 = fin[varname].max('time')*3600.
+dplot1 = fin[varname].max('time')
 m1=axs[1].contourf(to_np(lons), to_np(lats), dplot1.where(dplot1>0.1),levels=lmax,
                 transform=ccrs.PlateCarree(),
                 cmap=cmap,extend='max')
@@ -177,10 +181,10 @@ axs[1].set_xlim(cartopy_xlim(hgt,geobounds=mbounds))
 axs[1].set_ylim(cartopy_ylim(hgt,geobounds=mbounds))
 
 
-gl1=axs[1].gridlines(color="black", linestyle="dotted",linewidth=0.5,draw_labels=True, x_inline=False, y_inline=False,xlocs=range(-10,10,1), ylocs=range(20,60,1))
+gl1=axs[1].gridlines(color="black", linestyle="dotted",linewidth=0.5,draw_labels=True, x_inline=False, y_inline=False)#,xlocs=range(-10,10,1), ylocs=range(20,60,1))
 gl1.right_labels=False
 gl1.top_labels=False
-axs[1].colorbar(m1,length=0.7, loc='b',label=('mm hr-1'))
+axs[1].colorbar(m1,length=0.7, loc='b',label=units[freq])
 
 #fig.subplots_adjust(left=0.1,right=0.9,top=0.9,bottom=0.15,wspace=0.1,hspace=0.2)
 plt.savefig(f'{cfg.path_out}/WRF_General/{varname}_{freq}_{sdate.strftime("%Y-%m-%d_%H-%M")}-{edate.strftime("%Y-%m-%d_%H-%M")}_{reg}.pdf')
