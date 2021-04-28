@@ -38,42 +38,60 @@ from wrf_utils import wrftime2date,sel_wrfout_files
 import EPICC_post_config as cfg
 
 
-###########################################################
-###########################################################
-def checkpoint(ctime):
-  import time
+def main():
 
-  """ Computes the spent time from the last checkpoint
+    """ POSTPROCESS REQUESTES VARIABLES FROM WRF OUTPUTS"""
 
-  Input: a given time
-  Output: present time
-  Print: the difference between the given time and present time
-  Author: Alejandro Di Luca
-  Created: 07/08/2013
-  Last Modification: 14/08/2013
+    # Check initial time
+    ctime_i=checkpoint(0)
+    ctime=checkpoint(0)
 
-  """
-  if ctime==0:
-    ctime=time.time()
-    dtime=0
-  else:
-    dtime=time.time()-ctime
-    ctime=time.time()
-    print('======> DONE in ',float('%.2g' %(dtime)),' seconds',"\n")
-  return ctime
+    for wrun in cfg.wruns:
+
+        init_date = dt.datetime(cfg.syear,cfg.smonth,1)
+        year = init_date.year
+        month= init_date.month
+        day = init_date.day
+
+        while (year < cfg.eyear or (year == cfg.eyear and month < cfg.emonth)):
+            start_date = dt.datetime(year,month,day)
+            end_date   = dt.datetime(year,month,day) + relativedelta(years=1)
+            if end_date>dt.datetime(cfg.eyear,cfg.emonth,1):
+                end_date = dt.datetime(cfg.eyear,cfg.emonth,calendar.monthrange(int(cfg.eyear), cfg.emonth)[1])+dt.timedelta(days=1)
+
+            fullpathout = cfg.path_out + "/" + wrun + "/" + str(year)
+            if not os.path.exists(fullpathout):
+                os.makedirs(fullpathout)
+
+            # datenow=dt.datetime.now().strftime("%Y-%m-%d_%H:%M")
+
+            for varn in cfg.variables:
+                d1 = dt.datetime(year,month,1)
+                d2 = dt.datetime(end_date.year,end_date.month,end_date.day)
+                total_hours = (d2-d1).days*24+(d2-d1).seconds//3600
+                total_days = (d2-d1).days
+                date_list= [d1 + dt.timedelta(days=x) for x in range(0, total_days)]
+                Parallel(n_jobs=10)(delayed(postproc_var_byday)(wrun,varn,date) for date in date_list)
+
+            ctime=checkpoint(ctime_i)
+
+            year  = end_date.year
+            month = end_date.month
+            day   = end_date.day
+
+            #sys.stdout.close()
+
 
 ###########################################################
 ###########################################################
 
 def postproc_var_byday(wrun,varn,date):
 
-    institution=cfg.institution
-    path_in = cfg.path_in
-    path_out = cfg.path_out
+
     patt    = cfg.patt
     dom = cfg.dom
-    fullpathin = path_in + "/" + wrun + "/out"
-    fullpathout = path_out + "/" + wrun + "/" + str(year)
+    fullpathin = cfg.path_in + "/" + wrun + "/out"
+    fullpathout = cfg.path_out + "/" + wrun + "/" + str(date.year)
     file_refname = fullpathin+"/"+cfg.file_ref
 
     ctime_var=checkpoint(0)
@@ -136,7 +154,7 @@ def postproc_var_byday(wrun,varn,date):
     ###########################################################
 
     # ## Creating netcdf files
-    fileout = "%s/%s_%s_%s.nc" %(fullpathout,institution,varn,str(sdate))
+    fileout = "%s/%s_%s_%s.nc" %(fullpathout,cfg.institution,varn,str(sdate))
     ref_file = nc.Dataset(file_refname)
     lat=ref_file.variables['XLAT'][0,:]
     lon=ref_file.variables['XLONG'][0,:]
@@ -156,64 +174,37 @@ def postproc_var_byday(wrun,varn,date):
     print(otimes[-1].strftime("%Y-%m-%d"))
     ctime=checkpoint(ctime_var)
 
-###########################################################
-###########################################################
-
-# Check initial time
-ctime_i=checkpoint(0)
-ctime=checkpoint(0)
-
-varnames = cfg.variables
 
 ###########################################################
 ###########################################################
+def checkpoint(ctime):
+  import time
 
-wrun_all = cfg.wruns
-path_in = cfg.path_in
-path_out = cfg.path_out
-syear = cfg.syear
-eyear = cfg.eyear
-smonth = cfg.smonth
-emonth = cfg.emonth
+  """ Computes the spent time from the last checkpoint
 
+  Input: a given time
+  Output: present time
+  Print: the difference between the given time and present time
+  Author: Alejandro Di Luca
+  Created: 07/08/2013
+  Last Modification: 14/08/2013
 
+  """
+  if ctime==0:
+    ctime=time.time()
+    dtime=0
+  else:
+    dtime=time.time()-ctime
+    ctime=time.time()
+    print('======> DONE in ',float('%.2g' %(dtime)),' seconds',"\n")
+  return ctime
 
+###############################################################################
+##### __main__  scope
+###############################################################################
 
-for wrun in wrun_all:
+if __name__ == "__main__":
 
-    fullpathin = path_in + "/" + wrun + "/out"
+    main()
 
-
-    init_date = dt.datetime(syear,smonth,1)
-    year = init_date.year
-    month= init_date.month
-    day = init_date.day
-
-
-    while (year < eyear or (year == eyear and month < emonth)):
-        start_date = dt.datetime(year,month,day)
-        end_date   = dt.datetime(year,month,day) + relativedelta(years=1)
-        if end_date>dt.datetime(eyear,emonth,1):
-            end_date = dt.datetime(eyear,emonth,calendar.monthrange(int(eyear), emonth)[1])+dt.timedelta(days=1)
-
-        fullpathout = path_out + "/" + wrun + "/" + str(year)
-        if not os.path.exists(fullpathout):
-            os.makedirs(fullpathout)
-
-        # datenow=dt.datetime.now().strftime("%Y-%m-%d_%H:%M")
-
-        for varn in varnames:
-            d1 = dt.datetime(year,month,1)
-            d2 = dt.datetime(end_date.year,end_date.month,end_date.day)
-            total_hours = (d2-d1).days*24+(d2-d1).seconds//3600
-            total_days = (d2-d1).days
-            date_list= [d1 + dt.timedelta(days=x) for x in range(0, total_days)]
-            Parallel(n_jobs=10)(delayed(postproc_var_byday)(wrun,varn,date) for date in date_list)
-
-        ctime=checkpoint(ctime_i)
-
-        year  = end_date.year
-        month = end_date.month
-        day   = end_date.day
-
-        #sys.stdout.close()
+###############################################################################
