@@ -12,12 +12,12 @@ patt = 'wrfprec'
 dom  = 'd01'
 
 syear = 2017
-eyear = 2017
+eyear = 2019
 smonth =1
 emonth =12
 acc_dt = 10
 
-variables = ['PRNC']
+variables = ['RAIN']
 
 #### Requested output variables (DO NOT CHANGE THIS LINE) ####
 
