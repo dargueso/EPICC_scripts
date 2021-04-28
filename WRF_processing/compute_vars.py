@@ -111,17 +111,7 @@ def create_netcdf(var,filename):
     setattr(outtime,"calendar","standard")
 
 
-    if len(otimes)==1:
-        ## HARD CODED AT 1-HOUR
-        step_seconds=3600.
-    else:
-        step_seconds = np.int((otimes[1]-otimes[0]).total_seconds())
-
     outtime[:] = nc.date2num([otimes[x] for x in range(len(otimes))],units='hours since 1949-12-01 00:00:00',calendar='standard')
-
-    #outtime_bnds[:,0]=nc.date2num([otimes[x]-dt.timedelta(seconds=step_seconds/2.) for x in range(len(otimes))],units='hours since 1949-12-01 00:00:00',calendar='standard')
-    #outtime_bnds[:,1]=nc.date2num([otimes[x]+dt.timedelta(seconds=step_seconds/2.) for x in range(len(otimes))],units='hours since 1949-12-01 00:00:00',calendar='standard')
-
 
     outlat[:]  = var['lat'][:]
     outlon[:]  = var['lon'][:]
@@ -167,6 +157,29 @@ def compute_PRNC(ncfile):
                     "units"        : "kg m-2 s-1"}
 
     return prnc,atts
+
+def compute_RAIN(ncfile):
+    """Function to calculate non-convective precipitation flux from a wrf output
+       It also provides variable attribute CF-Standard
+    """
+
+
+    ## Computing diagnostic
+    if 'PREC_ACC' in ncfile.variables.keys():
+        pr_acc = ncfile.variables['PREC_ACC_NC'][:]+ncfile.variables['PREC_ACC'][:]
+    else:
+        prnc_acc = ncfile.variables['PREC_ACC_NC'][:]
+
+    ## Deacumulating over prac_acc_dt (namelist entry)
+    rain = prnc_acc
+
+
+
+    atts = {"standard_name": "Accumulated rainfall",
+                    "long_name"    : "Accumulated rainfall",
+                    "units"        : "mm"}
+
+    return rain,atts
 
 
 def compute_TAS(ncfile):
