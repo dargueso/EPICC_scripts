@@ -52,7 +52,6 @@ parser.add_argument("-e", "--end"  ,dest="edatestr",type=str,help="Ending date  
 parser.add_argument("-f", "--freq", dest="freq",help="Frequency to plot from 10min to monthly\n [default: hourly]",metavar="FREQ",default='01H',choices=['10MIN','01H','DAY','MON'])
 parser.add_argument("-v", "--var", dest="var", help="Variable to plot \n [default: RAIN]",metavar="VAR",default='RAIN')
 parser.add_argument("-r", "--reg", dest="reg", help="Region to plot \n [default: EPICC]",metavar="REG",default='EPICC',choices=cfg.reg_coords.keys())
-
 args = parser.parse_args()
 
 varname = args.var
@@ -152,8 +151,8 @@ axs[0].add_feature(cfeature.BORDERS,linewidth=0.5)
 axs[0].text(0.5,1.02,f'Mean', fontsize='x-large', horizontalalignment='center', transform=axs[0].transAxes)
 #axs[0].text(0.98,0.92,f'{labeltop[freq]}', fontsize='medium', horizontalalignment='right', transform=axs[0].transAxes)
 #CS = axs[0].contour(to_np(lons), to_np(lats), fin[varname].mean('time')*tot_seconds,levels=11,linewidth=0)
-dplot0= fin[varname].mean('time')
-m0=axs[0].contourf(to_np(lons), to_np(lats), dplot0.where(dplot0>0.1),levels=lmean,
+dplot0= fin[varname].mean(dim='time')
+m0=axs[0].contourf(to_np(lons), to_np(lats), dplot0,levels=lmean,
              transform=ccrs.PlateCarree(),
              cmap=cmap,extend='max')
 axs[0].set_xlim(cartopy_xlim(hgt,geobounds=mbounds))
@@ -172,7 +171,7 @@ axs[1].text(0.5,1.02,f'{freq} Maximum Rate', fontsize='x-large', horizontalalign
 axs[1].text(0.98,0.02,f'{labeltop[freq]}', fontsize='medium', horizontalalignment='right', transform=axs[1].transAxes)
 #CS = axs[1].contour(to_np(lons), to_np(lats), fin[varname].max('time')*tot_seconds,levels=11,linewidth=0)
 
-dplot1 = fin[varname].max('time')
+dplot1 = fin[varname].max(dim='time')
 m1=axs[1].contourf(to_np(lons), to_np(lats), dplot1.where(dplot1>0.1),levels=lmax,
                 transform=ccrs.PlateCarree(),
                 cmap=cmap,extend='max')
