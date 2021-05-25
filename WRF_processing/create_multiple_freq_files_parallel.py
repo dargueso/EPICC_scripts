@@ -42,8 +42,8 @@ varnames_hfreq=['RAIN']
 varnames_lfreq=[]
 varnames = varnames_hfreq + varnames_lfreq
 frequencies=['10MIN','01H','DAY','MON','DCYCLE']
-path_in = "/vg5/dargueso-NO-BKUP/postprocessed/EPICC"
-path_out = "/vg5/dargueso-NO-BKUP/postprocessed/unified/EPICC"
+path_in = cfg.path_proc
+path_out = cfg.path_unif
 patt_inst=cfg.institution
 
 def main():
