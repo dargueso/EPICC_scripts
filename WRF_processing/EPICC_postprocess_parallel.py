@@ -59,7 +59,7 @@ def main():
             if end_date>dt.datetime(cfg.eyear,cfg.emonth,1):
                 end_date = dt.datetime(cfg.eyear,cfg.emonth,calendar.monthrange(int(cfg.eyear), cfg.emonth)[1])+dt.timedelta(days=1)
 
-            fullpathout = cfg.path_out + "/" + wrun + "/" + str(year)
+            fullpathout = cfg.path_proc + "/" + wrun + "/" + str(year)
             if not os.path.exists(fullpathout):
                 os.makedirs(fullpathout)
 
