@@ -108,7 +108,7 @@ cart_proj,lats,lons,hgt = get_geoinfo()
 mbounds = map_bounds(reg)
 
 filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_{freq}_{varname}_????-??.nc'))
-fin_all = xr.open_mfdataset(filesin,combine='by_coords')
+fin_all = xr.open_mfdataset(filesin,concat_dim="time", combine="nested")
 fin = fin_all.sel(time=slice(sdate,edate)).squeeze()
 #tot_seconds = int((fin.isel(time=-1).time-fin.isel(time=0).time)*1e-9)
 if reg!='EPICC':
