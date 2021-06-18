@@ -19,6 +19,8 @@ eyear = 2020
 smonth = 8
 emonth = 12
 
+qtiles = [0.1,0.2,0.25,0.4,0.5,0.6, 0.7,0.8,0.9,0.95,0.98,0.99,0.999,0.9999,1.]
+wet_value = 0.1 #mm
 wrf_runs = ['EPICC_2km_ERA5_HVC_GWD']
 
 
