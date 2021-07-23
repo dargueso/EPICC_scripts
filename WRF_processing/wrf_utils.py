@@ -445,7 +445,7 @@ def create_netcdf(var,filename):
     outfile = nc.Dataset(filename,'w',format='NETCDF4_CLASSIC',zlib=True, complevel=5)
 
     outfile.createDimension('time',None)
-    outfile.createDimension('bnds',2)
+    #outfile.createDimension('bnds',2)
 
 
     outfile.createDimension('y',var['values'].shape[1])
@@ -456,8 +456,8 @@ def create_netcdf(var,filename):
 
     outtime = outfile.createVariable('time','f8','time',fill_value=1e20)
     outtime_bnds = outfile.createVariable('time_bnds','f8',('time','bnds'),fill_value=1e20)
-    outlat  = outfile.createVariable('lat','f',('y','x'),fill_value=1e20)
-    outlon  = outfile.createVariable('lon','f',('y','x'),fill_value=1e20)
+    #outlat  = outfile.createVariable('lat','f',('y','x'),fill_value=1e20)
+    #outlon  = outfile.createVariable('lon','f',('y','x'),fill_value=1e20)
 
     setattr(outlat,"standard_name","latitude")
     setattr(outlat,"long_name","Latitude")
@@ -485,8 +485,8 @@ def create_netcdf(var,filename):
 
     outtime[:] = nc.date2num([otimes[x] for x in range(len(otimes))],units='hours since 1949-12-01 00:00:00',calendar='standard')
 
-    outtime_bnds[:,0]=nc.date2num([otimes[x]-dt.timedelta(seconds=step_seconds/2.) for x in range(len(otimes))],units='hours since 1949-12-01 00:00:00',calendar='standard')
-    outtime_bnds[:,1]=nc.date2num([otimes[x]+dt.timedelta(seconds=step_seconds/2.) for x in range(len(otimes))],units='hours since 1949-12-01 00:00:00',calendar='standard')
+    # outtime_bnds[:,0]=nc.date2num([otimes[x]-dt.timedelta(seconds=step_seconds/2.) for x in range(len(otimes))],units='hours since 1949-12-01 00:00:00',calendar='standard')
+    # outtime_bnds[:,1]=nc.date2num([otimes[x]+dt.timedelta(seconds=step_seconds/2.) for x in range(len(otimes))],units='hours since 1949-12-01 00:00:00',calendar='standard')
 
 
     outlat[:]  = var['lat'][:]
