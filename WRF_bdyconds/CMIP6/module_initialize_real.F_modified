@@ -2875,7 +2875,7 @@ integer::oops1,oops2
                                   num_st_levels_alloc , num_sm_levels_alloc , num_sw_levels_alloc )
 
       END SELECT interpolate_soil_tmw
-
+    END IF
       !  surface_input_source=1 => use data from static file (fractional category as input)
       !  surface_input_source=2 => use data from grib file (dominant category as input)
       !  surface_input_source=3 => use dominant data from static file (dominant category as input)
