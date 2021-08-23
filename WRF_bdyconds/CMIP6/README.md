@@ -51,6 +51,9 @@ Email:  d.argueso@uib.es
   - Rename mv outputInter.[cpython-37m-x86_64-linux-gnu].so outputInter.so if necessary to outputInter.so
   - Run write_intermediate_ERA5_CMIP6anom.py which makes use of outputInter.f90 (as a python module), constanst.py, wrf_variables.py. It basically interpolates CMIP6 anomalies to every 6 hours (from monthly) and builds the WRF-Intermediate adding CMIP6 anomalies and ERA5 fields. Depending on CDO version variables in the ERA5 netCDF files may have names or codes, modify the vars2d_codes and vars3d_codes accordingly. Currently working with varcodes instead of names.
 
+
+NOTE: THIS PART DIDN"T WORK WITH LATEST VERSION OF ERA5 and CDO, it has problems with depth levels
+We had to create a climatology with netcdfs and directly write intemediate files for each of the starting dates
 10. Create a file with soil variables to initalize. Most GCMs do not write out soil variables. We create a climatological file from ERA5 that is simply used to initialize the model. In this example we initialize our experiments in July, so we use data from June to August to create the climatology, but other dates may apply to different experiments. We no longer use a script for this like before, we do it manually.
 
     cdo ensmean era5_daily_sfc_20??0[6-8]??.grb SOILCLIM_June-Aug.grb
@@ -67,7 +70,7 @@ Email:  d.argueso@uib.es
     *LSERA5:2012-12-22_00 (not necessary, we use it but not in the METGRID.TBL)
     SOILERA5:2020-07-22_00
 
-14. Then run normally. The namelist.wps should call ERA5_SOIL and *LSERA5 (constant field)
+14. Then run normally. The namelist.wps should call SOILERA5 and *LSERA5 (constant fields)
 
 15. New compilation of WRF and WPS using module_initialize_real.F_modified, which looks for soil variables only in the first timestep.
 16. Run WPS and WRF normally to generate BDY conds, except that ungrib.exe is not needed, since WRF-intermediate files were already created.
