@@ -62,6 +62,17 @@ We had to create a climatology with netcdfs and directly write intemediate files
 
 11. We move this new SOICLIM file to WPS. There we use Vtable.ERA5.SOIL1ststep (link to Vtable) and adapt the dates in the namelist_soilera5_cmip6_pgw.wps (copy to namelist.wps before). We also have to indicate constant files (see namelist_soilera5_cmip6_pgw.wps for an example). We run ./ungrib.exe to intermediate files (e.g. SOILERA5:2020-07-22_00)
 
+INSTEAD WE DID THE FOLLOWING TO CREATE SOIL VARIABLE INTERMEDIATE FILES:
+
+10. Steps to create soil variables climatology:
+  ncea era5_daily_sfc_20??07??.nc aux.nc
+  ncra aux.nc sfcclim.nc
+  f2py -c -m outputInter_soil outputInter_soil.f90 -DF2PY_REPORT_ON_ARRAY_COPY=1000000 #This outputInter_soil.f90 was created from the original outputInter.f90
+  mv outputInter_soil.cpython-37m-x86_64-linux-gnu.so outputInter_soil.so
+  python write_intermediate_ERA5_CMIP6anom_SOILCLIM.py -s 2010 -e 2020 #Same for this one, it was created from the originla write_intermediate_ERA5_CMIP6anom.py
+
+
+
   [TO BE CHECKED STILL]
 12. We also need to create a LSERA5 file (this was already done for regular ERA5 runs) to adequately create a landsea mask. The link the Vtable.ERA5.LANDSEA and modifiy the namelist.wps to change the output name (LSERA5) and run ungrib.exe. [This step may not be entirely necessary, but ERA-Interim had important issues with landsea mask and SST fields, they did not coincide in space. In fact, if the correct METGRID.TBL file is not used, LSERA won't be used either. If we want to use it Use METGRID.TBL.ARW_PGW, which uses the right landsea mask for SST. We didn't for present or future runs in EPICC project. ERA5 does not show large differences between default LSMASK and this version]
 
