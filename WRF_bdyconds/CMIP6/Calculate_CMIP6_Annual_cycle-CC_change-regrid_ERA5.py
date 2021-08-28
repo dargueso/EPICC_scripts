@@ -30,7 +30,7 @@ import os
 
 
 
-variables=['ua','va','zg','hus','ta','uas','vas','tas','ts','hurs','ps','psl']
+variables=['ua','va','zg']#,'uas','vas','tas','ts','hurs','ps','psl']
 experiments = ['historical','ssp585']
 
 #model_list = open (f'SearchLocations_intersection_cmip6_mon_Amon.txt',"r")
@@ -112,6 +112,19 @@ def calculate_annual_cycle(mod_mem,varname):
     if not os.path.exists(f'AnnualCycle/{varname}_{model}_{member}_historical_1990-2014_AnnualCycle.nc'):
         ctime00 = checkpoint(0)
         fin_p = finall.sel(time=slice('1990','2014'))
+
+        if varname == 'hus':
+            fin_p = fin_p.where((fin_p.hus>=0) & (fin_p.hus<100))
+        elif varname == 'ta':
+            fin_p = fin_p.where((fin_p.ta>=0) & (fin_p.ta<400))
+        elif varname == 'ua':
+            fin_p = fin_p.where((fin_p.ua>-500) & (fin_p.ua<500))
+        elif varname == 'va':
+            fin_p = fin_p.where((fin_p.va>-500) & (fin_p.va<500))
+        elif varname == 'zg':
+            fin_p = fin_p.where((fin_p.zg>-1000) & (fin_p.zg<60000))
+
+
         fin_p_mm = fin_p.groupby('time.month').mean('time')
         fin_p_mm.to_netcdf(f'AnnualCycle/{varname}_{model}_{member}_historical_1990-2014_AnnualCycle.nc')
         ctime2=checkpoint(ctime00, 'historical file done')
@@ -121,6 +134,20 @@ def calculate_annual_cycle(mod_mem,varname):
     if not os.path.exists(f'AnnualCycle/{varname}_{model}_{member}_ssp585_2076-2100_AnnualCycle.nc'):
         ctime00 = checkpoint(0)
         fin_f = finall.sel(time=slice('2076','2100'))
+
+        if varname == 'hus':
+            fin_f = fin_f.where((fin_f.hus>=0) & (fin_f.hus<100))
+        elif varname == 'ta':
+            fin_f = fin_f.where((fin_f.ta>=0) & (fin_f.ta<400))
+        elif varname == 'ua':
+            fin_f = fin_f.where((fin_f.ua>-500) & (fin_f.ua<500))
+        elif varname == 'va':
+            fin_f = fin_f.where((fin_f.va>-500) & (fin_f.va<500))
+        elif varname == 'zg':
+            fin_f = fin_f.where((fin_f.zg>-1000) & (fin_f.zg<60000))
+
+
+
         fin_f_mm = fin_f.groupby('time.month').mean('time')
         fin_f_mm.to_netcdf(f'AnnualCycle/{varname}_{model}_{member}_ssp585_2076-2100_AnnualCycle.nc')
         ctime2=checkpoint(ctime00, 'ssp585 file done')

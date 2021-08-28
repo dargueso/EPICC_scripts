@@ -29,7 +29,7 @@ Email:  d.argueso@uib.es
     * 2D: uas, vas, tas, ts, hurs,ps, psl
 
 4. Once the monthly CMIP6 data is downloaded, calculate the monthly annual cycle for the periods selected (present and future), then calculate the CC signal between those two files.
-    python  Calculate_CMIP6_Annual_cycle-CC_change-regrid_ERA5.py
+    python  Calculate_CMIP6_Annual_cycle-CC_change-regrid_ERA5.py (NOTE: 25/08/2021 There are issues with missing values - quality filters are required for some variables and were added to the script, otherwise it generates unrealistic values)
 5. Create a ERA5 grid in text file from griddes for CDO remapping (used to interpolate to a common ERA5 grid)
     cdo griddes era5_daily_sfc_[sampledate].nc > era5_grid
 6. Interpolate (remap) all files to ERA5 grid:
@@ -37,10 +37,12 @@ Email:  d.argueso@uib.es
   Note 1: this was giving an error  "Unsupported file structure" possibly because of the time dimension, or other variables not supported. The new version of the script fixes this.
   Note 2: Once the CC files are created and regridded, MCM-UA-1-0 gives some error because it has some extra variables that need to be removed
     Example:
-    ncks -x -v areacella,height ts_MCM-UA-1-0_r1i1p1f2_CC_2076-2100_1990-2014_AnnualCycle.nc aux.nc
-    mv aux.nc ts_MCM-UA-1-0_r1i1p1f2_CC_2076-2100_1990-2014_AnnualCycle.nc
-7. Create the ensemble mean of Climate Change signal. Example:
-    cdo ensmean ts_* ts_CC_signal_ssp585_2076-2100_1990-2014.nc
+    for file in $(ls *_MCM-UA*.nc); do ncks -x -v areacella,height ${file} aux.nc; mv aux.nc ${file}; done
+
+7. Calculate the ensemble mean using cdo ensmean. Example: cdo ensmean ts_* ts_CC_signal_ssp585_2076-2100_1990-2014.nc
+
+  NOTE: Files generated *AnnualCycle.nc may slightly differ in the plev levels (integer vs float). Some software may have issues with this. In that case, all plevs must be converted to the same type so they are interpreted as the same levels. We fixed this and create the ensemble mean of the climate change signal with the script Create_CMIP6_AnnualCycleChange_ENSMEAN.py. The netcdf files generated with this method were, in our specific case and after following all the previous steps, the same. So we decided to stick to cdo ensmean.
+
 
 8. Vertically interpolate from CMIP6 pressure levels to ERA5 pressure levels.
     python Interpolate_CMIP6_Annual_cycle-CC_pinterp.py

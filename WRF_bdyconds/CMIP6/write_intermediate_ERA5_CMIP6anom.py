@@ -70,30 +70,6 @@ import wrf_variables as fs
 import copy as cp
 import pdb
 import os
-import scipy.interpolate
-
-def interpolate_grid(ilat,ilon,idata,olat,olon,method='nearest'):
-  """ Function to interporlate grid into another grid (can be irregular too)
-      ilat,ilon: input coordinates (usually 2D arrays)
-      idata: input data (usually a 2D or 3D data)
-      olat,olon: output coordinates (usually 2D arrays). Final grid.
-      ----
-      odata: data interpolated to the final grid
-
-      Author: Daniel Argueso @ CCRC, UNSW. Sydney (Australia)
-      Created: Thu Aug 14 15:24:49 EST 2014
-  """
-
-  ilat1d=ilat.flatten()
-  ilon1d=ilon.flatten()
-  icoord1d=np.vstack([ilon1d,ilat1d])
-
-  olat1d=olat.flatten()
-  olon1d=olon.flatten()
-  ocoord1d=np.vstack([olon1d,olat1d])
-
-  odata=scipy.interpolate.griddata(icoord1d.T,idata.flatten(),ocoord1d.T,method=method).reshape(olat.shape)
-  return odata
 
 def checkfile(file_out,overwrite):
   """Checks if the output file exist and whether it should be written or not
@@ -169,13 +145,13 @@ nyears = eyear - syear + 1
 month_i=1
 month_f=12
 
-vars3d=['hur','ta','ua','va','zg']
+vars3d=['hus','ta','ua','va','zg']
 #vars3d_codes={'hur':'r','ta':'t','ua':'u','va':'v','zg':'z'}
-vars3d_codes={'hur':'var157','ta':'var130','ua':'var131','va':'var132','zg':'var129'}
+vars3d_codes={'hus':'var157','ta':'var130','ua':'var131','va':'var132','zg':'var129'}
 vars2d=['hurs','tas','uas','vas','ps','psl','ts']
 vars2d_codes={'dew':'var168','tas':'var167','uas':'var165','vas':'var166','ps':'var134','psl':'var151','ts':'var235'}
 var_units_era5={'z':'m2 s-2','t':'K', 'u':'m s-1','v':'m s-1',\
-                  'sp':'Pa','msl':'Pa','skt':'K',\
+                  'sp':'Pa','msl':'Pa','ts':'K',\
                   'r':'1','10u':'m s-1','10v':'m s-1','2t':'K','2d':'K','lsm':'0/1 Flag'}
 
 nfields3d=len(vars3d)
@@ -207,7 +183,7 @@ for y in range(nyears):
 
   midmonth=calc_midmonth(year)
 
-  for month in range(month_i,month_f):
+  for month in range(month_i,month_f+1):
 
     for day in range(1,calendar.monthrange(year,month)[1]+1):
         print("processing year %s month %02d day %02d" %(year, month,day))
@@ -260,7 +236,7 @@ for y in range(nyears):
 
               print("Processing variable %s" %(var))
 
-              fanom=nc.Dataset("%s/%s_CC_signal_ssp585_2076-2100_1990-2014.nc" %(CMIP6anom_dir,var))
+              fanom=nc.Dataset("%s/%s_CC_signal_ssp585_2076-2100_1990-2014_pinterp.nc" %(CMIP6anom_dir,var))
               var_era=ferapl.variables['%s' %(vars3d_codes[var])][nt,::-1,:,:]
               #anom_units=getattr(fanom.variables["%s" %(var)],'units')
               ilon,ilat=np.meshgrid(fanom.variables['lon'][:],fanom.variables['lat'][:])
@@ -271,19 +247,13 @@ for y in range(nyears):
                 var_units_era5['%s' %(vars3d_codes[var])]='m'
 
               if np.argmin(np.abs(tdelta))==0:
-                var_anom_c=fanom.variables["%s" %(var)][i1,:,:,:]
+                var_anom=fanom.variables["%s" %(var)][i1,::-1,:,:]
 
               else:
-                var_anom_1=fanom.variables["%s" %(var)][i1,:,:,:]
-                var_anom_2=fanom.variables["%s" %(var)][i2,:,:,:]
+                var_anom_1=fanom.variables["%s" %(var)][i1,::-1,:,:]
+                var_anom_2=fanom.variables["%s" %(var)][i2,::-1,:,:]
 
-                var_anom_c=var_anom_1+(var_anom_2-var_anom_1)*(tdelta_before)/tdelta_mid_month
-
-
-              var_anom=np.zeros((var_anom_c.shape[0],nlat,nlon),dtype=np.float64)
-              for k in range(var_anom_c.shape[0]):
-                var_anom[k,:,:] = interpolate_grid(ilat,ilon,var_anom_c[k,:,:],olat,olon,method='nearest')
-
+                var_anom=var_anom_1+(var_anom_2-var_anom_1)*(tdelta_before)/tdelta_mid_month
 
 
               # Convert relative humidity to specific humidity
@@ -320,7 +290,7 @@ for y in range(nyears):
                     units=var_units_era5['%s' %(vars3d_codes[var])]
                   if ii==1:
                     aa=var_anom[nlev,:]
-                    units=anom_units
+                    units=var_units_era5['%s' %(vars3d_codes[var])]
                   if ii==2:
                     aa=vout[var][nlev,:]
                   figname=figs_path+'%s_lev%s_%s_%s-%s-%s-%s.png' %(var,str(nlev),file_name[ii],Y,M,D,H)
@@ -337,8 +307,8 @@ for y in range(nyears):
               print("Processing variable %s" %(var))
               if var=='hurs':
                 #Surface relative humidity doesn't exist in original ERA-INt, must be calculated from T2 and DEWPT
-                dew_era=ferasfc.variables['2d'][nt,:,:]-const.tkelvin
-                tas_era=ferasfc.variables['2t'][nt,:,:]-const.tkelvin
+                dew_era=ferasfc.variables[vars2d_codes['dew']][nt,:,:]-const.tkelvin
+                tas_era=ferasfc.variables[vars2d_codes['tas']][nt,:,:]-const.tkelvin
 
                 var_era=calc_relhum(dew_era,tas_era)
 
@@ -347,25 +317,33 @@ for y in range(nyears):
 
 
               fanom=nc.Dataset("%s/%s_CC_signal_ssp585_2076-2100_1990-2014.nc" %(CMIP6anom_dir,var))
-              anom_units=getattr(fanom.variables["%s" %(var)],'units')
+              # if hasattr(fanom.variables["%s" %(var)],'units'):
+              #     anom_units=getattr(fanom.variables["%s" %(var)],'units')
+              # else:
+              #     if var == 'hurs':
+              #       anom_units=''
+              #     else:
+              #       import pdb; pdb.set_trace()
               ilon,ilat=np.meshgrid(fanom.variables['lon'][:],fanom.variables['lat'][:])
 
 
               if np.min(np.abs(tdelta))==0:
-                var_anom_c=fanom.variables["%s" %(var)][i1,:,:]
+                var_anom=fanom.variables["%s" %(var)][i1,:,:]
               else:
                 var_anom_1=fanom.variables["%s" %(var)][i1,:,:]
                 var_anom_2=fanom.variables["%s" %(var)][i2,:,:]
 
-                var_anom_c=var_anom_1+(var_anom_2-var_anom_1)*(tdelta_before)/tdelta_mid_month
+                var_anom=var_anom_1+(var_anom_2-var_anom_1)*(tdelta_before)/tdelta_mid_month
 
-              var_anom = interpolate_grid(ilat,ilon,var_anom_c,olat,olon,method='nearest')
+              #var_anom = interpolate_grid(ilat,ilon,var_anom_c,olat,olon,method='nearest')
 
               # Define the pseudo global warming
               vout[var]=var_era+np.nan_to_num(var_anom)
 
-              if var=='ts':
-                vout[var][var_era==-9.e+33]=-9.e+33
+              #if var=='ts':
+                #import pdb; pdb.set_trace()
+                #vout[var][var_era.mask==True]=
+                #vout[var][var_era==-9.e+33]=-9.e+33
 
 
               # -----------------------------------------------------------------------------------------------
@@ -378,7 +356,7 @@ for y in range(nyears):
                     if var=='hurs':
                       units='%'
                     else:
-                      units=var_units_erai['%s' %(vars2d_codes[var])]
+                      units=var_units_era5['%s' %(vars2d_codes[var])]
                   if ii==1:
                     aa=var_anom[:]
                     units=anom_units
@@ -408,7 +386,7 @@ for y in range(nyears):
             deltalon=0.30
             deltalat=-0.30
 
-            fields3d[0,:,:,:]=np.float32(vout['hur'])
+            fields3d[0,:,:,:]=np.float32(vout['hus'])
             fields3d[1,:,:,:]=np.float32(vout['ta'])
             fields3d[2,:,:,:]=np.float32(vout['ua'])
             fields3d[3,:,:,:]=np.float32(vout['va'])

@@ -23,7 +23,7 @@ character (len=32), parameter :: map_source = "ERA5"! Source model / originating
 logical, parameter :: is_wind_grid_rel = .FALSE. ! Flag indicating whether winds are
 				! relative to source grid (TRUE) or
 				! relative to earth (FALSE)
-real, parameter :: earth_radius = 6356.766 ! Earth radius, km
+real, parameter :: earth_radius = 6367.470215 ! Earth radius, km
 					!this is average not from model
 
 
