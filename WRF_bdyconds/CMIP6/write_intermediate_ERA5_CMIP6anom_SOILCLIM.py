@@ -140,6 +140,6 @@ for y in range(nyears):
     fieldssoil[5,:,:]=np.float32(vout['SM000007'])
     fieldssoil[6,:,:]=np.float32(vout['SM007028'])
     fieldssoil[7,:,:]=np.float32(vout['SM028100'])
-    fieldssoil[7,:,:]=np.float32(vout['SM100289'])
+    fieldssoil[8,:,:]=np.float32(vout['SM100289'])
 
     f90.writeintsoil(fieldssoil,filedate,nlat,nlon,startlat,startlon,deltalon,deltalat)
