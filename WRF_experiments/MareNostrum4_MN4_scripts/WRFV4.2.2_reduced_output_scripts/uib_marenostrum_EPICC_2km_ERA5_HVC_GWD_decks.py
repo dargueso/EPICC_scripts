@@ -94,11 +94,11 @@ import calendar
 
 # Start month of the simulation. Will start at day 1.
 start_month = 8
-start_year = 2020
+start_year = 2012
 
 # End month of the simulation (included).
-end_month =1 
-end_year = 2021
+end_month =8 
+end_year = 2013
 
 # If starting from scratch (not a continuation run)
 isrestart = False

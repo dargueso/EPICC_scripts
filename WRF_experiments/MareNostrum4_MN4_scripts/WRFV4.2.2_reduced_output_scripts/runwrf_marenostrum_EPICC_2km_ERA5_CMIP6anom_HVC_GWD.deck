@@ -4,7 +4,7 @@
 # @Date:   2017-10-30T17:40:49+01:00
 # @Email:  d.argueso@uib.es
 # @Last modified by:   daniel
-# @Last modified time: 2021-03-16T22:26:50+01:00
+# @Last modified time: 2021-03-19T09:28:25+01:00
 
 # create 3 slurm scripts to run a WRF job
 # including getting the boundary data and sending the output data
@@ -47,9 +47,15 @@ auxhist7_outname                    = "wrfprec_d<domain>_<date>"
 auxhist7_interval                   = 10,
 frames_per_auxhist7                 = 144,
 io_form_auxhist7                    = 2
+auxhist8_outname                    = "wrf3hrly_d<domain>_<date>"
+auxhist8_interval                   = 180,
+frames_per_auxhist8                 = 1,
+io_form_auxhist8                    = 2,
 auxinput4_inname                    = "wrflowinp_d<domain>"
 auxinput4_interval                  = 360,
 io_form_auxinput4                   = 2,
+iofields_filename                   = "myoutfields.txt",
+ignore_iofields_warning             = .true.,
 /
 
 
@@ -193,7 +199,7 @@ cat << \EOF_po > ./po%syear%%smonth%%sday%.slurm
 #SBATCH --time=01:00:00 # walltime, abbreviated by -t
 #SBATCH --tasks=1
 
-sh ./runwrf_%eyear%_%emonth%_%eday%.sh
+#sh ./runwrf_%eyear%_%emonth%_%eday%.sh
 
 module load netcdf/4.4.1.1
 module load hdf5/1.8.19
@@ -203,16 +209,17 @@ tempdir=wrftemp%syear%%smonth%%sday%
 
 mkdir ${tempdir}
 
-rm ./wrfout_d01_%eyear%-%emonth%-%eday%*
 rm ./wrfprec_d01_%eyear%-%emonth%-%eday%*
 mv ./wrfout* $tempdir
 mv ./wrfprec* $tempdir
-
+mv ./wrf3hrly* $tempdir
 mv $tempdir/* %OUTdir%/
 
 
 
 rmdir $tempdir
+
+sh ./runwrf_%eyear%_%emonth%_%eday%.sh
 
 #moving restart files to project folder - if any of them fail then fail out of job
 mv -v ./wrfrst_d01_%eyear%-%emonth%-%eday%* %RSTdir%/
