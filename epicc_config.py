@@ -1,4 +1,4 @@
-path_in = "/vg5/dargueso-NO-BKUP/postprocessed/unified/EPICC/"
+path_in = "/vg6/dargueso-NO-BKUP/postprocessed/unified/EPICC/"
 patt_in = "UIB"
 path_out = "/home/dargueso/Analyses/EPICC/"
 path_cmaps = "/home/dargueso/share/colormaps/"
@@ -7,7 +7,7 @@ path_bdy = "/home/dargueso/OBS_DATA/ERA5/"
 patt_bdy = "era5_monthly_prec"
 bdy_data = "ERA5"
 path_wrfout = "/vg6/dargueso-NO-BKUP/WRF_OUT/EPICC"
-path_postproc = "/vg5/dargueso-NO-BKUP/postprocessed/EPICC/"
+path_postproc = "/vg6/dargueso-NO-BKUP/postprocessed/unified/EPICC/"
 
 institution = "UIB"
 patt_wrf = 'wrfout'
