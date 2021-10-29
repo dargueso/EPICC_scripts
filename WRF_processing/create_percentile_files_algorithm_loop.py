@@ -25,6 +25,8 @@ from glob import glob
 
 wrun = cfg.wrf_runs[0]
 qtiles = np.asarray(cfg.qtiles)
+wetonly = True
+cfg.wet_value
 
 ###########################################################
 ###########################################################
@@ -47,13 +49,24 @@ def main():
             ctime0=checkpoint(0)
             print(ny,nx)
             files_all = xr.open_mfdataset(filesin, concat_dim='time')
-            aux = files_all.RAIN.isel(y=slice(ny,ny+100),x=slice(nx,nx+100)).values
-            ctime1=checkpoint(ctime0,f'Loaded gridpoint {ny}-{ny+100}, {nx}-{nx+100}')
-            qtiles_array[:,ny:ny+100,nx:nx+100]=np.percentile(aux, qtiles*100.,axis=0)
-            files_all.close()
+
+            if wetonly == True:
+                aux = files_all.RAIN.where(files_all.RAIN>=wet_value).isel(y=slice(ny,ny+100),x=slice(nx,nx+100)).values
+                ctime1=checkpoint(ctime0,f'Loaded gridpoint {ny}-{ny+100}, {nx}-{nx+100}')
+                qtiles_array[:,ny:ny+100,nx:nx+100]=np.nanpercentile(aux, qtiles*100.,axis=0)
+                files_all.close()
+            else:
+                aux = files_all.RAIN.isel(y=slice(ny,ny+100),x=slice(nx,nx+100)).values
+                ctime1=checkpoint(ctime0,f'Loaded gridpoint {ny}-{ny+100}, {nx}-{nx+100}')
+                qtiles_array[:,ny:ny+100,nx:nx+100]=np.percentile(aux, qtiles*100.,axis=0)
+                files_all.close()
 
     fino=xr.Dataset({'prtile':(['qtiles','y','x'],qtiles_array)},coords={'qtiles':qtiles,'y':range(nlats),'x':range(nlons)})
-    fino.to_netcdf(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_10MIN_RAIN_2011-2020-qtiles_algorithm_loop.nc',mode='w')
+    if wetonly == True:
+      fino.to_netcdf(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_10MIN_RAIN_2011-2020-qtiles_wetonly_algorithm_loop.nc',mode='w')
+    else:
+      fino.to_netcdf(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_10MIN_RAIN_2011-2020-qtiles_allvalues_algorithm_loop.nc',mode='w')
+
 
 
 ###########################################################
