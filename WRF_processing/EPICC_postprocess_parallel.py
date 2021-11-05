@@ -18,7 +18,6 @@
 #
 #####################################################################
 """
-
 import netCDF4 as nc
 import numpy as np
 from glob import glob
@@ -127,9 +126,9 @@ def postproc_var_byday(wrun,varn,date):
         for n,filename in enumerate(filesin):
 
             tFragment = wrftime2date(filename.split())[:]
-            ncfile = nc.Dataset(filesin_wrf[thour])
+            ncfile = nc.Dataset(filesin[n])
             if patt == 'wrf3hrly':
-                fwrf2d = nc.Dataset(filesin_wrf[thour].replace('wrf3hrly','wrfout'))
+                fwrf2d = nc.Dataset(filesin[n].replace('wrf3hrly','wrfout'))
                 for varname in fwrf2d.variables.keys():
                     ncfile.variables[varname]=fwrf2d.variables[varname]
 
