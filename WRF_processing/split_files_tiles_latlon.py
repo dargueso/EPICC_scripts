@@ -18,15 +18,17 @@
 #####################################################################
 """
 
+import pdb
 import xarray as xr
 import numpy as np
 import epicc_config as cfg
 from glob import glob
+import time
 import subprocess as subprocess
 from joblib import Parallel, delayed
 
 wrun = cfg.wrf_runs[0]
-
+tile_size = 50
 ###########################################################
 ###########################################################
 
@@ -34,70 +36,41 @@ def main():
 
     """  Split files into tiles """
 
-    # Check initial time
-    ctime0=checkpoint(0)
-
-    filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_10MIN_RAIN_20??-??.nc'))
-
+    filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_01H_RAIN_20??-??.nc'))
     files_ref = xr.open_dataset(filesin[0])
     nlats = files_ref.sizes['y']
     nlons = files_ref.sizes['x']
-
     files_ref.close()
 
-    ctime00=checkpoint(0)
+    Parallel(n_jobs=20)(delayed(split_files)(fin,nlons,nlats) for fin in filesin)
 
 
-    for nn in range(0,int(np.ceil(nlons/10))):
-        ctime0=checkpoint(0)
-        Parallel(n_jobs=10)(delayed(split_files)(fin,nn,nlons) for fin in filesin)
-        ctime1=checkpoint(ctime0,f'Split file {nn}/{int(np.ceil(nlons/10))}')
-
-
-
-
-###########################################################
-###########################################################
-def checkpoint(ctime,msg='task'):
-  import time
-
-  """ Computes the spent time from the last checkpoint
-
-  Input: a given time
-  Output: present time
-  Print: the difference between the given time and present time
-  Author: Alejandro Di Luca
-  Modified: Daniel Argüeso
-  Created: 07/08/2013
-  Last Modification: 06/07/2021
-
-  """
-  if ctime==0:
-    ctime=time.time()
-    dtime=0
-  else:
-    dtime=time.time()-ctime
-    ctime=time.time()
-    print(f'{msg}')
-    print(f'======> DONE in {dtime:0.2f} seconds',"\n")
-  return ctime
-
+    #Then concatenate using:
+    # for ny in $(seq -s " " -f %03g 0 10); do for nx in $(seq -s " " -f %03g 0 10); do ncrcat UIB_10MIN_RAIN_*_${ny}y-${nx}x.nc UIB_10MIN_RAIN_2011-2020_${ny}y-${nx}x.nc ;done done
+    
 ###########################################################
 ###########################################################
 
-def split_files(fin,nn,nlons):
+def split_files(fin,nlons,nlats):
 
     """Split files based on longitude using ncks"""
-    print(fin,nn)
-    fout = fin.replace(".nc",f'_{nn:03d}.nc')
+    print(fin)
 
-    if nn*10+10>nlons:
+    finxr = xr.open_dataset(fin).load()
+    
 
-        subprocess.call(f"ncks -d x,{nn*10},{nlons-1} {fin} {fout}",shell=True)
+    for nnlon,slon in enumerate(range(0,nlons,tile_size)): 
+      for nnlat,slat in enumerate(range(0,nlats,tile_size)):
+        fout = fin.replace(".nc",f'_{nnlat:03d}y-{nnlon:03d}x.nc')
+        elon = slon + tile_size
+        elat = slat + tile_size
+        #print(f'lon tile: ',slon,elon)
+        #print(f'lat tile: ',slat,elat)
+        if elon > nlons: elon=nlons
+        if elat > nlats: elat=nlats
 
-    else:
-
-        subprocess.call(f"ncks -d x,{nn*10},{nn*10+10} {fin} {fout}",shell=True)
+        fin_tile = finxr.isel(x=slice(slon,elon),y=slice(slat,elat))
+        fin_tile.to_netcdf(fout)
 
 ###############################################################################
 ##### __main__  scope
