@@ -27,10 +27,10 @@ from joblib import Parallel, delayed
 
 wrun = cfg.wrf_runs[0]
 qtiles = np.asarray(cfg.qtiles)
-mode = 'wetonly'
+mode = 'all'
 wet_value = cfg.wet_value
 tile_size = 50
-freq = '01H'
+freq = '10MIN'
 ###########################################################
 ###########################################################
 
@@ -69,14 +69,12 @@ def calc_percentile(filespath,ny,nx,qtiles,mode='wetonly'):
   if len(filesin)==1:
     fin = xr.open_dataset(filesin[0]).load()
   else:
-    fin = xr.open_mfdataset(filesin,concat_dim="time", combine="nested").load()
+    fin = xr.open_mfdataset(filesin,concat_dim="time", combine="nested").load().sel(time=slice(str(cfg.syear),str(cfg.eyear)))
 
   if mode == 'wetonly':
     ptiles = fin.RAIN.where(fin.RAIN>wet_value).quantile(qtiles,dim=['time'])
   else:
     ptiles = fin.RAIN.quantile(qtiles,dim=['time'])
-  
-  
   fout = f'{cfg.path_in}/{wrun}/{cfg.patt_in}_{freq}_RAIN_{cfg.syear}-{cfg.eyear}_{ny}y-{nx}x_qtiles_{mode}.nc'
   ptiles.to_netcdf(fout)
   fin.close()
