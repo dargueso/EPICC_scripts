@@ -76,7 +76,7 @@ def create_netcdf(var,filename):
 
         outvar  = outfile.createVariable(var['varname'],'f',('time','y','x'),zlib=True,complevel=5,fill_value=const.missingval)
 
-    outtime = outfile.createVariable('time','f','time',zlib=True,complevel=5,fill_value=const.missingval)
+    outtime = outfile.createVariable('time','d','time',zlib=True,complevel=5,fill_value=const.missingval)
     #outtime_bnds = outfile.createVariable('time_bnds','f8',('time','bnds'),fill_value=const.missingval)
     outlat  = outfile.createVariable('lat','f',('y','x'),zlib=True,complevel=5,fill_value=const.missingval)
     outlon  = outfile.createVariable('lon','f',('y','x'),zlib=True,complevel=5,fill_value=const.missingval)
@@ -107,11 +107,11 @@ def create_netcdf(var,filename):
 
     setattr(outtime,"standard_name","time")
     setattr(outtime,"long_name","Time")
-    setattr(outtime,"units","hours since 1949-12-01 00:00:00")
+    setattr(outtime,"units","seconds since 1949-12-01 00:00:00")
     setattr(outtime,"calendar","standard")
 
 
-    outtime[:] = nc.date2num([otimes[x] for x in range(len(otimes))],units='hours since 1949-12-01 00:00:00',calendar='standard')
+    outtime[:] = nc.date2num([otimes[x] for x in range(len(otimes))],units='seconds since 1949-12-01 00:00:00',calendar='standard')
 
     outlat[:]  = var['lat'][:]
     outlon[:]  = var['lon'][:]
@@ -197,6 +197,21 @@ def compute_TAS(ncfile):
 
     return t2,atts
 
+def compute_TD2(ncfile):
+    """ Function to calculate 2-m dewpoint temperature from WRF OUTPUTS
+        It also provides variable attributes CF-Standard
+    """
+
+    td2 = wrf.getvar(ncfile, "td2",wrf.ALL_TIMES,units='K')
+
+    atts = {"standard_name": "air_dewpoint_temperature",
+            "long_name":  "Surface air dewpoint temperature",
+            "units"    :  "K"                      ,
+            "hgt"       :  "2 m"                    ,
+            }
+
+    return td2,atts
+
 def compute_TC(ncfile):
     """ Function to calculate temperature in degC at model full levels from WRF outputs
         It also provides variable attributes CF-Standard
@@ -211,3 +226,19 @@ def compute_TC(ncfile):
             }
 
     return tc,atts
+
+def compute_HUSS(ncfile):
+    """ Function to calculate specific humidity near surface from WRF outputs
+        It also provides variable attributes CF-Standard
+    """
+
+    q2 = ncfile.variables['Q2'][:]
+    huss = q2/(1+q2)
+
+    atts = {"standard_name": "specific_humidity",
+            "long_name":  "Surface specific humidity",
+            "units"    :  "kg/kg"                      ,
+            "hgt"       :  "2 m"                    ,
+            }
+
+    return huss,atts
