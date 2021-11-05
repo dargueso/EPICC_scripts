@@ -196,4 +196,4 @@ fig.colorbar(m1,length=0.7, loc='b',label=units[freq],col=2)
 
 
 #fig.subplots_adjust(left=0.1,right=0.9,top=0.9,bottom=0.15,wspace=0.1,hspace=0.2)
-plt.savefig(f'{cfg.path_out}/WRF_General/{varname}_{freq}_{sdate.strftime("%Y-%m-%d_%H-%M")}-{edate.strftime("%Y-%m-%d_%H-%M")}_{reg}_seasons.pdf')
+plt.savefig(f'{cfg.path_out}/WRF_General/{varname}_{freq}_{sdate.strftime("%Y-%m-%d_%H-%M")}-{edate.strftime("%Y-%m-%d_%H-%M")}_{reg}_seasons_{wrun}.png', dpi=150)
