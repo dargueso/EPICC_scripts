@@ -18,18 +18,16 @@
 #####################################################################
 """
 
-import pdb
 import xarray as xr
 import numpy as np
 import epicc_config as cfg
 from glob import glob
-import time
-import subprocess as subprocess
-from joblib import Parallel, delayed
 
 wrun = cfg.wrf_runs[0]
 tile_size = 50
+mode = 'wetonly'
 freq = '01H'
+
 ###########################################################
 ###########################################################
 
@@ -41,37 +39,21 @@ def main():
     files_ref = xr.open_dataset(filesin[0])
     nlats = files_ref.sizes['y']
     nlons = files_ref.sizes['x']
-    files_ref.close()
 
-    Parallel(n_jobs=20)(delayed(split_files)(fin,nlons,nlats) for fin in filesin)
+    # filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_10MIN_RAIN_2011-2020_???y-???x_qtiles_wetonly.nc'))
+    # fin_all = xr.open_mfdataset(filesin,combine='by_coords')
 
-
-    #Then concatenate using:
-    # for ny in $(seq -s " " -f %03g 0 10); do for nx in $(seq -s " " -f %03g 0 10); do ncrcat UIB_10MIN_RAIN_*_${ny}y-${nx}x.nc UIB_10MIN_RAIN_2011-2020_${ny}y-${nx}x.nc ;done done
+    filespath = f'{cfg.path_in}/{wrun}/{cfg.patt_in}_{freq}_RAIN_2011-2020'
+    latlongrid = []
+    for nnlat in range(nlats//tile_size+1):
+      print(nnlat)
+      latlongrid.append([f'{filespath}_{nnlat:03d}y-{nnlon:03d}x_qtiles_{mode}.nc' for nnlon in range(nlons//tile_size+1)])
+    fin_all = xr.open_mfdataset(latlongrid,combine='nested',concat_dim=["y", "x"])
     
-###########################################################
-###########################################################
+    print(f'Ej: {filespath}_000y-000x_qtiles_{mode}.nc')
+    fout = latlongrid[0][0].replace("_000y-000x_",f'_')
+    fin_all.to_netcdf(fout)
 
-def split_files(fin,nlons,nlats):
-
-    """Split files based on longitude using ncks"""
-    print(fin)
-
-    finxr = xr.open_dataset(fin).load()
-    
-
-    for nnlon,slon in enumerate(range(0,nlons,tile_size)): 
-      for nnlat,slat in enumerate(range(0,nlats,tile_size)):
-        fout = fin.replace(".nc",f'_{nnlat:03d}y-{nnlon:03d}x.nc')
-        elon = slon + tile_size
-        elat = slat + tile_size
-        #print(f'lon tile: ',slon,elon)
-        #print(f'lat tile: ',slat,elat)
-        if elon > nlons: elon=nlons
-        if elat > nlats: elat=nlats
-
-        fin_tile = finxr.isel(x=slice(slon,elon),y=slice(slat,elat))
-        fin_tile.to_netcdf(fout)
 
 ###############################################################################
 ##### __main__  scope
