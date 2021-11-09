@@ -43,6 +43,8 @@ I_bins_edges=np.array([0,0.1]+list(range(1,10))+list(range(10,20,2))+list(range(
 I_bins_centers=I_bins_edges[:-1]+np.diff(I_bins_edges)/2
 I_bins_centers[1]=0.5
 tile_size = 50
+
+wet_th = cfg.wet_value
 #####################################################################
 #####################################################################
 
@@ -58,13 +60,13 @@ def main():
     filespath = f'{cfg.path_in}/{wrun}/{cfg.patt_in}_10MIN_RAIN_20??-??'
     print(f'Ej: {filespath}_000y-000x.nc')
 
-    Parallel(n_jobs=20)(delayed(calc_IFD)(filespath,xytile[0],xytile[1],RSmins,RShours,RSdays,I_bins_edges,I_bins_centers) for xytile in xytiles)
+    Parallel(n_jobs=20)(delayed(calc_IFD_resample)(filespath,xytile[0],xytile[1],RSmins,RShours,RSdays,I_bins_edges,I_bins_centers) for xytile in xytiles)
 
 
 #####################################################################
 #####################################################################
 
-def calc_IFD(filespath,ny,nx,RSmins,RShours,RSdays,I_bins_edges,I_bins_centers):
+def calc_IFD_resample(filespath,ny,nx,RSmins,RShours,RSdays,I_bins_edges,I_bins_centers):
     print (f'Analyzing tile y: {ny} x: {nx}')
     filesin = sorted(glob(f'{filespath}_{ny}y-{nx}x.nc'))
     fin = xr.open_mfdataset(filesin,concat_dim="time", combine="nested").load()
@@ -102,6 +104,55 @@ def calc_IFD(filespath,ny,nx,RSmins,RShours,RSdays,I_bins_edges,I_bins_centers):
     fout = f'{cfg.path_in}/{wrun}/hist2d_IFD_resample_time_{cfg.syear}-{cfg.eyear}_{ny}y-{nx}x.nc'
     hist_o.to_netcdf(fout)
     fin.close()
+
+#####################################################################
+#####################################################################
+
+def calc_IFD_spell(filespath,ny,nx,RSmins,RShours,RSdays,I_bins_edges,I_bins_centers):
+    print (f'Analyzing tile y: {ny} x: {nx}')
+    filesin = sorted(glob(f'{filespath}_{ny}y-{nx}x.nc'))
+    fin = xr.open_mfdataset(filesin,concat_dim="time", combine="nested").load()
+    ylen = fin.sizes['y']
+    xlen = fin.sizes['x']
+    lons = fin.lon.squeeze()
+    lats = fin.lat.squeeze()
+    hist_array = np.zeros((len(I_bins_centers),len(RSmins)+len(RShours)+len(RSdays),ylen,xlen),dtype=np.int32)
+
+    series=(fin.RAIN>wet_th).astype(dtype=np.int).values
+    spell=np.zeros((len(fin.time)-1,len(fin.y),len(fin.x)),dtype=np.int)
+    intensity = np.zeros((len(fin.time)-1,len(fin.y),len(fin.x)),dtype=np.float)
+
+    for iy in ylen:
+        for ix in xlen:
+            if ((series[0,iy,ix]==1) | (series[-1,iy,ix]==1)):
+                series[0,ilat,ilon]=0
+                series[-1,ilat,ilon]=0
+            srun=-np.diff(series[:,iy,ix])
+            L=(series[:,iy,ix]).tolist()
+            groups_rain = []
+            for k,g in groupby(L):
+                if k==1:
+                    b=list(g)
+                    groups_rain.append(sum(b))
+            if np.any(srun==1):
+                spell[srun==1,iy,ix]=np.asarray(groups_rain)
+            
+            for t in range(len(fin.time)-1):
+                if spell[t,iy,ix]!=0:
+                    intensity[t,iy,ix]=fin.isel(time=slice(t,t+spell[t,iy,ix]),y=iy,x=ix).sum()
+            #if (iy==100) & (ix==200):import pdb; pdb.set_trace()
+    
+    spell = np.append(np.zeros((1,len(fin.y),len(fin.x)),dtype=np.int), spell, axis=0)
+    intensity = np.append(np.zeros((1,len(fin.y),len(fin.x)),dtype=np.float), intensity, axis=0)
+
+    fino=xr.Dataset({'spell':(['time','y','x'],spell),'intensity':(['time','y','x'],intensity),'lat':(['y','x'],fin.lat.isel(time=0).squeeze()),'lon':(['y','x'],fin.lon.isel(time=0).squeeze())},\
+        coords={'time':fin.time.values})
+    
+    fout = f'{cfg.path_in}/{wrun}/hist2d_IFD_spell_{cfg.syear}-{cfg.eyear}_{ny}y-{nx}x.nc'
+    fino.to_netcdf(fout,mode='w',encoding={'spell':{'zlib': True,'complevel': 5},'intensity':{'zlib': True,'complevel': 5}})
+
+
+
 
 #####################################################################
 #####################################################################
