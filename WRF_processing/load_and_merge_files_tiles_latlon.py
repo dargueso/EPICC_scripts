@@ -24,9 +24,15 @@ import epicc_config as cfg
 from glob import glob
 
 wrun = cfg.wrf_runs[0]
+wrun = 'EPICC_2km_ERA5_CMIP6anom_HVC_GWD'
 tile_size = 50
 mode = 'wetonly'
-freq = '01H'
+freq = '10MIN'
+
+#filespath = f'{cfg.path_in}/{wrun}/{cfg.patt_in}_{freq}_RAIN_2013-2020'
+filespath = f'{cfg.path_in}/{wrun}/hist2d_IFD_resample_time_2013-2020'
+#filessuffix = f'qtiles_{mode}'
+filessuffix = ''
 
 ###########################################################
 ###########################################################
@@ -40,18 +46,14 @@ def main():
     nlats = files_ref.sizes['y']
     nlons = files_ref.sizes['x']
 
-    # filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_10MIN_RAIN_2011-2020_???y-???x_qtiles_wetonly.nc'))
-    # fin_all = xr.open_mfdataset(filesin,combine='by_coords')
-
-    filespath = f'{cfg.path_in}/{wrun}/{cfg.patt_in}_{freq}_RAIN_2011-2020'
     latlongrid = []
     for nnlat in range(nlats//tile_size+1):
       print(nnlat)
-      latlongrid.append([f'{filespath}_{nnlat:03d}y-{nnlon:03d}x_qtiles_{mode}.nc' for nnlon in range(nlons//tile_size+1)])
-    fin_all = xr.open_mfdataset(latlongrid,combine='nested',concat_dim=["y", "x"])
-    
-    print(f'Ej: {filespath}_000y-000x_qtiles_{mode}.nc')
-    fout = latlongrid[0][0].replace("_000y-000x_",f'_')
+      latlongrid.append([f'{filespath}_{nnlat:03d}y-{nnlon:03d}x{filessuffix}.nc' for nnlon in range(nlons//tile_size+1)])
+    fin_all = xr.open_mfdataset(latlongrid,combine='nested',concat_dim=["y", "x"]).load()
+    print(f'Ej: {filespath}_000y-000x{filessuffix}.nc')
+    fout = latlongrid[0][0].replace("_000y-000x",f'')
+    print(f'Output file: {fout}')
     fin_all.to_netcdf(fout)
 
 
