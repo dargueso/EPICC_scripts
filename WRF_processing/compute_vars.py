@@ -242,3 +242,30 @@ def compute_HUSS(ncfile):
             }
 
     return huss,atts
+
+
+def compute_rsds(ncfile):
+    """ Function to calculate downward shortwave surface radiation
+        It also provides variable attributes CF-Standard
+    """ 
+    swdown=ncfile.variables['SWDOWN'][:]
+
+    atts = {"standard_name": "surface_downwelling_shortwave_flux_in_air",
+            "long_name":  "Downward SW surface radiation",
+            "units"    :  "W m-2"                      
+            }
+
+    return swdown,atts
+
+def compute_rlds(ncfile):
+    """ Function to calculate downward longwave surface radiation
+        It also provides variable attributes CF-Standard
+    """ 
+    glw=ncfile.variables['GLW'][:]
+
+    atts = {"standard_name": "surface_downwelling_longwave_flux_in_air",
+            "long_name":  "Downward LW surface radiation",
+            "units"    :  "W m-2"                      
+            }
+
+    return glw,atts
