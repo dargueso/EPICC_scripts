@@ -24,7 +24,7 @@ import epicc_config as cfg
 from glob import glob
 
 wrun = cfg.wrf_runs[0]
-wrun = 'EPICC_2km_ERA5_CMIP6anom_HVC_GWD'
+wrun = 'EPICC_2km_ERA5_HVC_GWD'
 tile_size = 50
 mode = 'wetonly'
 freq = '10MIN'
