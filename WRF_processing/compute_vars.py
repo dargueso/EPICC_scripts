@@ -244,7 +244,7 @@ def compute_HUSS(ncfile):
     return huss,atts
 
 
-def compute_rsds(ncfile):
+def compute_RSDS(ncfile):
     """ Function to calculate downward shortwave surface radiation
         It also provides variable attributes CF-Standard
     """ 
@@ -257,7 +257,7 @@ def compute_rsds(ncfile):
 
     return swdown,atts
 
-def compute_rlds(ncfile):
+def compute_RLDS(ncfile):
     """ Function to calculate downward longwave surface radiation
         It also provides variable attributes CF-Standard
     """ 
