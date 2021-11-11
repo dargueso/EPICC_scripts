@@ -6,19 +6,19 @@ path_proc = '/vg6/dargueso-NO-BKUP/postprocessed/EPICC/'
 path_unif = '/vg6/dargueso-NO-BKUP/postprocessed/unified/EPICC/'
 file_ref = 'wrfout_d01_2020-08-01_00:00:00'
 institution = 'UIB'
-wruns = ['EPICC_2km_ERA5_CMIP6anom_HVC_GWD']#,'EPICC_2km_ERA5_CMIP6anom_HVC_GWD']
+wruns = ['EPICC_2km_ERA5_HVC_GWD']#,'EPICC_2km_ERA5_CMIP6anom_HVC_GWD']
 
 
-patt = 'wrfprec'
+patt = 'wrfout'
 dom  = 'd01'
 
-syear = 2013
+syear = 2011
 eyear = 2020
 smonth =1
 emonth =12
 acc_dt = 10
 
-variables = ['RAIN']
+variables = ['RSDS','RLDS']
 
 #### Requested output variables (DO NOT CHANGE THIS LINE) ####
 
