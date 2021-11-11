@@ -197,7 +197,7 @@ for ns,season in enumerate(['DJF','MAM','JJA','SON']):
 
 
     dplot1 = (xseas_fut - xseas_pre)*100./xseas_pre
-    m1=axs[ns*2+1].contourf(to_np(lons), to_np(lats), dplot1.where(dplot1>0.1),levels=lmax,
+    m1=axs[ns*2+1].contourf(to_np(lons), to_np(lats), dplot1,levels=lmax,
                     transform=ccrs.PlateCarree(),
                     cmap=cmap,extend='both')
 
