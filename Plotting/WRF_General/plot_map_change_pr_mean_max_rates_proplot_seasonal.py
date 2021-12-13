@@ -137,8 +137,8 @@ else:
 lmean = MaxNLocator(nbins=15).tick_values(-100,100)
 lmax = MaxNLocator(nbins=15).tick_values(-100,100)
 
-lmean = np.arange(-50,55,5)
-lmax = np.arange(-50,55,5)
+#lmean = np.arange(-50,55,5)
+#lmax = np.arange(-50,55,5)
 
 ###########################################################
 ###########################################################
