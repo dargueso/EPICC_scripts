@@ -14,9 +14,9 @@ import matplotlib.pyplot as plt
 #####################################################################
 #####################################################################
 
-ptile_plot = 0.99
+ptile_plot = 0.95
 #freq = ['10MIN','01H','DAY']
-freq = '10MIN'
+freq = 'DAY'
 aemet_freq = {'10MIN':'PMAX10','01H':'PMAX60','DAY':'P24'}
 hourly_rate_factor = {'10MIN': 6,'01H':1,'DAY':1/24.}
 
@@ -92,7 +92,7 @@ def main():
 
     ax1.set_ylabel('Rainfall rate (mm $hr^{-1}$)')
     ax1.set_xlabel('Station no.')
-    ax1.set_title(f'Comparison of {freq} {ptile_plot:.2f}th (2011-2020)',fontsize='xx-large')
+    ax1.set_title(f'Comparison of {freq} {int(ptile_plot*100):2d}th (2011-2020)',fontsize='xx-large')
     ax1.legend()
 
     ax2 = fig.add_subplot(spec[0, 1],sharey=ax1)
