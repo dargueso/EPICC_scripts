@@ -1,0 +1,11 @@
+GRIB | Level| Level| Level| metgrid  |  metgrid | metgrid                                  |
+Code | Code |   1  |   2  | Name     |  Units   | Description                              |
+-----+------+------+------+----------+----------+------------------------------------------+
+ 172 |  1   |   0  |      | LANDSEA  | 0/1 Flag | Land/Sea flag                            |
+-----+------+------+------+----------+----------+------------------------------------------+
+#
+#  Grib codes are from Table 128 
+#  http://www.ecmwf.int/products/data/technical/GRIB_tables/table_128.html
+#  
+# snow depth is converted to the proper units in rrpr.F
+
