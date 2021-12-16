@@ -247,12 +247,12 @@ def compute_HUSS(ncfile):
 def compute_RSDS(ncfile):
     """ Function to calculate downward shortwave surface radiation
         It also provides variable attributes CF-Standard
-    """ 
+    """
     swdown=ncfile.variables['SWDOWN'][:]
 
     atts = {"standard_name": "surface_downwelling_shortwave_flux_in_air",
             "long_name":  "Downward SW surface radiation",
-            "units"    :  "W m-2"                      
+            "units"    :  "W m-2"
             }
 
     return swdown,atts
@@ -260,12 +260,44 @@ def compute_RSDS(ncfile):
 def compute_RLDS(ncfile):
     """ Function to calculate downward longwave surface radiation
         It also provides variable attributes CF-Standard
-    """ 
+    """
     glw=ncfile.variables['GLW'][:]
 
     atts = {"standard_name": "surface_downwelling_longwave_flux_in_air",
             "long_name":  "Downward LW surface radiation",
-            "units"    :  "W m-2"                      
+            "units"    :  "W m-2"
             }
 
     return glw,atts
+
+def compute_PSFC(ncfile):
+
+    """ Function to calculate surface pressure from WRF OUTPUTS
+        It also provides variable attributes CF-Standard
+    """
+
+    psfc = ncfile.variables['PSFC'][:]
+
+    atts = {"standard_name": "surface_pressure",
+            "long_name":  "Surface pressure",
+            "units"    :  "Pa"                      ,
+            }
+
+    return psfc,atts
+
+def compute_PSL(ncfile):
+    """ Function to calculate PSL using wrf-python diagnostics
+        It also provides variable attribute CF-Standard
+    """
+
+    ncfile = nc.Dataset(filename,'r')
+
+    # Get the sea level pressure using wrf-python
+    psl = wrf.getvar(ncfile, "slp",wrf.ALL_TIMES)
+
+    atts = {"standard_name": "air_pressure_at_mean_sea_level",
+                 "long_name":      "Sea Level Pressure"      ,
+                 "units"    :      "Pa"                      ,
+                }
+
+    return psl,atts
