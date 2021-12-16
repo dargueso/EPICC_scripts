@@ -5,3 +5,17 @@
 *.pyc
 *.pyc
 *.pyc
+WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/ERA5_grbfiles/era5_daily_pl_20210101.grb
+WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/ERA5_grbfiles/era5_daily_sfc_20210101.grb
+WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/Pathway3_NOLANDSEA/met_em.d01.2021-01-01_12:00:00.nc
+WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/Pathway3_NOLANDSEA/met_em.d01.2021-01-01_18:00:00.nc
+WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/Pathway3_NOLANDSEA/met_em.d01.2021-01-01_06:00:00.nc
+WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/Pathway3_NOLANDSEA/met_em.d01.2021-01-01_00:00:00.nc
+WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/Pathway2_default/met_em.d01.2021-01-01_18:00:00.nc
+WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/Pathway2_default/met_em.d01.2021-01-01_12:00:00.nc
+WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/Pathway2_default/met_em.d01.2021-01-01_06:00:00.nc
+WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/Pathway2_default/met_em.d01.2021-01-01_00:00:00.nc
+WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/Pathway1_SST_LANDSEA/met_em.d01.2021-01-01_18:00:00.nc
+WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/Pathway1_SST_LANDSEA/met_em.d01.2021-01-01_12:00:00.nc
+WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/Pathway1_SST_LANDSEA/met_em.d01.2021-01-01_06:00:00.nc
+WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/Pathway1_SST_LANDSEA/met_em.d01.2021-01-01_00:00:00.nc
