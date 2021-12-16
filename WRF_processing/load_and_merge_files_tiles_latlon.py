@@ -38,7 +38,6 @@ tile_size = 50
 def main():
 
     """  Split files into tiles """
-#MULTIPLE FILES
 #RECURSIVE
 # for fr in ['10MIN','01H','DAY']:
 #     for seas in ['DJF','MAM','JJA','SON']:
