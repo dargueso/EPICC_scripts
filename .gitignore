@@ -43,3 +43,5 @@ WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/Pathway2_default/w
 WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/Pathway1_SST_LANDSEA/wrflowinp_d01
 WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/Pathway1_SST_LANDSEA/wrfinput_d01
 WRF_experiments/Bdy_conds_scripts/ERA5_WRF_steps/sample_files/Pathway1_SST_LANDSEA/wrfbdy_d01
+Plotting/HrlExt/Changes_IFD_accum_EPICC.png
+Plotting/HrlExt/Changes_IFD_resampled.png
