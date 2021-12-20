@@ -40,7 +40,7 @@ nlons=fileref.west_east.size
 #filespath = f'{cfg.path_in}/{wrun}/hist2d_IFD_tiles_50/hist2d_IFD_spell_2013-2020'
 
 #I_bins_spell = np.asarray(list(range(1,6,1)) + list(range(6,144,6)) + list(range(144,576,144)))
-I_bins_spell = np.asarray(list(range(1,6,1)) + list(range(6,150,6)))
+I_bins_spell = np.asarray(list(range(1,6,1)) + list(range(6,582,6)))
 I_bins_intensity=np.array(list(range(1,251,2))+[1000])
 # I_bins_intensity=np.array(list(range(1,30,1))+list(range(30,100,2))+list(range(100,255,5))+[1000])
 #I_bins_intensity = np.arange(0,605,5)
@@ -82,8 +82,6 @@ def calc_IFD_hist2d(filespath,ny,nx,I_bins_spell,I_bins_intensity):
 
     hist2d.to_netcdf(fout)
     fin.close()
-
-
 
 
 

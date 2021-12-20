@@ -32,7 +32,7 @@ from xhistogram.xarray import histogram
 #####################################################################
 
 
-wrun = 'EPICC_2km_ERA5_CMIP6anom_HVC_GWD'
+wrun = 'EPICC_2km_ERA5_HVC_GWD'
 
 fileref = xr.open_dataset(f'{cfg.path_wrfout}/{cfg.wrf_runs[0]}/out/{cfg.file_ref}')
 nlats=fileref.south_north.size
@@ -61,8 +61,8 @@ def main():
     filespath = f'{cfg.path_in}/{wrun}/split_files_tiles_50/{cfg.patt_in}_10MIN_RAIN_20??-??'
     print(f'Ej: {filespath}_000y-000x.nc')
 
-    Parallel(n_jobs=10)(delayed(calc_IFD_resample)(filespath,xytile[0],xytile[1],RSmins,I_bins_edges,I_bins_centers) for xytile in xytiles)
-    #Parallel(n_jobs=20)(delayed(calc_IFD_spell)(filespath,xytile[0],xytile[1]) for xytile in xytiles)
+    #Parallel(n_jobs=10)(delayed(calc_IFD_resample)(filespath,xytile[0],xytile[1],RSmins,I_bins_edges,I_bins_centers) for xytile in xytiles)
+    Parallel(n_jobs=20)(delayed(calc_IFD_spell)(filespath,xytile[0],xytile[1]) for xytile in xytiles)
 
 
 #####################################################################
@@ -140,7 +140,7 @@ def calc_IFD_spell(filespath,ny,nx):
     fino=xr.Dataset({'spell':(['time','y','x'],spell),'intensity':(['time','y','x'],intensity),'lat':(['y','x'],fin.lat.isel(time=0).squeeze()),'lon':(['y','x'],fin.lon.isel(time=0).squeeze())},\
         coords={'time':fin.time.values})
 
-    fout = f'{cfg.path_in}/{wrun}/hist2d_IFD_spell_{cfg.syear}-{cfg.eyear}_{ny}y-{nx}x.nc'
+    fout = f'{cfg.path_in}/{wrun}/hist2d_IFD_spell_{cfg.syear}-{cfg.eyear}_{ny}y-{nx}x_{wet_th}mm.nc'
     fino.to_netcdf(fout,mode='w',encoding={'spell':{'zlib': True,'complevel': 5},'intensity':{'zlib': True,'complevel': 5}})
     fin.close()
 

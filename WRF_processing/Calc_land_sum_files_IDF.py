@@ -24,8 +24,9 @@ lm_is.coords['x']=lons[0,:]
 wrun_pre = cfg.wrf_runs[0]
 wrun_fut = wrun_pre.replace("ERA5","ERA5_CMIP6anom")
 
-# fin_pre = xr.open_dataset(f'{cfg.path_in}/{wrun_pre}/hist2d_IFD_spell_hist2d_2013-2020.nc')
-fin_fut = xr.open_dataset(f'{cfg.path_in}/{wrun_fut}/hist2d_IFD_resample_time_2013-2020.nc')
+#fin_pre = xr.open_dataset(f'{cfg.path_in}/{wrun_pre}/hist2d_IFD_spell_hist2d_2013-2020.nc')
+fin_fut = xr.open_dataset(f'{cfg.path_in}/{wrun_fut}/hist2d_IFD_spell_hist2d_2013-2020.nc')
+#fin_fut = xr.open_dataset(f'{cfg.path_in}/{wrun_fut}/hist2d_IFD_resample_time_2013-2020.nc')
 
 
 #####################################################################
@@ -38,7 +39,8 @@ fin_fut = xr.open_dataset(f'{cfg.path_in}/{wrun_fut}/hist2d_IFD_resample_time_20
 #fin_fut_land.to_netcdf(f'{cfg.path_in}/{wrun_fut}/hist2d_IFD_resample_time_2013-2020_land_mean_{reg}.nc')
 
 #Domain
-# fin_pre_land = fin_pre.where(lm_is==1).sum(dim=('x','y'))
+#fin_pre_land = fin_pre.where(lm_is==1).sum(dim=('x','y'))
+#fin_pre_land.to_netcdf(f'{cfg.path_in}/{wrun_pre}/hist2d_IFD_spell_hist2d_2013-2020_land_sum.nc')
 fin_fut_land = fin_fut.where(lm_is==1).sum(dim=('x','y'))
-# fin_pre_land.to_netcdf(f'{cfg.path_in}/{wrun_pre}/hist2d_IFD_spell_hist2d_2013-2020_land_sum.nc')
-fin_fut_land.to_netcdf(f'{cfg.path_in}/{wrun_fut}/hist2d_IFD_resample_time_2013-2020_land_sum.nc')
+fin_fut_land.to_netcdf(f'{cfg.path_in}/{wrun_fut}/hist2d_IFD_spell_hist2d_2013-2020_land_sum.nc')
+#fin_fut_land.to_netcdf(f'{cfg.path_in}/{wrun_fut}/hist2d_IFD_resample_time_2013-2020_land_sum.nc')
