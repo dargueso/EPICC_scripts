@@ -27,6 +27,7 @@ import time
 import subprocess as subprocess
 from joblib import Parallel, delayed
 
+
 wrun = cfg.wrf_runs[0]
 tile_size = 50
 freq = '01H'
@@ -43,30 +44,32 @@ def main():
     nlons = files_ref.sizes['x']
     files_ref.close()
 
-    Parallel(n_jobs=20)(delayed(split_files)(fin,nlons,nlats) for fin in filesin)
+    Parallel(n_jobs=20)(delayed(iotiles.split_files)(fin,nlons,nlats,tile_size) for fin in filesin)
 
 
     #Then concatenate using:
     # for ny in $(seq -s " " -f %03g 0 10); do for nx in $(seq -s " " -f %03g 0 10); do ncrcat UIB_10MIN_RAIN_*_${ny}y-${nx}x.nc UIB_10MIN_RAIN_2011-2020_${ny}y-${nx}x.nc ;done done
-    
+
+
 ###########################################################
 ###########################################################
 
-def split_files(fin,nlons,nlats):
+def split_files(fin,nlons,nlats,tile_size):
 
-    """Split files based on longitude using ncks"""
+    """Split files based on longitude using xarray"""
     print(fin)
 
     finxr = xr.open_dataset(fin).load()
-    
 
-    for nnlon,slon in enumerate(range(0,nlons,tile_size)): 
+
+    for nnlon,slon in enumerate(range(0,nlons,tile_size)):
       for nnlat,slat in enumerate(range(0,nlats,tile_size)):
+
         fout = fin.replace(".nc",f'_{nnlat:03d}y-{nnlon:03d}x.nc')
+
         elon = slon + tile_size
         elat = slat + tile_size
-        #print(f'lon tile: ',slon,elon)
-        #print(f'lat tile: ',slat,elat)
+
         if elon > nlons: elon=nlons
         if elat > nlats: elat=nlats
 
