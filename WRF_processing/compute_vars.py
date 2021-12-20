@@ -290,8 +290,6 @@ def compute_PSL(ncfile):
         It also provides variable attribute CF-Standard
     """
 
-    ncfile = nc.Dataset(filename,'r')
-
     # Get the sea level pressure using wrf-python
     psl = wrf.getvar(ncfile, "slp",wrf.ALL_TIMES)
 
@@ -301,3 +299,38 @@ def compute_PSL(ncfile):
                 }
 
     return psl,atts
+
+def compute_U10MET(ncfile):
+    """ Function to calculate zonal 10-m windspeed rotated to Earth coordinates
+        from WRF OUTPUTS
+        It also provides variable attributes CF-Standard
+    """
+
+    #Get vertical wind using wrf-python
+
+    ua = np.squeeze(wrf.getvar(ncfile, "uvmet10",wrf.ALL_TIMES)[0,:])
+
+    atts = {"standard_name": "zonal_wind_speed",
+            "long_name":  "Zonal earth coordinates wind speed",
+            "units"    :  "m s-1"                      ,
+            "hgt"       :  "10 m"                    ,
+            }
+
+    return ua,atts
+
+def compute_V10MET(ncfile):
+    """ Function to calculate meridional 10-m windspeed rotated to Earth coordinates
+        from WRF OUTPUTS
+        It also provides variable attributes CF-Standard
+    """
+    #Get vertical wind using wrf-python
+
+    va = np.squeeze(wrf.getvar(ncfile, "uvmet10",wrf.ALL_TIMES)[1,:])
+
+    atts = {"standard_name": "meridional_wind_speed",
+            "long_name":  "Meridional earth coordinates wind speed",
+            "units"    :  "m s-1"                      ,
+            "hgt"       :  "10 m"                    ,
+            }
+
+    return va,atts
