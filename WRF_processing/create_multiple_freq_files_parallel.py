@@ -38,10 +38,12 @@ import pandas as pd
 ###########################################################
 ###########################################################
 
-varnames_hfreq=['RAIN']
+varnames_hfreq=[]
+varnames_mfreq=['U10MET','V10MET']
 varnames_lfreq=[]
-varnames = varnames_hfreq + varnames_lfreq
-frequencies=['10MIN','01H','DAY','MON','DCYCLE']
+varnames = varnames_hfreq + varnames_mfreq + varnames_lfreq
+#frequencies=['10MIN','01H','03H','DAY','MON','DCYCLE']
+frequencies=['01H']
 path_in = cfg.path_proc
 path_out = cfg.path_unif
 patt_inst=cfg.institution
@@ -78,9 +80,16 @@ def main():
                         patt="%s_%s"%(patt_inst,'10MIN')
                         Parallel(n_jobs=12)(delayed(create_hourly_files)(fullpathout,yearmonth,patt,varn) for yearmonth in datelist)
 
-                    if varn in varnames_lfreq:
+                    if varn in varnames_mfreq:
                         patt="%s_%s"%(patt_inst,'01H')
                         Parallel(n_jobs=12)(delayed(create_hourly_files_from_pp)(fullpathin,fullpathout,yearmonth,patt_inst,varn) for yearmonth in datelist)
+
+                if freq == '03H':
+
+                    if varn in varnames_lfreq:
+                        patt="%s_%s"%(patt_inst,'03H')
+                        Parallel(n_jobs=12)(delayed(create_3hourly_files_from_pp)(fullpathin,fullpathout,yearmonth,patt_inst,varn) for yearmonth in datelist)
+
 
                 if freq == 'DAY':
                     patt="%s_%s"%(patt_inst,'01H')
@@ -123,6 +132,15 @@ def create_hourly_files(fullpathout,yearmonth,patt,varn):
         subprocess.call(f"cdo hoursum {fin} {fout}",shell=True)
     else:
         subprocess.call(f"cdo hourmean {fin} {fout}",shell=True)
+
+def create_3hourly_files_from_pp(fullpathin,fullpathout,yearmonth,patt_inst,varn):
+
+    """Create hourly files from original postprocessed"""
+
+    fin = f'{fullpathin}/{yearmonth[:4]}/{patt_inst}_{varn}_{yearmonth}*'
+    fout = f'{fullpathout}/{patt_inst}_03H_{varn}_{yearmonth}.nc'
+    print(fin)
+    subprocess.call(f"ncrcat {fin} {fout}",shell=True)
 
 def create_daily_files(fullpathout,yearmonth,patt,varn):
     """Create daily files from hourly files"""
