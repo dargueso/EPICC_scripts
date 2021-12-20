@@ -59,7 +59,7 @@ def main():
 #         fin_all.to_netcdf(fout)
 
 #SINGLE FILE TYPES
-filespath = f'{cfg.path_in}/{wrun}/hist2d_IFD_tiles_50/hist2d_IFD_resample_time_2013-2020'
+filespath = f'{cfg.path_in}/{wrun}/hist2d_IFD_tiles_50/hist2d_IFD_spell_hist2d_2013-2020'
 filessuffix = f''
 filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_10MIN_RAIN_20??-??.nc'))
 files_ref = xr.open_dataset(filesin[0])
