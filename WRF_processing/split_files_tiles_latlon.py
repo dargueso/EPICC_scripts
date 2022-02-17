@@ -44,7 +44,7 @@ def main():
     nlons = files_ref.sizes['x']
     files_ref.close()
 
-    Parallel(n_jobs=20)(delayed(iotiles.split_files)(fin,nlons,nlats,tile_size) for fin in filesin)
+    Parallel(n_jobs=20)(delayed(split_files)(fin,nlons,nlats,tile_size) for fin in filesin)
 
 
     #Then concatenate using:
