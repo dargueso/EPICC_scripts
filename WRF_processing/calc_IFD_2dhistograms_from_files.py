@@ -40,11 +40,12 @@ nlons=fileref.west_east.size
 #filespath = f'{cfg.path_in}/{wrun}/hist2d_IFD_tiles_50/hist2d_IFD_spell_2013-2020'
 
 #I_bins_spell = np.asarray(list(range(1,6,1)) + list(range(6,144,6)) + list(range(144,576,144)))
-I_bins_spell = np.asarray(list(range(1,6,1)) + list(range(6,582,6)))
-I_bins_intensity=np.array(list(range(1,251,2))+[1000])
+# I_bins_intensity=np.array(list(range(1,251,2))+[1000])
 # I_bins_intensity=np.array(list(range(1,30,1))+list(range(30,100,2))+list(range(100,255,5))+[1000])
 #I_bins_intensity = np.arange(0,605,5)
 
+I_bins_spell = np.asarray(list(range(1,6,1)) + list(range(6,582,6)))
+I_bins_intensity = np.arange(0,1005,5)
 #####################################################################
 #####################################################################
 
@@ -55,7 +56,7 @@ def main():
 
     xytiles=list(product(latsteps, lonsteps))
 
-    filespath = f'{cfg.path_in}/{wrun}/hist2d_IFD_tiles_50/hist2d_IFD_spell_2013-2020'
+    filespath = f'{cfg.path_in}/{wrun}/hist2d_IFD_tiles_50/spell_IFD_2013-2020'
     print(f'Ej: {filespath}_000y-000x.nc')
 
 
@@ -77,7 +78,10 @@ def calc_IFD_hist2d(filespath,ny,nx,I_bins_spell,I_bins_intensity):
     fin = xr.open_dataset(filesin)
     hist2d = histogram(fin.spell, fin.intensity, bins=[I_bins_spell,I_bins_intensity],dim=['time'])
 
-    fout = filesin.replace('IFD_spell','IFD_spell_hist2d')
+    import pdb; pdb.set_trace()
+    hist2d['spell_bin'] = I_bins_spell[-:1]
+
+    fout = filesin.replace('spell','hist2d_spell')
 
 
     hist2d.to_netcdf(fout)
