@@ -24,7 +24,7 @@ import epicc_config as cfg
 from glob import glob
 
 # wrun = cfg.wrf_runs[0]
-wrun = 'EPICC_2km_ERA5_CMIP6anom_HVC_GWD'
+wrun = 'EPICC_2km_ERA5_HVC_GWD'
 tile_size = 50
 
 # #filespath = f'{cfg.path_in}/{wrun}/{cfg.patt_in}_{freq}_RAIN_2013-2020'
@@ -59,7 +59,9 @@ def main():
 #         fin_all.to_netcdf(fout)
 
 #SINGLE FILE TYPES
-filespath = f'{cfg.path_in}/{wrun}/hist2d_IFD_tiles_50/hist2d_IFD_spell_hist2d_2013-2020'
+#filespath = f'{cfg.path_in}/{wrun}/hist2d_IFD_tiles_50/hist2d_IFD_spell_hist2d_2013-2020'
+filespath = f'{cfg.path_in}/{wrun}/hist2d_resample_time_IFD_2013-2020'
+
 filessuffix = f''
 filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_10MIN_RAIN_20??-??.nc'))
 files_ref = xr.open_dataset(filesin[0])
