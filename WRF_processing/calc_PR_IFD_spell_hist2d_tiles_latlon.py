@@ -83,18 +83,18 @@ def calc_IFD_spell(filespath,ny,nx):
             srain = fin.RAIN.isel(y=iy,x=ix).where(fin.isel(y=iy,x=ix).RAIN>wet_th,0)
             srain = srain.to_dataframe()
             srain = srain.rename(columns = {'RAIN':'pr'})
-            srain['pr'] = srain['pr'].where(srain['pr']>=wet_th,0)
-            srain['event_start'] = (srain['pr'].astype(bool).shift() != srain['pr'].astype(bool)).where(srain['pr']>=wet_th, False)
-            srain['event_end'] = (srain['pr'].astype(bool).shift(-1) != srain['pr'].astype(bool)).where(srain['pr']>=wet_th, False)
-            srain['event'] = srain['event_start'].cumsum().where(srain['pr']>=wet_th)
+            #srain['pr'] = srain['pr'].where(srain['pr']>=wet_th,0)
+            srain['event_start'] = (srain['pr'].astype(bool).shift() != srain['pr'].astype(bool))#.where(srain['pr']>=wet_th, False)
+            srain['event_end'] = (srain['pr'].astype(bool).shift(-1) != srain['pr'].astype(bool))#.where(srain['pr']>=wet_th, False)
+            srain['event'] = srain['event_start'].cumsum()#.where(srain['pr']>=wet_th)
 
             wet_event_intensity = srain.groupby('event')['pr'].sum()
             wet_event_duration = srain.groupby('event')['pr'].count()
             srain['event_pr'] = srain['event'].map(wet_event_intensity).where(srain['event_end'])
             srain['event_dur'] =  srain['event'].map(wet_event_duration).where(srain['event_end'])
 
-            spell[:,iy,ix] = srain['event_dur']
-            intensity[:,iy,ix] = srain['event_pr']
+            spell[:,iy,ix] = srain['event_dur'].where(srain['event_pr']>=wet_th)
+            intensity[:,iy,ix] = srain['event_pr'].where(srain['event_pr']>=wet_th)
 
     fino=xr.Dataset({'spell':(['time','y','x'],spell),'intensity':(['time','y','x'],intensity),'lat':(['y','x'],fin.lat.squeeze()),'lon':(['y','x'],fin.lon.squeeze())},coords={'time':fin.time.values})
 
