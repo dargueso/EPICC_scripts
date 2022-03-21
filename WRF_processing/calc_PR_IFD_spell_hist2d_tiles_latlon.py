@@ -33,7 +33,7 @@ import epicc_config as cfg
 ###########################################################
 ###########################################################
 
-wrun = 'EPICC_2km_ERA5_HVC_GWD'
+wrun = 'EPICC_2km_ERA5_CMIP6anom_HVC_GWD'
 tile_size = 50
 fileref = xr.open_dataset(f'{cfg.path_wrfout}/{cfg.wrf_runs[0]}/out/{cfg.file_ref}')
 nlats=fileref.south_north.size
@@ -44,7 +44,8 @@ save_spell_file = False
 ###########################################################
 
 I_bins_spell = np.asarray(list(range(1,6,1)) + list(range(6,582,6)))
-I_bins_intensity = np.arange(0,1005,5)
+I_bins_intensity = np.asarray([1,5] + list(range(10,505,5)))
+#I_bins_intensity = np.arange(0,1005,5)
 I_bins_centers=I_bins_intensity[:-1]+np.diff(I_bins_intensity)/2
 
 ###########################################################
@@ -59,7 +60,6 @@ def main():
     xytiles=list(product(latsteps, lonsteps))
     filespath = f'{cfg.path_in}/{wrun}/split_files_tiles_50/{cfg.patt_in}_10MIN_RAIN_20??-??'
     print(f'Ej: {filespath}_000y-000x.nc')
-
     Parallel(n_jobs=10)(delayed(calc_IFD_spell)(filespath,xytile[0],xytile[1]) for xytile in xytiles)
 
 ###########################################################
@@ -93,8 +93,8 @@ def calc_IFD_spell(filespath,ny,nx):
             srain['event_pr'] = srain['event'].map(wet_event_intensity).where(srain['event_end'])
             srain['event_dur'] =  srain['event'].map(wet_event_duration).where(srain['event_end'])
 
-            spell[:,iy,ix] = srain['event_dur'].where(srain['event_pr']>=wet_th)
-            intensity[:,iy,ix] = srain['event_pr'].where(srain['event_pr']>=wet_th)
+            spell[:,iy,ix] = srain['event_dur']
+            intensity[:,iy,ix] = srain['event_pr']
 
     fino=xr.Dataset({'spell':(['time','y','x'],spell),'intensity':(['time','y','x'],intensity),'lat':(['y','x'],fin.lat.squeeze()),'lon':(['y','x'],fin.lon.squeeze())},coords={'time':fin.time.values})
 

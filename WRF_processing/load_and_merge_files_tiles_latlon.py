@@ -41,7 +41,7 @@ def main():
 
     filespath = f'{cfg.path_in}/{wrun}/hist2d_spell_IFD_2013-2020'
 
-    filessuffix = f'_1.0mm'
+    filessuffix = f'_0.1mm'
     filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_10MIN_RAIN_20??-??.nc'))
     files_ref = xr.open_dataset(filesin[0])
     nlats = files_ref.sizes['y']

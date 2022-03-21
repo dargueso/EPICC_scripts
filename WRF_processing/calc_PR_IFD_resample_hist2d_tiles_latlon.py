@@ -32,16 +32,16 @@ from xhistogram.xarray import histogram
 #####################################################################
 
 
-wrun = 'EPICC_2km_ERA5_CMIP6anom_HVC_GWD'
+wrun = 'EPICC_2km_ERA5_HVC_GWD'
 
 fileref = xr.open_dataset(f'{cfg.path_wrfout}/{cfg.wrf_runs[0]}/out/{cfg.file_ref}')
 nlats=fileref.south_north.size
 nlons=fileref.west_east.size
-RSmins = [10,20,30,60,120,180,360,480,720,1440]
+RSmins = [10,20,30,60,120,180,240,360,480,720,1440]
 
 #I_bins_edges=np.array(list(range(1,251,2))+[1000])
 #I_bins_edges=np.array([0,0.1]+list(range(1,10))+list(range(10,20,2))+list(range(20,100,5))+list(range(100,200,10))+list(range(200,620,20)))
-I_bins_edges = np.arange(0,1005,5)
+I_bins_edges = np.asarray([1,5] + list(range(10,505,5)))
 I_bins_centers=I_bins_edges[:-1]+np.diff(I_bins_edges)/2
 tile_size = 50
 wet_th = cfg.wet_value
@@ -89,7 +89,7 @@ def calc_IFD_resample(filespath,ny,nx,RSmins,I_bins_edges,I_bins_centers):
 
     hist_o = xr.Dataset({'FRQ':(['RSmins','Ibins','y','x'],hist_array),'lat':(['y','x'],lats.squeeze()),'lon':(['y','x'],lons.squeeze())},coords={'Ibins':I_bins_centers,'RSmins':RSmins})
 
-    fout = f'{cfg.path_in}/{wrun}/hist2d_resample_time_IFD_{cfg.syear}-{cfg.eyear}_{ny}y-{nx}x.nc'
+    fout = f'{cfg.path_in}/{wrun}/hist2d_resample_time_IFD_{cfg.syear}-{cfg.eyear}_{ny}y-{nx}x_{wet_th}mm.nc'
     hist_o.to_netcdf(fout)
     fin.close()
 
