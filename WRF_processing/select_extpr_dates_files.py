@@ -71,7 +71,7 @@ def main():
 
     print(f'Processing dates: {args.sdatestr} to {args.edatestr}')
 
-    Parallel(n_jobs=1)(delayed(select_extreme_dates)(fin,reg,pr_thres) for fin in filesin)
+    Parallel(n_jobs=12)(delayed(select_extreme_dates)(fin,reg,pr_thres) for fin in filesin)
 
 
 ###########################################################
