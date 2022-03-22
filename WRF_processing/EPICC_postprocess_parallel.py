@@ -115,8 +115,11 @@ def postproc_var_byday(wrun,varn,date):
         ncfile = nc.Dataset(filesin[0])
         if patt == 'wrf3hrly':
             fwrf2d = nc.Dataset(filesin[0].replace('wrf3hrly','wrfout'))
+            fwrfgeo = nc.Dataset(f'{cfg.path_geo}/{cfg.file_geo}')
             for varname in fwrf2d.variables.keys():
                 ncfile.variables[varname]=fwrf2d.variables[varname]
+            for varname in fwrfgeo.variables.keys():
+                ncfile.variables[varname]=fwrfgeo.variables[varname]
 
         varout,atts = cvars.compute_WRFvar(ncfile,varn)
         otimes =  wrftime2date(filesin[0].split())[:]
@@ -129,8 +132,11 @@ def postproc_var_byday(wrun,varn,date):
             ncfile = nc.Dataset(filesin[n])
             if patt == 'wrf3hrly':
                 fwrf2d = nc.Dataset(filesin[n].replace('wrf3hrly','wrfout'))
+                fwrfgeo = nc.Dataset(f'{cfg.path_geo}/{cfg.file_geo}')
                 for varname in fwrf2d.variables.keys():
                     ncfile.variables[varname]=fwrf2d.variables[varname]
+                for varname in fwrfgeo.variables.keys():
+                    ncfile.variables[varname]=fwrfgeo.variables[varname]
 
             xFragment,atts = cvars.compute_WRFvar(ncfile,varn)
 
@@ -141,8 +147,9 @@ def postproc_var_byday(wrun,varn,date):
                     xFragment=np.expand_dims(xFragment,axis=0)
 
             ncfile.close()
-            if patt == 'wrf3hrly': fwrf2d.close()
-
+            if patt == 'wrf3hrly':
+                fwrf2d.close()
+                fwrfgeo.close()
             x.append(xFragment)
             t.append(tFragment)
 

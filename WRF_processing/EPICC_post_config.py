@@ -4,21 +4,23 @@
 path_wrfo = '/vg6/dargueso-NO-BKUP/WRF_OUT/EPICC/'
 path_proc = '/vg6/dargueso-NO-BKUP/postprocessed/EPICC/'
 path_unif = '/vg6/dargueso-NO-BKUP/postprocessed/unified/EPICC/'
+path_geo = '/home/dargueso/share/geo_em_files/EPICC/'
+file_geo= 'geo_em.d01.EPICC_2km_ERA5_HVC_GWD.nc'
 file_ref = 'wrfout_d01_2020-08-01_00:00:00'
 institution = 'UIB'
 wruns = ['EPICC_2km_ERA5_HVC_GWD']#,'EPICC_2km_ERA5_CMIP6anom_HVC_GWD']
 
 
-patt = 'wrfout'
+patt = 'wrf3hrly'
 dom  = 'd01'
 
-syear = 2011
+syear = 2018
 eyear = 2020
 smonth =1
 emonth =12
 acc_dt = 10
 
-variables = ['RSDS','RLDS']
+variables = ['PVO']
 
 #### Requested output variables (DO NOT CHANGE THIS LINE) ####
 

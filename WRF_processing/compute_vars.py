@@ -300,6 +300,21 @@ def compute_PSL(ncfile):
 
     return psl,atts
 
+def compute_PVO(ncfile):
+    """ Function to calculate PVU (potential vorticity) using wrf-python diagnostics
+        It also provides variable attribute CF-Standard
+    """
+
+    # Get the sea level pressure using wrf-python
+    psl = wrf.getvar(ncfile, "pvo",wrf.ALL_TIMES)
+
+    atts = {"standard_name": "air_pressure_at_mean_sea_level",
+                 "long_name":      "Sea Level Pressure"      ,
+                 "units"    :      "PVU"                      ,
+                }
+
+    return psl,atts
+
 def compute_U10MET(ncfile):
     """ Function to calculate zonal 10-m windspeed rotated to Earth coordinates
         from WRF OUTPUTS
