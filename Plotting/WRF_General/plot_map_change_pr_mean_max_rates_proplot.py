@@ -71,14 +71,14 @@ labeltop={'10MIN': f'{sdate.strftime("%H:%M %d %b %Y")}-{edate.strftime("%H:%M %
               '01H'  : f'{sdate.strftime("%H:00 %d %b %Y")}-{edate.strftime("%H:00 %d %b %Y")}',
               'DAY'  : f'{sdate.strftime("%d %b %Y")}-{edate.strftime("%d %b %Y")}',
               'MON'  : f'{sdate.strftime("%b %Y")}-{edate.strftime("%d %b %Y")}'}
-units = {'10MIN': f'mm/10min',
-              '01H'  : f'mm hr-1',
-              'DAY'  : f'mm day-1',
-              'MON'  : f'mm month-1'}
+units = {'10MIN': f'%',
+              '01H'  : f'%',
+              'DAY'  : f'%',
+              'MON'  : f'%'}
 
 def get_geoinfo():
 
-    fileref = nc.Dataset(f'{cfg.path_wrfout}/{wrun}/out/{cfg.file_ref}')
+    fileref = nc.Dataset(f'{cfg.path_wrfout}/{wrun_pre}/out/{cfg.file_ref}')
     hgt = getvar(fileref, "ter")
     lats, lons = latlon_coords(hgt)
     cart_proj = get_cartopy(hgt)
@@ -99,41 +99,53 @@ def map_bounds(reg):
 ###########################################################
 ###########################################################
 
-wrun = cfg.wrf_runs[0]
+wrun_pre = cfg.wrf_runs[0]
+wrun_fut = wrun_pre.replace("ERA5","ERA5_CMIP6anom")
 
-# cmap = utils.rgb2cmap(f'{cfg.path_cmaps}/precip_11lev.rgb')
-cmap = plot.Colormap('IceFire')
+cmap = plot.Colormap('DryWet')
 cart_proj,lats,lons,hgt = get_geoinfo()
 
 mbounds = map_bounds(reg)
 
-filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_{freq}_{varname}_????-??.nc'))
-fin_all = xr.open_mfdataset(filesin,concat_dim="time", combine="nested")
-fin = fin_all.sel(time=slice(sdate,edate)).squeeze()
+filesin_pre = sorted(glob(f'{cfg.path_in}/{wrun_pre}/{cfg.patt_in}_{freq}_{varname}_????-??.nc'))
+fin_all_pre = xr.open_mfdataset(filesin_pre,concat_dim="time", combine="nested")
+
+filesin_fut = sorted(glob(f'{cfg.path_in}/{wrun_fut}/{cfg.patt_in}_{freq}_{varname}_????-??.nc'))
+fin_all_fut = xr.open_mfdataset(filesin_fut,concat_dim="time", combine="nested")
+
+fin_pre = fin_all_pre.sel(time=slice(sdate,edate)).squeeze()
+fin_fut = fin_all_fut.sel(time=slice(sdate,edate)).squeeze()
+
 #tot_seconds = int((fin.isel(time=-1).time-fin.isel(time=0).time)*1e-9)
 if reg!='EPICC':
-    fin_reg =  fin.where((fin.lat>=cfg.reg_coords[reg][0]) &\
-                         (fin.lat<=cfg.reg_coords[reg][2]) &\
-                        (fin.lon>=cfg.reg_coords[reg][1]) &\
-                        (fin.lon<=cfg.reg_coords[reg][3]),
+    fin_reg_pre =  fin_pre.where((fin_pre.lat>=cfg.reg_coords[reg][0]) &\
+                         (fin_pre.lat<=cfg.reg_coords[reg][2]) &\
+                        (fin_pre.lon>=cfg.reg_coords[reg][1]) &\
+                        (fin_pre.lon<=cfg.reg_coords[reg][3]),
                         drop=True)
+    fin_reg_fut =  fin_fut.where((fin_fut.lat>=cfg.reg_coords[reg][0]) &\
+                    (fin_fut.lat<=cfg.reg_coords[reg][2]) &\
+                    (fin_fut.lon>=cfg.reg_coords[reg][1]) &\
+                    (fin_fut.lon<=cfg.reg_coords[reg][3]),
+                    drop=True)
 else:
-    fin_reg = fin
-
-xmax = fin_reg.RAIN.max(skipna=True).values
-mmax = fin_reg.RAIN.mean(dim='time').max(skipna=True).values
-
-lmean = MaxNLocator(nbins=15).tick_values(0.5,mmax)
-lmax = MaxNLocator(nbins=15).tick_values(0.5,xmax)
+    fin_reg_pre = fin_pre
+    fin_reg_fut = fin_fut
 
 
+
+lmean = MaxNLocator(nbins=15).tick_values(-100,100)
+lmax = MaxNLocator(nbins=15).tick_values(-100,100)
+
+#lmean = np.arange(-50,55,5)
+#lmax = np.arange(-50,55,5)
 
 ###########################################################
 ###########################################################
 
 #Plotting
 # Create a figure
-fig, axs = plot.subplots(width=12,height=5,ncols=2,proj=cart_proj)
+fig, axs = plot.subplots(width=12,height=4,ncols=2,nrows=1,proj=cart_proj)
 #plot.rc.abc = True
 #fig.suptitle.size='x-large'
 
@@ -146,12 +158,16 @@ axs.format(
 
 ###########################################################
 ###########################################################
+
+
 axs[0].add_feature(cfeature.COASTLINE,linewidth=0.5)
 axs[0].add_feature(cfeature.BORDERS,linewidth=0.5)
 axs[0].text(0.5,1.02,f'Mean', fontsize='x-large', horizontalalignment='center', transform=axs[0].transAxes)
-#axs[0].text(0.98,0.92,f'{labeltop[freq]}', fontsize='medium', horizontalalignment='right', transform=axs[0].transAxes)
-#CS = axs[0].contour(to_np(lons), to_np(lats), fin[varname].mean('time')*tot_seconds,levels=11,linewidth=0)
-dplot0= fin[varname].mean(dim='time')
+
+mseas_pre = fin_pre[varname].mean(dim='time')
+mseas_fut = fin_fut[varname].mean(dim='time')
+
+dplot0= (mseas_fut - mseas_pre)*100./mseas_pre
 m0=axs[0].contourf(to_np(lons), to_np(lats), dplot0,levels=lmean,
              transform=ccrs.PlateCarree(),
              cmap=cmap,extend='both')
@@ -160,7 +176,7 @@ axs[0].set_ylim(cartopy_ylim(hgt,geobounds=mbounds))
 gl0=axs[0].gridlines(color="black", linestyle="dotted",linewidth=0.5,draw_labels=True,x_inline=False, y_inline=False)#,xlocs=range(-10,10,1), ylocs=range(20,60,1))
 gl0.right_labels=False
 gl0.top_labels=False
-axs[0].colorbar(m0,length=0.7, loc='b',label=(units[freq]))
+#axs[0].colorbar(m0,length=0.7, loc='b',label='mm day-1')
 ###########################################################
 ###########################################################
 
@@ -168,11 +184,17 @@ axs[0].colorbar(m0,length=0.7, loc='b',label=(units[freq]))
 axs[1].add_feature(cfeature.COASTLINE,linewidth=0.5)
 axs[1].add_feature(cfeature.BORDERS,linewidth=0.5)
 axs[1].text(0.5,1.02,f'{freq} Maximum Rate', fontsize='x-large', horizontalalignment='center', transform=axs[1].transAxes)
-axs[1].text(0.98,0.02,f'{labeltop[freq]}', fontsize='medium', horizontalalignment='right', transform=axs[1].transAxes)
+
+#axs[1].text(0.98,1.02,f'{season}', fontsize='x-large', horizontalalignment='right', transform=axs[1].transAxes)
+#axs[1].text(0.98,0.02,f'{labeltop[freq]}', fontsize='medium', horizontalalignment='right', transform=axs[1].transAxes)
 #CS = axs[1].contour(to_np(lons), to_np(lats), fin[varname].max('time')*tot_seconds,levels=11,linewidth=0)
 
-dplot1 = fin[varname].max(dim='time')
-m1=axs[1].contourf(to_np(lons), to_np(lats), dplot1.where(dplot1>0.1),levels=lmax,
+xseas_pre = fin_pre[varname].max(dim='time')
+xseas_fut = fin_fut[varname].max(dim='time')
+
+
+dplot1 = (xseas_fut - xseas_pre)*100./xseas_pre
+m1=axs[1].contourf(to_np(lons), to_np(lats), dplot1,levels=lmax,
                 transform=ccrs.PlateCarree(),
                 cmap=cmap,extend='both')
 
@@ -183,7 +205,11 @@ axs[1].set_ylim(cartopy_ylim(hgt,geobounds=mbounds))
 gl1=axs[1].gridlines(color="black", linestyle="dotted",linewidth=0.5,draw_labels=True, x_inline=False, y_inline=False)#,xlocs=range(-10,10,1), ylocs=range(20,60,1))
 gl1.right_labels=False
 gl1.top_labels=False
-axs[1].colorbar(m1,length=0.7, loc='b',label=units[freq])
+#axs[1].colorbar(m1,length=0.7, loc='b',label=units[freq])
+
+fig.colorbar(m0,length=0.7, loc='b',label=units[freq],col=1)
+fig.colorbar(m1,length=0.7, loc='b',label=units[freq],col=2)
+
 
 #fig.subplots_adjust(left=0.1,right=0.9,top=0.9,bottom=0.15,wspace=0.1,hspace=0.2)
-plt.savefig(f'{cfg.path_out}/WRF_General/{varname}_{freq}_{sdate.strftime("%Y-%m-%d_%H-%M")}-{edate.strftime("%Y-%m-%d_%H-%M")}_{reg}.pdf')
+plt.savefig(f'{cfg.path_out}/WRF_General/Change_{varname}_{freq}_{sdate.strftime("%Y-%m-%d_%H-%M")}-{edate.strftime("%Y-%m-%d_%H-%M")}_{reg}.png',dpi=150)
