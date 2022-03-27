@@ -349,3 +349,15 @@ def compute_V10MET(ncfile):
             }
 
     return va,atts
+
+def compute_PW(ncfile):
+    """ Function to calculate precipitable water in the column
+    """
+
+    pw = wrf.getvar(ncfile,"pw",wrf.ALL_TIMES)
+
+    atts = {"standard_name": "precipitable_water",
+            "long_name"    : "column precipitable water",
+            "units"        : "kg m-2"}
+
+    return pw,atts
