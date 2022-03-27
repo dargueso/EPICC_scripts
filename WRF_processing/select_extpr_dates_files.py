@@ -51,10 +51,11 @@ def main():
     parser.add_argument("-s", "--start",dest="sdatestr",type=str,help="Starting date  of the period to plot in format 2019-09-11 09:00\n partial datestrings such as 2019-09 also valid\n [default: 2019-09-11 09:00]",metavar="DATE",default=f'{cfg.syear}-01-01 00:00')
     parser.add_argument("-e", "--end"  ,dest="edatestr",type=str,help="Ending date  of the period to plot in format 2019-09-11 09:00\n partial datestrings such as 2019-09 also valid\n [default: 2019-09-15 09:30]",metavar="DATE",default=f'{cfg.eyear}-12-31 23:59')
     parser.add_argument("-v", "--var", dest="var", help="Variable to plot \n [default: RAIN]",metavar="VAR",default='RAIN')
-    parser.add_argument("-t", "--thres"  ,dest="thres",type=str,help="Threshold to define extreme rainfall event",metavar="THRES",default='10')
+    parser.add_argument("-t", "--thres"  ,dest="thres",type=float,help="Threshold to define extreme rainfall event",metavar="THRES",default='10')
     parser.add_argument("-f", "--freq", dest="freq",help="Frequency to plot from 10min to monthly\n [default: hourly]",metavar="FREQ",default='01H',choices=['10MIN','01H','DAY','MON'])
     parser.add_argument("-r", "--reg", dest="reg", help="Region to plot \n [default: EPICC]",metavar="REG",default='EPICC',choices=cfg.reg_coords.keys())
-
+    parser.add_argument("-l", "--landonly", dest="landonly", action="store_true", default=False,help="Search events over land grid points only [default:False]")
+    parser.add_argument("-w", "--wrfrun", dest= "wrfrun", type=int, help="WRF run to analyze (0: Present, 1: PGW) \n [default: Present", default=0,choices=[0,1])
     args = parser.parse_args()
 
     sdate=dateparser.parse(args.sdatestr)
@@ -62,8 +63,9 @@ def main():
     varname = args.var
     freq= args.freq
     reg = args.reg
-    pr_thres = int(args.thres)
-    wrun = cfg.wrf_runs[0]
+    pr_thres = args.thres
+    wrun = cfg.wrf_runs[args.wrfrun]
+    landonly = args.landonly
 
 
     files_all = sorted(glob(f'{cfg.path_postproc}/{wrun}/{cfg.institution}_{freq}_{varname}_????-??.nc'))
@@ -71,20 +73,27 @@ def main():
 
     print(f'Processing dates: {args.sdatestr} to {args.edatestr}')
 
-    Parallel(n_jobs=12)(delayed(select_extreme_dates)(fin,reg,pr_thres) for fin in filesin)
+    Parallel(n_jobs=10)(delayed(select_extreme_dates)(fin,reg,pr_thres,landonly) for fin in filesin)
 
 
 ###########################################################
 ###########################################################
 
-def select_extreme_dates(fin_name,reg,pr_thres):
+def select_extreme_dates(fin_name,reg,pr_thres,landonly):
 
     print("Input: ", fin_name)
     fout_name = fin_name.replace(".nc",f"-{pr_thres}mm_{reg}.nc")
+    if landonly: fout_name = fout_name.replace(".nc","_LAND.nc")
 
     if not os.path.isfile(fout_name):
 
-        fin = xr.open_dataset(fin_name)
+        fin_all = xr.open_dataset(fin_name)
+        if landonly:
+            fin_geo = xr.open_dataset(cfg.geofile_ref)
+            fin_geo = fin_geo.rename_dims({'south_north':'y','west_east':'x'})
+            fin = fin_all.where(fin_geo.LANDMASK.squeeze() == 1)
+        else:
+            fin = fin_all
 
         if reg!='EPICC':
             fin_reg =  fin.where((fin.lat>=cfg.reg_coords[reg][0]) &\
@@ -96,7 +105,7 @@ def select_extreme_dates(fin_name,reg,pr_thres):
             fin_reg = fin
 
 
-        fout = fin.sel(time=(fin_reg.max(dim=['x','y']).RAIN>pr_thres))
+        fout = fin_all.sel(time=(fin_reg.max(dim=['x','y']).RAIN>pr_thres))
 
         if len(fout.time)!=0:
             fout.to_netcdf(fout_name)
