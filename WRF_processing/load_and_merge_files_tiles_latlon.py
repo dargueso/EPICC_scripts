@@ -24,7 +24,7 @@ import epicc_config as cfg
 from glob import glob
 
 # wrun = cfg.wrf_runs[0]
-wrun = 'EPICC_2km_ERA5_HVC_GWD'
+wrun = 'EPICC_2km_ERA5_CMIP6anom_HVC_GWD'
 tile_size = 50
 
 # #filespath = f'{cfg.path_in}/{wrun}/{cfg.patt_in}_{freq}_RAIN_2013-2020'
@@ -39,9 +39,9 @@ def main():
 
     """  Split files into tiles """
 
-    filespath = f'{cfg.path_in}/{wrun}/hist2d_spell_IFD_2013-2020'
+    filespath = f'{cfg.path_in}/{wrun}/hist2d_spell_sumevents_IFD_2013-2020'
 
-    filessuffix = f'_0.1mm'
+    filessuffix = f''
     filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_10MIN_RAIN_20??-??.nc'))
     files_ref = xr.open_dataset(filesin[0])
     nlats = files_ref.sizes['y']
