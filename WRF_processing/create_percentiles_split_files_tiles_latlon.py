@@ -25,7 +25,7 @@ from glob import glob
 from itertools import product
 from joblib import Parallel, delayed
 
-wrun = 'EPICC_2km_ERA5_CMIP6anom_HVC_GWD'
+wrf_runs = ['EPICC_2km_ERA5_HVC_GWD','EPICC_2km_ERA5_CMIP6anom_HVC_GWD']
 qtiles = np.asarray(cfg.qtiles)
 mode = 'all'
 wet_value = cfg.wet_value
@@ -36,22 +36,23 @@ tile_size = 50
 def main():
 
     """ Calculating percentiles using a loop"""
+    for wrun in wrf_runs:
 
-    filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_10MIN_RAIN_20??-??.nc'))
-    files_ref = xr.open_dataset(filesin[0])
-    nlats = files_ref.sizes['y']
-    nlons = files_ref.sizes['x']
+        filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_10MIN_RAIN_20??-??.nc'))
+        files_ref = xr.open_dataset(filesin[0])
+        nlats = files_ref.sizes['y']
+        nlons = files_ref.sizes['x']
 
-    lonsteps = [f'{nn:03d}' for nn in range(nlons//tile_size+1)]
-    latsteps = [f'{nn:03d}' for nn in range(nlats//tile_size+1)]
+        lonsteps = [f'{nn:03d}' for nn in range(nlons//tile_size+1)]
+        latsteps = [f'{nn:03d}' for nn in range(nlats//tile_size+1)]
 
-    xytiles=list(product(latsteps, lonsteps))
+        xytiles=list(product(latsteps, lonsteps))
 
-    filespath = f'{cfg.path_in}/{wrun}/split_files_tiles_50/{cfg.patt_in}_10MIN_RAIN_20??-??'
-    print(f'Ej: {filespath}_000y-000x.nc')
+        filespath = f'{cfg.path_in}/{wrun}/split_files_tiles_50/{cfg.patt_in}_10MIN_RAIN_20??-??'
+        print(f'Ej: {filespath}_000y-000x.nc')
 
 
-    Parallel(n_jobs=20)(delayed(calc_percentile)(filespath,xytile[0],xytile[1],qtiles,mode) for xytile in xytiles)
+        Parallel(n_jobs=20)(delayed(calc_percentile)(filespath,xytile[0],xytile[1],qtiles,wrun,mode) for xytile in xytiles)
 
 
 
@@ -59,7 +60,7 @@ def main():
 #####################################################################
 #####################################################################
 
-def calc_percentile(filespath,ny,nx,qtiles,mode='wetonly'):
+def calc_percentile(filespath,ny,nx,qtiles,wrun,mode='wetonly'):
   print (f'Analyzing tile y: {ny} x: {nx}')
   filesin = sorted(glob(f'{filespath}_{ny}y-{nx}x.nc'))
 
