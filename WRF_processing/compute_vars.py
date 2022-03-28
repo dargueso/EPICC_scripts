@@ -350,6 +350,25 @@ def compute_V10MET(ncfile):
 
     return va,atts
 
+def compute_WSPD10(ncfile):
+    """ Function to calculate 10-m wind speed on Earth coordinates
+        from WRF OUTPUTS
+        It also provides variable attributes CF-Standard
+    """
+
+    #Get wind speed (this function calculates both speed and direction)
+    #We select speed only
+
+    uvmet10_wind = np.squeeze(wrf.getvar(ncfile, "uvmet10_wspd_wdir",wrf.ALL_TIMES)[0,:])
+
+    atts = {"standard_name": "wind_speed",
+            "long_name":  "Earth coordinates wind speed",
+            "units"    :  "m s-1"                      ,
+            "hgt"       :  "10 m"                    ,
+            }
+
+    return uvmet10_wind,atts
+
 def compute_PW(ncfile):
     """ Function to calculate precipitable water in the column
     """
