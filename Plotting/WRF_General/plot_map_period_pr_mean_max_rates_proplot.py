@@ -123,8 +123,8 @@ else:
 xmax = fin_reg.RAIN.max(skipna=True).values
 mmax = fin_reg.RAIN.mean(dim='time').max(skipna=True).values
 
-lmean = MaxNLocator(nbins=15).tick_values(0.5,mmax)
-lmax = MaxNLocator(nbins=15).tick_values(0.5,xmax)
+lmean = MaxNLocator(nbins=15).tick_values(0,mmax)
+lmax = MaxNLocator(nbins=15).tick_values(0,xmax)
 
 
 
@@ -154,7 +154,7 @@ axs[0].text(0.5,1.02,f'Mean', fontsize='x-large', horizontalalignment='center', 
 dplot0= fin[varname].mean(dim='time')
 m0=axs[0].contourf(to_np(lons), to_np(lats), dplot0,levels=lmean,
              transform=ccrs.PlateCarree(),
-             cmap=cmap,extend='both')
+             cmap=cmap,extend='max')
 axs[0].set_xlim(cartopy_xlim(hgt,geobounds=mbounds))
 axs[0].set_ylim(cartopy_ylim(hgt,geobounds=mbounds))
 gl0=axs[0].gridlines(color="black", linestyle="dotted",linewidth=0.5,draw_labels=True,x_inline=False, y_inline=False)#,xlocs=range(-10,10,1), ylocs=range(20,60,1))
@@ -174,7 +174,7 @@ axs[1].text(0.98,0.02,f'{labeltop[freq]}', fontsize='medium', horizontalalignmen
 dplot1 = fin[varname].max(dim='time')
 m1=axs[1].contourf(to_np(lons), to_np(lats), dplot1.where(dplot1>0.1),levels=lmax,
                 transform=ccrs.PlateCarree(),
-                cmap=cmap,extend='both')
+                cmap=cmap,extend='max')
 
 axs[1].set_xlim(cartopy_xlim(hgt,geobounds=mbounds))
 axs[1].set_ylim(cartopy_ylim(hgt,geobounds=mbounds))
