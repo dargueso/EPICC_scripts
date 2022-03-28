@@ -38,7 +38,7 @@ tile_size = 50
 fileref = xr.open_dataset(f'{cfg.path_wrfout}/{cfg.wrf_runs[0]}/out/{cfg.file_ref}')
 nlats=fileref.south_north.size
 nlons=fileref.west_east.size
-wet_th = cfg.wet_value
+#wet_th = cfg.wet_value
 save_spell_file = False
 ###########################################################
 ###########################################################
@@ -80,7 +80,7 @@ def calc_IFD_spell(filespath,ny,nx):
     for iy in range(ylen):
         for ix in range(xlen):
             #print(f'y: {iy}; x: {ix}')
-            srain = fin.RAIN.isel(y=iy,x=ix).where(fin.isel(y=iy,x=ix).RAIN>wet_th,0)
+            srain = fin.RAIN.isel(y=iy,x=ix)#.where(fin.isel(y=iy,x=ix).RAIN>wet_th,0)
             srain = srain.to_dataframe()
             srain = srain.rename(columns = {'RAIN':'pr'})
             #srain['pr'] = srain['pr'].where(srain['pr']>=wet_th,0)
@@ -100,13 +100,13 @@ def calc_IFD_spell(filespath,ny,nx):
 
 
     if save_spell_file:
-        fout = f'{cfg.path_in}/{wrun}/spell_IFD_{cfg.syear}-{cfg.eyear}_{ny}y-{nx}x_{wet_th}mm.nc'
+        fout = f'{cfg.path_in}/{wrun}/spell_IFD_{cfg.syear}-{cfg.eyear}_{ny}y-{nx}x.nc'#_{wet_th}mm.nc'
         fino.to_netcdf(fout,mode='w',encoding={'spell':{'zlib': True,'complevel': 5},'intensity':{'zlib': True,'complevel': 5}})
 
     fin.close()
 
     hist2d = histogram(fino.spell, fino.intensity, bins=[I_bins_spell,I_bins_intensity],dim=['time'])
-    fout2d = f'{cfg.path_in}/{wrun}/hist2d_spell_IFD_{cfg.syear}-{cfg.eyear}_{ny}y-{nx}x_{wet_th}mm.nc'
+    fout2d = f'{cfg.path_in}/{wrun}/hist2d_spell_IFD_{cfg.syear}-{cfg.eyear}_{ny}y-{nx}x.nc'#_{wet_th}mm.nc'
     hist2d.to_netcdf(fout2d)
 
 
