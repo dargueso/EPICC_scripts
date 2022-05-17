@@ -39,11 +39,11 @@ import pandas as pd
 ###########################################################
 
 varnames_hfreq=[]
-varnames_mfreq=['U10MET','V10MET']
-varnames_lfreq=[]
+varnames_mfreq=[]
+varnames_lfreq=['CAPE2D']
 varnames = varnames_hfreq + varnames_mfreq + varnames_lfreq
 #frequencies=['10MIN','01H','03H','DAY','MON','DCYCLE']
-frequencies=['01H']
+frequencies=['03H']
 path_in = cfg.path_proc
 path_out = cfg.path_unif
 patt_inst=cfg.institution
