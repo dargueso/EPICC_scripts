@@ -45,17 +45,17 @@ import epicc_config as cfg
 
 
 WRF_runs=['EPICC_2km_ERA5_HVC_GWD']
-varnames=['TC']#'TC','TD','RH','UA','Z','VA','WA']
+varnames=['WA']#'TC','TD','RH','UA','Z','VA','WA']
 
 numvar=len(varnames)
 path_out = "/vg5/dargueso-NO-BKUP/postprocessed/plevs/EPICC"
 path_in="/vg6/dargueso-NO-BKUP/WRF_OUT/EPICC/"
 path_proc="/vg5/dargueso-NO-BKUP/postprocessed/unified/EPICC"
 
-smonth = 8
+smonth = 1
 emonth = 12
 
-periods=[2020]
+periods=np.arange(2011,2021)
 
 plevs=cfg.plevs
 
@@ -72,7 +72,7 @@ for wrun in WRF_runs:
         eyear = syear
 
         fullpathin = path_in + "/" + wrun + "/out"
-        fullpathout = path_out + "/" + wrun + "/" + str(syear) 
+        fullpathout = path_out + "/" + wrun + "/" + str(syear)
 
         if not os.path.exists(fullpathout):
             os.makedirs(fullpathout)
