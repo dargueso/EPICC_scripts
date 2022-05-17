@@ -100,7 +100,7 @@ axs[0].set_xlim(cartopy_xlim(hgt,geobounds=mbounds))
 axs[0].set_ylim(cartopy_ylim(hgt,geobounds=mbounds))
 gl0=axs[0].gridlines(color="black", linestyle="dotted",linewidth=0.5,draw_labels=True,x_inline=False, y_inline=False)
 gl0.right_labels=False
-gl0.top_labels=False    
+gl0.top_labels=False
 
 plt.savefig(f'{cfg.path_out}/WRF_General/EPICC_domain{reg}.png',dpi=150)
 
