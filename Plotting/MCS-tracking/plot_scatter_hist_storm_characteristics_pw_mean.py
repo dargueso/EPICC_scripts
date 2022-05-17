@@ -30,6 +30,7 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 from glob import glob
 import datetime as dt
+import matplotlib.gridspec as gridspec
 
 ###########################################################
 ###########################################################
@@ -61,7 +62,7 @@ allmonths = [8,9,10]
 
 
 pr_max = 250
-pw_max = 60
+pw_max = 70
 exp = 'exp3'
 ###########################################################
 ###########################################################
@@ -76,45 +77,43 @@ geo_proj = wrf.get_cartopy(wrfin=geofile_ref)
 hgt = wrf.getvar(geofile_ref, "ter")
 lats, lons = wrf.latlon_coords(hgt)
 
-
-
 ###########################################################
 ###########################################################
 
-storms_pres_summary = pd.read_pickle(f"storms_summary_{syear}-{eyear}_{allmonths[0]:02d}-{allmonths[-1]:02d}_{reg}_{exp}.pkl")
+storms_pres_summary = pd.read_pickle(f"storms_pres_summary_{syear}-{eyear}_{allmonths[0]:02d}-{allmonths[-1]:02d}_{reg}_{exp}.pkl")
 storms_fut_summary = pd.read_pickle(f"storms_fut_summary_{syear}-{eyear}_{allmonths[0]:02d}-{allmonths[-1]:02d}_{reg}_{exp}.pkl")
+
 ###########################################################
 ###########################################################
 
 # https://matplotlib.org/3.5.0/gallery/lines_bars_and_markers/scatter_hist.html
-fig = plt.figure(figsize=(25, 20))
+fig = plt.figure(figsize=(30, 20))
 
-# Add a gridspec with two rows and two columns and a ratio of 2 to 7 between
-# the size of the marginal axes and the main axes in both directions.
-# Also adjust the subplot parameters for a square plot.
-gs = fig.add_gridspec(4, 5,  width_ratios=(2,7,2,7,0.5), height_ratios=(2, 7,2,7),
+gs1 = fig.add_gridspec(2, 2,  width_ratios=(9,9), height_ratios=(9,9),
                       left=0.05, right=0.95, bottom=0.05, top=0.95,
-                      wspace=0.15, hspace=0.05)
+                      wspace=0.1, hspace=0.1)
 
-ax = fig.add_subplot(gs[1, 1])
-ax_histx = fig.add_subplot(gs[0, 1], sharex=ax)
-ax_histy = fig.add_subplot(gs[1, 0], sharey=ax)
+gs00 = gridspec.GridSpecFromSubplotSpec(2, 2, width_ratios=(7,2), height_ratios=(2,7),subplot_spec=gs1[0,0],wspace=0,hspace=0)
+gs01 = gridspec.GridSpecFromSubplotSpec(2, 2, width_ratios=(7,2), height_ratios=(2,7),subplot_spec=gs1[0,1],wspace=0,hspace=0)
+gs02 = gridspec.GridSpecFromSubplotSpec(2, 2, width_ratios=(7,2), height_ratios=(2,7),subplot_spec=gs1[1,0],wspace=0,hspace=0)
+gs03 = gridspec.GridSpecFromSubplotSpec(2, 2, width_ratios=(7,2), height_ratios=(0.5,8.5),subplot_spec=gs1[1,1],wspace=0,hspace=0)
+
+
+ax = fig.add_subplot(gs00[1, 0])
+ax_histx = fig.add_subplot(gs00[0,0], sharex=ax)
+ax_histy = fig.add_subplot(gs00[1,1], sharey=ax)
 
 ax.set_ylim(0,pw_max)
 ax.set_xlim(0,pr_max)
-ax.text(0.95,0.95,f"Present",fontsize='xx-large',fontweight='bold',color="deepskyblue",horizontalalignment='right',transform=ax.transAxes)
-#ax.text(0.98,0.98,f'{len(storms_pres_summary)}', fontsize='large', horizontalalignment='right', transform=ax.transAxes)
 
+ax.text(0.95,0.95,f"Present",fontsize='xx-large',fontweight='bold',color="deepskyblue",horizontalalignment='right',transform=ax.transAxes)
+plt.setp(ax.get_xticklabels()[-1], visible = False)
+plt.setp(ax.get_yticklabels()[-1], visible = False)
 ax_histx.tick_params(axis="x", labelbottom=False)
 ax_histy.tick_params(axis="y", labelleft=False)
-ax_histy.invert_xaxis()
-ax_histy.yaxis.tick_right()
 
-ax.set_ylabel("Mean precip. water (mm)")
-ax.set_xlabel("Max. precip. rate (mm/hr)")
-# adjust_spines2(ax, ['left','bottom'])
-# adjust_spines2(ax_histy, ['right','bottom'])
-# adjust_spines2(ax_histx, ['left','bottom'])
+ax.set_ylabel("Mean precip. water (mm)", fontsize='xx-large')
+ax.set_xlabel("Max. precip. rate (mm/hr)",fontsize='xx-large')
 
 sct = ax.scatter(storms_pres_summary.prmax,storms_pres_summary.pw_mean,
            s=(storms_pres_summary.max_size/100)*2,
@@ -125,37 +124,30 @@ sct = ax.scatter(storms_pres_summary.prmax,storms_pres_summary.pw_mean,
 ax_histx.hist(storms_pres_summary.prmax,bins = np.linspace(0,pr_max,20),color = "lightgray",alpha=0.8,edgecolor='gray',rwidth=0.8,weights = np.ones_like(storms_pres_summary.prmax) / len(storms_pres_summary.prmax))
 ax_histy.hist(storms_pres_summary.pw_mean,bins = np.linspace(0,pw_max,20),color = "lightgray",alpha=0.8,edgecolor='gray', orientation='horizontal',rwidth=0.8,weights = np.ones_like(storms_pres_summary.pw_mean) / len(storms_pres_summary.pw_mean))
 
-# cbar_ax = fig.add_subplot(gs[1, 2])
-# cbar=plt.colorbar(sct, cax=cbar_ax,orientation="vertical")
-# cbar.set_label ('Total rain (m3)')
 kw = dict(prop="sizes", num=5, fmt="{x:.0f}",
           func=lambda s: s*100/2000)
 legend = ax.legend(*sct.legend_elements(**kw),
-                    loc="lower center", title="Storm size\n ($10^4$ $km^2$)",frameon=False,labelspacing = 2,borderaxespad=2,ncol = 7)
+                    loc="lower right", title="Storm size\n ($10^4$ $km^2$)",frameon=False,labelspacing = 2,borderaxespad=2,ncol = 7)
 plt.setp(legend.get_title(), multialignment='center')
 ############################################################
 ###########################################################
 
-ax2 = fig.add_subplot(gs[1, 3])
-ax2_histx = fig.add_subplot(gs[0, 3], sharex=ax2)
-ax2_histy = fig.add_subplot(gs[1, 2], sharey=ax2)
+
+ax2 = fig.add_subplot(gs01[1, 0])
+ax2_histx = fig.add_subplot(gs01[0,0], sharex=ax)
+ax2_histy = fig.add_subplot(gs01[1,1], sharey=ax)
 
 ax2.set_ylim(0,pw_max)
 ax2.set_xlim(0,pr_max)
 ax2.text(0.95,0.95,f"Future",fontsize='xx-large',fontweight='bold',color="crimson",horizontalalignment='right',transform=ax2.transAxes)
 
-#ax2.text(0.98,0.98,f'{len(storms_fut_summary)}', fontsize='large', horizontalalignment='right', transform=ax2.transAxes)
-
+plt.setp(ax2.get_xticklabels()[-1], visible = False)
+plt.setp(ax2.get_yticklabels()[-1], visible = False)
 ax2_histx.tick_params(axis="x", labelbottom=False)
 ax2_histy.tick_params(axis="y", labelleft=False)
-ax2_histy.invert_xaxis()
-ax2_histy.yaxis.tick_right()
 
-ax2.set_ylabel("Mean precip. water (mm)")
-ax2.set_xlabel("Max. precip. rate (mm/hr)")
-
-
-
+ax2.set_ylabel("Mean precip. water (mm)", fontsize='xx-large')
+ax2.set_xlabel("Max. precip. rate (mm/hr)", fontsize='xx-large')
 
 sct2 = ax2.scatter(storms_fut_summary.prmax,storms_fut_summary.pw_mean,
            s=(storms_fut_summary.max_size/100)*2,
@@ -166,36 +158,32 @@ sct2 = ax2.scatter(storms_fut_summary.prmax,storms_fut_summary.pw_mean,
 ax2_histx.hist(storms_fut_summary.prmax,bins = np.linspace(0,pr_max,20),color = "lightgray",alpha=0.8,edgecolor='gray',rwidth=0.8,weights = np.ones_like(storms_fut_summary.prmax) / len(storms_fut_summary.prmax))
 ax2_histy.hist(storms_fut_summary.pw_mean,bins = np.linspace(0,pw_max,20),color = "lightgray",alpha=0.8,edgecolor='gray', orientation='horizontal',rwidth=0.8,weights = np.ones_like(storms_fut_summary.pw_mean) / len(storms_fut_summary.pw_mean))
 
-cbar_ax = fig.add_subplot(gs[1, 4])
-cbar=plt.colorbar(sct2, cax=cbar_ax,orientation="vertical")
-cbar.set_label ('Total rain (m3)')
+cbar_ax = fig.add_subplot(gs03[0, 0])
+cbar=plt.colorbar(sct2, cax=cbar_ax,orientation="horizontal")
+cbar.set_label ('Total rain (m3)',fontsize='xx-large')
 kw2 = dict(prop="sizes", num=5, fmt="{x:.0f}",
           func=lambda s: s*100/2000)
 legend2 = ax2.legend(*sct.legend_elements(**kw2),
-                    loc="lower center", title="Storm size\n ($10^4$ $km^2$)",frameon=False,labelspacing = 2,borderaxespad=2,ncol = 7)
+                    loc="lower right", title="Storm size\n ($10^4$ $km^2$)",frameon=False,labelspacing = 2,borderaxespad=2,ncol = 7)
 plt.setp(legend2.get_title(), multialignment='center')
 
 ###########################################################
 ###########################################################
 
-
-ax3 = fig.add_subplot(gs[3, 1])
-ax3_histx = fig.add_subplot(gs[2, 1], sharex=ax3)
-ax3_histy = fig.add_subplot(gs[3, 0], sharey=ax3)
+ax3 = fig.add_subplot(gs02[1, 0])
+ax3_histx = fig.add_subplot(gs02[0,0], sharex=ax)
+ax3_histy = fig.add_subplot(gs02[1,1], sharey=ax)
 
 ax3.set_ylim(0,pw_max)
 ax3.set_xlim(0,pr_max)
 
+plt.setp(ax3.get_xticklabels()[-1], visible = False)
+plt.setp(ax3.get_yticklabels()[-1], visible = False)
 ax3_histx.tick_params(axis="x", labelbottom=False)
 ax3_histy.tick_params(axis="y", labelleft=False)
-ax3_histy.invert_xaxis()
-ax3_histy.yaxis.tick_right()
 
-ax3.set_ylabel("Mean precip. water (mm)")
-ax3.set_xlabel("Max. precip. rate (mm/hr)")
-# adjust_spines2(ax, ['left','bottom'])
-# adjust_spines2(ax_histy, ['right','bottom'])
-# adjust_spines2(ax_histx, ['left','bottom'])
+ax3.set_ylabel("Mean precip. water (mm)", fontsize='xx-large')
+ax3.set_xlabel("Max. precip. rate (mm/hr)", fontsize='xx-large')
 
 sct3p = ax3.scatter(storms_pres_summary.prmax,storms_pres_summary.pw_mean,
            s=(storms_pres_summary.max_size/100)*2,
@@ -207,7 +195,7 @@ sct3f = ax3.scatter(storms_fut_summary.prmax,storms_fut_summary.pw_mean,
            c='crimson',
            alpha=0.5)
 
-ax3_histx.hist(storms_pres_summary.prmax,bins = np.linspace(0,pr_max,20),color = "deepskyblue",alpha=0.8,edgecolor='deepskyblue',rwidth=0.8, weights = np.ones_like(storms_pres_summary.prmax) / len(storms_pres_summary.prmax))
+ax3_histx.hist(storms_pres_summary.prmax,bins = np.linspace(0,pr_max,20),color = "deepskyblue",alpha=0.8,edgecolor='deepskyblue',rwidth=0.8,weights = np.ones_like(storms_pres_summary.prmax) / len(storms_pres_summary.prmax))
 ax3_histy.hist(storms_pres_summary.pw_mean,bins = np.linspace(0,pw_max,20),color = "deepskyblue",alpha=0.8,edgecolor='deepskyblue', orientation='horizontal',rwidth=0.8,weights = np.ones_like(storms_pres_summary.pw_mean) / len(storms_pres_summary.pw_mean))
 
 ax3_histx.hist(storms_fut_summary.prmax,bins = np.linspace(0,pr_max,20),color = "crimson",alpha=0.8,edgecolor='crimson',rwidth=0.8,weights = np.ones_like(storms_fut_summary.prmax) / len(storms_fut_summary.prmax))
