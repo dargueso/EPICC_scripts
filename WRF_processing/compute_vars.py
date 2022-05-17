@@ -211,7 +211,9 @@ def compute_TD2(ncfile):
             }
 
     return td2,atts
-
+    
+###########################################################
+###########################################################
 def compute_TC(ncfile):
     """ Function to calculate temperature in degC at model full levels from WRF outputs
         It also provides variable attributes CF-Standard
@@ -226,6 +228,26 @@ def compute_TC(ncfile):
             }
 
     return tc,atts
+###########################################################
+###########################################################
+def compute_WA(ncfile):
+    """ Function to calculate vertical wind at model full levels from WRF outputs
+        It also provides variable attributes CF-Standard
+    """
+
+    wa =  wrf.getvar(ncfile,"wa",wrf.ALL_TIMES)
+
+    atts = {"standard_name": "vertical_wind_speed",
+            "long_name":  "Vertical wind speed",
+            "units"    :  "m s-1",
+            "hgt"       :  "full_model_level",
+            }
+
+    return wa,atts
+
+
+###########################################################
+###########################################################
 
 def compute_HUSS(ncfile):
     """ Function to calculate specific humidity near surface from WRF outputs
@@ -380,3 +402,30 @@ def compute_PW(ncfile):
             "units"        : "kg m-2"}
 
     return pw,atts
+
+
+
+###########################################################
+###########################################################
+
+def compute_CAPE2D(ncfile):
+    """ Function to calculate CAPE using methods described in:
+        http://wrf-python.readthedocs.io/en/latest/user_api/generated/wrf.cape_2d.html
+        This is NOT CF-compliant in any way. cape2d contains 4 variables distributed by levels: MCAPE [J kg-1], MCIN[J kg-1], LCL[m] and LFC[m]
+    """
+    pres_hpa = wrf.getvar(ncfile,"pressure",wrf.ALL_TIMES)
+    tkel = wrf.getvar(ncfile,"tk",wrf.ALL_TIMES)
+    qv = wrf.getvar(ncfile,"QVAPOR",wrf.ALL_TIMES)
+    z = wrf.getvar(ncfile,"geopotential",wrf.ALL_TIMES)/const.g
+    psfc = wrf.getvar(ncfile,"PSFC",wrf.ALL_TIMES)/100. #Converto to hPA
+    terrain = wrf.getvar(ncfile,"ter",wrf.ALL_TIMES)
+    ter_follow=True
+
+    cape2d = wrf.cape_2d(pres_hpa, tkel, qv, z, terrain, psfc, ter_follow,missing=const.missingval, meta=False)
+
+    atts = {"standard_name": "cape2d_variables",
+            "long_name":  "mcape mcin lcl lfc",
+            "units"    :  "SI"                ,
+            }
+
+    return cape2d,atts
