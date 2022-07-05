@@ -1,0 +1,11 @@
+<ul>
+<li>
+<b>Data file name:</b>
+<br> AWS_AEMET-AAAAMM.txt (for year AAAA and month MM)
+<br> AWSwest_AEMET-AAAAMM.txt file contains the Spanish surface data to the west of 2ºW from October 2011 to December 2012.
+<br>In order to limit the size of the AWS 10' data, only data to the east of 2ºW are included in the AWS_AEMET-*.txt files. If you need the western data for specific study cases, do not hesitate to ask the Principal Investigator.
+<li>
+<b>Data file type:</b> ASCII space separated values, with 1 header line commented with '#' and missing data code = '-999'
+<li>
+<b>Sampling frequency: </b>10 minutes
+</ul>
