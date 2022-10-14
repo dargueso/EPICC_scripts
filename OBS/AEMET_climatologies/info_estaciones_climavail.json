@@ -3175,8 +3175,8 @@
   "nombre": "MENORCA, AEROPUERTO",
   "indsinop": "08314",
   "longitud": "041256E",
-  "syear_download": 2023.0,
-  "start_year": 1969.0,
+  "syear_download": 1936.0,
+  "start_year": 1936.0,
   "end_year": null
  },
  {
@@ -3187,7 +3187,7 @@
   "nombre": "PALMA DE MALLORCA, AEROPUERTO",
   "indsinop": "08306",
   "longitud": "024412E",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 1972.0,
   "end_year": null
  },
@@ -3199,7 +3199,7 @@
   "nombre": "PALMA, PUERTO",
   "indsinop": "08301",
   "longitud": "023731E",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 1978.0,
   "end_year": null
  },
@@ -3211,7 +3211,7 @@
   "nombre": "PORRERES",
   "indsinop": "08310",
   "longitud": "030109E",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 1989.0,
   "end_year": null
  },
@@ -3223,7 +3223,7 @@
   "nombre": "PORTOCOLOM  ",
   "indsinop": "08309",
   "longitud": "031618E",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 1993.0,
   "end_year": null
  },
@@ -3235,7 +3235,7 @@
   "nombre": "SA POBLA",
   "indsinop": "08312",
   "longitud": "030100E",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 2011.0,
   "end_year": null
  },
@@ -3247,7 +3247,7 @@
   "nombre": "SIERRA DE ALFABIA, BUNYOLA",
   "indsinop": "08303",
   "longitud": "024247E",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 1994.0,
   "end_year": null
  },
@@ -3259,7 +3259,7 @@
   "nombre": "FUERTEVENTURA AEROPUERTO",
   "indsinop": "60035",
   "longitud": "135147W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 1969.0,
   "end_year": null
  },
@@ -3271,7 +3271,7 @@
   "nombre": "GRAN CANARIA AEROPUERTO",
   "indsinop": "60030",
   "longitud": "152343W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 1951.0,
   "end_year": null
  },
@@ -3283,8 +3283,8 @@
   "nombre": "LA ALDEA DE SAN NICOLÁS",
   "indsinop": "60027",
   "longitud": "154850W",
-  "syear_download": 2023.0,
-  "start_year": 2023.0,
+  "syear_download": NaN,
+  "start_year": NaN,
   "end_year": null
  },
  {
@@ -3295,7 +3295,7 @@
   "nombre": "LANZAROTE AEROPUERTO",
   "indsinop": "60040",
   "longitud": "133601W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 1972.0,
   "end_year": null
  },
@@ -3307,7 +3307,7 @@
   "nombre": "LAS PALMAS DE GRAN CANARIA, PL. DE LA FERIA",
   "indsinop": "60032",
   "longitud": "152517W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 2013.0,
   "end_year": null
  },
@@ -3319,7 +3319,7 @@
   "nombre": "LAS PALMAS DE GRAN CANARIA, SAN CRISTOBAL",
   "indsinop": "60029",
   "longitud": "152458W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 2002.0,
   "end_year": null
  },
@@ -3331,7 +3331,7 @@
   "nombre": "MASPALOMAS",
   "indsinop": "60037",
   "longitud": "153545W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 1997.0,
   "end_year": null
  },
@@ -3343,7 +3343,7 @@
   "nombre": "MOGÁN, PUERTO",
   "indsinop": "60036",
   "longitud": "154551W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 2003.0,
   "end_year": null
  },
@@ -3355,7 +3355,7 @@
   "nombre": "PÁJARA",
   "indsinop": "60034",
   "longitud": "142129W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 2014.0,
   "end_year": null
  },
@@ -3367,8 +3367,8 @@
   "nombre": "TEGUISE",
   "indsinop": "",
   "longitud": "133007W",
-  "syear_download": 2023.0,
-  "start_year": 2023.0,
+  "syear_download": NaN,
+  "start_year": NaN,
   "end_year": null
  },
  {
@@ -3379,7 +3379,7 @@
   "nombre": "GÜÍMAR",
   "indsinop": "60018",
   "longitud": "162256W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 2014.0,
   "end_year": null
  },
@@ -3391,7 +3391,7 @@
   "nombre": "HIERRO AEROPUERTO",
   "indsinop": "60001",
   "longitud": "175320W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 1973.0,
   "end_year": null
  },
@@ -3403,7 +3403,7 @@
   "nombre": "IZAÑA",
   "indsinop": "60010",
   "longitud": "162958W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": NaN,
   "end_year": null
  },
@@ -3415,7 +3415,7 @@
   "nombre": "LA PALMA AEROPUERTO",
   "indsinop": "60005",
   "longitud": "174518W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 1970.0,
   "end_year": null
  },
@@ -3427,7 +3427,7 @@
   "nombre": "PUERTO DE LA CRUZ",
   "indsinop": "60012",
   "longitud": "163253W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 1996.0,
   "end_year": null
  },
@@ -3439,7 +3439,7 @@
   "nombre": "SAN SEBASTIÁN DE LA GOMERA",
   "indsinop": "60008",
   "longitud": "170641W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 1995.0,
   "end_year": null
  },
@@ -3451,7 +3451,7 @@
   "nombre": "STA.CRUZ DE TENERIFE",
   "indsinop": "60020",
   "longitud": "161519W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 1931.0,
   "end_year": null
  },
@@ -3463,7 +3463,7 @@
   "nombre": "TAZACORTE",
   "indsinop": "60004",
   "longitud": "175455W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 2000.0,
   "end_year": null
  },
@@ -3475,7 +3475,7 @@
   "nombre": "TENERIFE NORTE AEROPUERTO",
   "indsinop": "60015",
   "longitud": "161946W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 1941.0,
   "end_year": null
  },
@@ -3487,7 +3487,7 @@
   "nombre": "TENERIFE SUR AEROPUERTO",
   "indsinop": "60025",
   "longitud": "163340W",
-  "syear_download": 2023.0,
+  "syear_download": NaN,
   "start_year": 1980.0,
   "end_year": null
  }
