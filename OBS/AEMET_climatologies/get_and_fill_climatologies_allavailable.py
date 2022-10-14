@@ -81,7 +81,8 @@ if getfiles:
 
 
         print (f"Getting station {nsname}")
-        if rewrite: print(f'Record files will be rewritten if they exist')
+        if rewrite: 
+            print(f'Record files will be rewritten if they exist')
 
         #First time - create folder for station
         if not os.path.exists(f'{path_in}/{stn_url}'):
@@ -95,6 +96,7 @@ if getfiles:
             syear_download = int(syear)
             df_locs.loc[df_locs.indicativo==stn_id,'syear_download']=int(syear)
 
+        
         for yr in range(syear_download , eyear+1):
             filename = f'{path_in}/{stn_url}/Data_ClimDay_{stn_url}_{yr}.csv'
         
