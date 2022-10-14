@@ -50,3 +50,4 @@ General_Maps/WRF/orog_fx_CanESM5_esm-hist_r10i1p1f1_gn.nc
 General_Maps/WRF/orog_fx_CESM2_hist-GHG_r2i1p1f1_gn.nc
 General_Maps/WRF/sftlf_fx_CanESM5_esm-hist_r1i1p1f1_gn.nc
 General_Maps/WRF/sftlf_fx_CESM2_hist-GHG_r2i1p1f1_gn.nc
+OBS/AEMET_climatologies/Data_records/*
