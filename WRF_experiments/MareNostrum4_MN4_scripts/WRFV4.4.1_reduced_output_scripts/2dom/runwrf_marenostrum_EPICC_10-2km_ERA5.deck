@@ -143,9 +143,9 @@ khdif                               = 0,
 kvdif                               = 0,
 epssm                               = 0.3,
 non_hydrostatic                     = .true.,
-moist_adv_opt                       = 1,
-scalar_adv_opt                      = 1,
-gwd_opt                             = 1,
+moist_adv_opt                       = 1, 1,
+scalar_adv_opt                      = 1, 1,
+gwd_opt                             = 0, 1,
 /
 
 &bdy_control
@@ -158,6 +158,11 @@ nested                              = .false.,
 /
 
 &grib2
+/
+
+&namelist_quilt
+nio_tasks_per_group = 0,
+nio_groups = 0,
 /
 
 EOF_namelist
