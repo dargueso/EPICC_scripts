@@ -146,8 +146,7 @@ epssm                               = 0.3,
 non_hydrostatic                     = .true.,
 moist_adv_opt                       = 1,
 scalar_adv_opt                      = 1,
-gwd_opt                             = 1,
-hybrid_opt                          = 2,
+gwd_opt                             = 0,
 /
 
 &bdy_control
