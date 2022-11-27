@@ -86,8 +86,8 @@ def sel_grbfiles(filelist, sdate, edate):
 
 # Start month of the simulation. Will start at day 1.
 
-start_month = 1
-start_year = 2011
+start_month = 8
+start_year = 2013
 
 # End month of the simulation (included).
 end_month = 12
@@ -95,7 +95,7 @@ end_year = 2020
 
 
 # How many days in advance (spin-up)?
-spinup = 10
+spinup = 0
 
 # name the input deck to use
 indeck_wps = "namelist_wps_EPICC_2km_ERA5.deck"
@@ -107,9 +107,9 @@ wps_dir = "/home/dargueso/WRF_runs/EPICC_BSC_v4.4.1/WPS"
 grb_dir = "/home/dargueso/BDY_DATA/ERA5/"
 bdy_dir = "/home/dargueso/BDY_DATA/ERA5/WRF-boundary/EPICC/EPICC_2km_ERA5/"
 
-run_geogrid = False
+run_geogrid = False 
 run_ungrib = True
-run_metgrid = False
+run_metgrid = False 
 
 run_real = False
 
@@ -127,7 +127,8 @@ init_date = dt.datetime(start_year, start_month, 1) - dt.timedelta(days=spinup)
 
 year = init_date.year
 month = init_date.month
-day = init_date.day
+#day = init_date.day
+day = 8
 firstday = True
 
 

@@ -90,8 +90,8 @@ start_month = 1
 start_year = 2011
 
 # End month of the simulation (included).
-end_month = 12
-end_year = 2020
+end_month = 1
+end_year = 2011
 
 
 # How many days in advance (spin-up)?
@@ -107,7 +107,7 @@ wps_dir = "/home/dargueso/WRF_runs/EPICC_BSC_v4.4.1_2dom/WPS/"
 grb_dir = "/home/dargueso/BDY_DATA/ERA5/"
 bdy_dir = "/home/dargueso/BDY_DATA/ERA5/WRF-boundary/EPICC/EPICC_10-2km_ERA5/"
 
-run_geogrid = False
+run_geogrid = True
 run_ungrib = False
 run_metgrid = True
 
@@ -128,7 +128,6 @@ init_date = dt.datetime(start_year, start_month, 1) - dt.timedelta(days=spinup)
 year = init_date.year
 month = init_date.month
 day = init_date.day
-
 firstday = True
 
 
@@ -322,11 +321,11 @@ while year < end_year or (year == end_year and month < end_month):
         print("Running real.exe")
 
         subprocess.call("ln -sf %s/met_em.d0?.*.nc ." % (wps_dir), shell=True)
-
         # flog = open(flogname,"r")
         subprocess.call("./real.exe ", shell=True)  # ,stdout=flog,shell=True)
         # flog.close()
         flogname = "rsl.out.0000"
+
         completed = check_output(flogname, 4, "SUCCESS COMPLETE REAL_EM INIT")
 
         if completed:
