@@ -10,10 +10,10 @@
 &geogrid
  parent_id         =   1, 1,
  parent_grid_ratio =   1, 5,
- i_parent_start    =   1, 52
+ i_parent_start    =   1, 55
  j_parent_start    =   1, 50
- e_we              =  350,1051,
- e_sn              =  250,601,
+ e_we              =  350,1151,
+ e_sn              =  250,651,
 
  geog_data_res = 'modis_15s_lake+default',
  dx = 10000,
