@@ -54,7 +54,7 @@ def main():
 
     eday = calendar.monthrange(cfg.eyear,cfg.emonth)[1]
     datelist = pd.date_range(f'{cfg.syear}-{cfg.smonth}-01',f'{cfg.eyear}-{cfg.emonth}-{eday}',freq='MS').strftime("%Y-%m").tolist()
-
+    datelist = datelist[:-1]
 
 
     for varn in varnames:
