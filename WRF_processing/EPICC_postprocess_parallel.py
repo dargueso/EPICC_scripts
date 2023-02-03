@@ -91,7 +91,7 @@ def postproc_var_byday(wrun,varn,date):
     dom = cfg.dom
     fullpathin = cfg.path_wrfo + "/" + wrun + "/out"
     fullpathout = cfg.path_proc + "/" + wrun + "/" + str(date.year)
-    file_refname = fullpathin+"/"+cfg.file_ref
+    file_refname = cfg.file_ref
 
     ctime_var=checkpoint(0)
 
