@@ -2,8 +2,8 @@
 # To be used with EPICC WRF postprocessing package based on WRF-python
 
 path_wrfo = '/vg6a/dargueso/WRF_OUT/'
-path_proc = '/vg6a/dargueso/postprocessed/EPICC/temp'
-path_unif = '/vg6a/dargueso/postprocessed/EPICC/'
+path_proc = '/vg5/dargueso/postprocessed/EPICC/temp'
+path_unif = '/vg5/dargueso/postprocessed/EPICC/'
 path_geo = '/home/dargueso/share/geo_em_files/EPICC/'
 file_geo= 'geo_em.d01.EPICC_2km_ERA5_HVC_GWD.nc'
 file_ref = '/home/dargueso/share/wrf_ref_files/EPICC/wrfout_d01_2011-12-22_00:00:00'
