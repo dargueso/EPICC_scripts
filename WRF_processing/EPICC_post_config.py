@@ -1,26 +1,28 @@
 # File with EPICC postprocessing input arguments
 # To be used with EPICC WRF postprocessing package based on WRF-python
 
-path_wrfo = '/vg6/dargueso-NO-BKUP/WRF_OUT/EPICC/'
-path_proc = '/vg6/dargueso-NO-BKUP/postprocessed/EPICC/'
-path_unif = '/vg6/dargueso-NO-BKUP/postprocessed/unified/EPICC/'
+path_wrfo = '/vg6a/dargueso/WRF_OUT/'
+path_proc = '/vg6a/dargueso/postprocessed/EPICC/temp'
+path_unif = '/vg6a/dargueso/postprocessed/EPICC/'
 path_geo = '/home/dargueso/share/geo_em_files/EPICC/'
 file_geo= 'geo_em.d01.EPICC_2km_ERA5_HVC_GWD.nc'
-file_ref = 'wrfout_d01_2020-08-01_00:00:00'
+file_ref = '/home/dargueso/share/wrf_ref_files/EPICC/wrfout_d01_2011-12-22_00:00:00'
 institution = 'UIB'
-wruns = ['EPICC_2km_ERA5_CMIP6anom_HVC_GWD']#,'EPICC_2km_ERA5_CMIP6anom_HVC_GWD']
+wruns = ['EPICC_2km_ERA5']
 
 
-patt = 'wrf3hrly'
+patt = 'wrfprec'
 dom  = 'd01'
 
 syear = 2013
-eyear = 2020
-smonth =1
-emonth =12
+eyear = 2014
+smonth =12
+emonth =1
 acc_dt = 10
+nproc_x = 12
+nproc_y = 48
 
-variables = ['CAPE2D']
+variables = ['PRNC']
 
 #### Requested output variables (DO NOT CHANGE THIS LINE) ####
 
