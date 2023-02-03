@@ -38,15 +38,16 @@ import pandas as pd
 ###########################################################
 ###########################################################
 
-varnames_hfreq=[]
+varnames_hfreq=['PRNC']
 varnames_mfreq=[]
-varnames_lfreq=['CAPE2D']
+varnames_lfreq=[]
 varnames = varnames_hfreq + varnames_mfreq + varnames_lfreq
 #frequencies=['10MIN','01H','03H','DAY','MON','DCYCLE']
-frequencies=['03H']
+frequencies=['10MIN','01H','DAY','MON']
 path_in = cfg.path_proc
 path_out = cfg.path_unif
 patt_inst=cfg.institution
+njobs = 12
 
 def main():
 
@@ -62,7 +63,6 @@ def main():
 
             fullpathin = "%s/%s/" %(path_in,wrun)
             fullpathout = "%s/%s/" %(path_out,wrun)
-
             if not os.path.exists(fullpathout):
                 os.makedirs(fullpathout)
 
@@ -73,31 +73,31 @@ def main():
                 if freq == '10MIN':
                     if varn in varnames_hfreq:
                         patt="%s_%s"%(patt_inst,'10MIN')
-                        Parallel(n_jobs=12)(delayed(create_10min_files_from_pp)(fullpathin,fullpathout,yearmonth,patt_inst,varn) for yearmonth in datelist)
+                        Parallel(n_jobs=njobs)(delayed(create_10min_files_from_pp)(fullpathin,fullpathout,yearmonth,patt_inst,varn) for yearmonth in datelist)
 
                 if freq == '01H':
                     if varn in varnames_hfreq:
                         patt="%s_%s"%(patt_inst,'10MIN')
-                        Parallel(n_jobs=12)(delayed(create_hourly_files)(fullpathout,yearmonth,patt,varn) for yearmonth in datelist)
+                        Parallel(n_jobs=njobs)(delayed(create_hourly_files)(fullpathout,yearmonth,patt,varn) for yearmonth in datelist)
 
                     if varn in varnames_mfreq:
                         patt="%s_%s"%(patt_inst,'01H')
-                        Parallel(n_jobs=12)(delayed(create_hourly_files_from_pp)(fullpathin,fullpathout,yearmonth,patt_inst,varn) for yearmonth in datelist)
+                        Parallel(n_jobs=njobs)(delayed(create_hourly_files_from_pp)(fullpathin,fullpathout,yearmonth,patt_inst,varn) for yearmonth in datelist)
 
                 if freq == '03H':
 
                     if varn in varnames_lfreq:
                         patt="%s_%s"%(patt_inst,'03H')
-                        Parallel(n_jobs=12)(delayed(create_3hourly_files_from_pp)(fullpathin,fullpathout,yearmonth,patt_inst,varn) for yearmonth in datelist)
+                        Parallel(n_jobs=njobs)(delayed(create_3hourly_files_from_pp)(fullpathin,fullpathout,yearmonth,patt_inst,varn) for yearmonth in datelist)
 
 
                 if freq == 'DAY':
                     patt="%s_%s"%(patt_inst,'01H')
-                    Parallel(n_jobs=12)(delayed(create_daily_files)(fullpathout,yearmonth,patt,varn) for yearmonth in datelist)
+                    Parallel(n_jobs=njobs)(delayed(create_daily_files)(fullpathout,yearmonth,patt,varn) for yearmonth in datelist)
 
                 if freq == 'MON':
                     patt="%s_%s"%(patt_inst,'DAY')
-                    Parallel(n_jobs=12)(delayed(create_monthly_files)(fullpathout,yearmonth,patt,varn) for yearmonth in datelist)
+                    Parallel(n_jobs=njobs)(delayed(create_monthly_files)(fullpathout,yearmonth,patt,varn) for yearmonth in datelist)
 
 ###########################################################
 ###########################################################
@@ -106,7 +106,7 @@ def create_10min_files_from_pp(fullpathin,fullpathout,yearmonth,patt_inst,varn):
 
     """Create 10min files from original postprocessed"""
 
-    fin = f'{fullpathin}/{yearmonth[:4]}/{patt_inst}_{varn}_{yearmonth}*'
+    fin = f'{fullpathin}/{patt_inst}_{varn}_{yearmonth}*'
     fout = f'{fullpathout}/{patt_inst}_10MIN_{varn}_{yearmonth}.nc'
     print(fin)
     subprocess.call(f"ncrcat {fin} {fout}",shell=True)
@@ -115,7 +115,7 @@ def create_hourly_files_from_pp(fullpathin,fullpathout,yearmonth,patt_inst,varn)
 
     """Create hourly files from original postprocessed"""
 
-    fin = f'{fullpathin}/{yearmonth[:4]}/{patt_inst}_{varn}_{yearmonth}*'
+    fin = f'{fullpathin}/{patt_inst}_{varn}_{yearmonth}*'
     fout = f'{fullpathout}/{patt_inst}_01H_{varn}_{yearmonth}.nc'
     print(fin)
     subprocess.call(f"ncrcat {fin} {fout}",shell=True)
@@ -137,7 +137,7 @@ def create_3hourly_files_from_pp(fullpathin,fullpathout,yearmonth,patt_inst,varn
 
     """Create hourly files from original postprocessed"""
 
-    fin = f'{fullpathin}/{yearmonth[:4]}/{patt_inst}_{varn}_{yearmonth}*'
+    fin = f'{fullpathin}/{patt_inst}_{varn}_{yearmonth}*'
     fout = f'{fullpathout}/{patt_inst}_03H_{varn}_{yearmonth}.nc'
     print(fin)
     subprocess.call(f"ncrcat {fin} {fout}",shell=True)
