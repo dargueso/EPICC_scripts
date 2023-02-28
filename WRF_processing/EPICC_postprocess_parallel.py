@@ -58,7 +58,7 @@ def main():
             if end_date>dt.datetime(cfg.eyear,cfg.emonth,1):
                 end_date = dt.datetime(cfg.eyear,cfg.emonth,calendar.monthrange(int(cfg.eyear), cfg.emonth)[1])+dt.timedelta(days=1)
 
-            fullpathout = cfg.path_proc + "/" + wrun + "/" + str(year)
+            fullpathout = cfg.path_proc + "/" + wrun
             if not os.path.exists(fullpathout):
                 os.makedirs(fullpathout)
 
@@ -70,7 +70,7 @@ def main():
                 total_hours = (d2-d1).days*24+(d2-d1).seconds//3600
                 total_days = (d2-d1).days
                 date_list= [d1 + dt.timedelta(days=x) for x in range(0, total_days)]
-                Parallel(n_jobs=10)(delayed(postproc_var_byday)(wrun,varn,date) for date in date_list)
+                Parallel(n_jobs=1)(delayed(postproc_var_byday)(wrun,varn,date) for date in date_list)
 
             ctime=checkpoint(ctime_i)
 
@@ -90,7 +90,7 @@ def postproc_var_byday(wrun,varn,date):
     patt    = cfg.patt
     dom = cfg.dom
     fullpathin = cfg.path_wrfo + "/" + wrun + "/out"
-    fullpathout = cfg.path_proc + "/" + wrun + "/" + str(date.year)
+    fullpathout = cfg.path_proc + "/" + wrun 
     file_refname = cfg.file_ref
 
     ctime_var=checkpoint(0)
@@ -103,8 +103,7 @@ def postproc_var_byday(wrun,varn,date):
     print(y,m,d)
 
     sdate="%s-%s-%s" %(y,str(m).rjust(2,"0"),str(d).rjust(2,"0"))
-    filesin = sorted(glob('%s/%s_%s_%s*' %(fullpathin,patt,dom,sdate)))
-
+    filesin = sorted(glob(f'{fullpathin}/{patt}_{dom}_{sdate}*'))
 
 
     x=[]
@@ -125,7 +124,7 @@ def postproc_var_byday(wrun,varn,date):
         otimes =  wrftime2date(filesin[0].split())[:]
 
     else:
-
+        print(filesin)
         for n,filename in enumerate(filesin):
 
             tFragment = wrftime2date(filename.split())[:]
