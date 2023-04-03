@@ -5,8 +5,7 @@
 # Date:   2021-06-07T16:53:49+02:00
 # Email:  d.argueso@uib.es
 # Last modified by:   daniel
-# Last modified time: 2021-06-07T16:53:56+02:00
-#
+# Last modified time: 2023-04-03
 # @Project@ EPICC
 # Version: 1.0 (Beta)
 # Description:
@@ -18,187 +17,218 @@
 #####################################################################
 """
 
-
-
+import time
 import numpy as np
 import netCDF4 as nc
 import subprocess as subprocess
 from glob import glob
 import pandas as pd
 import xarray as xr
-import os
+import os, argparse
+from pathlib import Path
+from tqdm.auto import tqdm
+
+class bcolors:
+    HEADER = "\033[95m"
+    OKBLUE = "\033[94m"
+    OKCYAN = "\033[96m"
+    OKGREEN = "\033[92m"
+    WARNING = "\033[93m"
+    ERROR = "\033[91m"
+    ENDC = "\033[0m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
 
 
+#####################################################################
+#####################################################################
 
-variables=['ua','va','zg']#,'uas','vas','tas','ts','hurs','ps','psl']
-experiments = ['historical','ssp585']
+def parse_args():
 
-#model_list = open (f'SearchLocations_intersection_cmip6_mon_Amon.txt',"r")
-model_list = sorted(glob("*r1i1p1f?"))
-calc_ACycle = True
-calc_CC  = True
+    parser = argparse.ArgumentParser(
+        description="PURPOSE: Create files with annual cycle of changes PGW"
+    )
 
-if not os.path.exists("./AnnualCycle"):
-    os.makedirs("./AnnualCycle")
+    parser.add_argument(
+        "-m",
+        "--models",
+        dest="models",
+        help="Optional input list of models",
+        type=str,
+        nargs="?",
+        default=None,
+    )
 
-if not os.path.exists("./AnnualCycle_change"):
-    os.makedirs("./AnnualCycle_change")
+    # variable(s) to process
+    parser.add_argument('-v', '--var_names', type=str,
+            help='Variable names (e.g. ta) to process. Separate ' +
+            'multiple variable names with "," (e.g. tas,ta). Default is ' +
+            'to process all required variables ta,hur,ua,va,zg,hurs,tas,ps,ts',
+            default='ta,hur,ua,va,zg,hurs,tas,ps,ts')
+
+    # input directory
+    parser.add_argument('-i', '--input_dir', type=str,
+                help='Directory with input GCM delta files on ERA5 grid',
+                default =  "/vg5/dargueso/BDY_DATA/CMIP6/")
+    
+    # output directory
+    parser.add_argument('-o', '--output_dir', type=str,
+                help='Directory where the GCM ENSEMBLE delta files ' +
+                ' should be stored.',
+                default = "/vg5/dargueso/BDY_DATA/CMIP6/")
+
+    args = parser.parse_args()
+    return args
+
+
+#####################################################################
+#####################################################################
+
+args = parse_args()
+models_str = args.models
+
+if models_str is None:
+    with open("list_CMIP6.txt") as f:
+        models = f.read().splitlines()
+else:
+    models = args.models.split(",")
+
+variables = args.var_names.split(',')
+idir = args.input_dir
+odir = args.output_dir
+experiments = ["historical", "ssp585"]
+syear_exp = {"historical": 1985, "ssp585": 2070}
+eyear_exp = {"historical": 2014, "ssp585": 2099}
+
+acycle_odir = f"{odir}/annual_cycle"
+deltas_odir = f"{odir}/deltas"
+regrid_era5 = f"{odir}/regrid_ERA5"
+
+plvs=np.asarray([100000, 92500, 85000, 70000, 60000, 50000, 40000, 30000, 25000,
+    20000, 15000, 10000, 7000, 5000, 3000, 2000, 1000, 500, 100 ])
 
 def main():
 
-    for mod_mem in model_list:
-        for vn,varname in enumerate(variables):
+    print(f"{bcolors.HEADER}Creating Annual cycles and delta files{bcolors.ENDC}")
+    Path(acycle_odir).mkdir(exist_ok=True, parents=True)
+    Path(deltas_odir).mkdir(exist_ok=True, parents=True)
+    Path(regrid_era5).mkdir(exist_ok=True, parents=True)
+  
+    
 
-            if calc_ACycle == True:
-                calculate_annual_cycle(mod_mem,varname)
-            if calc_CC == True:
-                ctime0=checkpoint(0)
-                calculate_CC_signal(mod_mem,varname)
+    for GCM in (pbar := tqdm(models)):
+        pbar.set_description(f"{GCM}")
 
-            #Bash command for regridding
-            #for file in $(ls *_AnnualCycle.nc); do cdo -remapcon,era5_grid ${file} regrid_era5/${file};done
-            # if regrid_era5 == True:
-            #
-            #     regrid_file_to_era5(mod_mem,varname)
+        for vn, varname in enumerate(variables):
+
+            for exp in experiments:
+
+                syear = syear_exp[exp]
+                eyear = eyear_exp[exp]
+
+                calculate_annual_cycle(GCM,varname,exp,syear,eyear,idir,acycle_odir)
+        
+        
+            calculate_CC_signal(GCM,varname,acycle_odir,deltas_odir)
+
+            #REGRID TO ERA5
+            delta_file = f"{deltas_odir}/{GCM}/{varname}_delta.nc"
+            regrid_file = f"{regrid_era5}/{varname}_{GCM}_delta.nc"
+            try:
+                subprocess.check_output(
+                    f"cdo -remapbil,era5_grid {delta_file} {regrid_file}",
+                    shell=True,
+                )
+                print(f"{bcolors.OKGREEN}Regridded delta to ERA5: {GCM} {varname}{bcolors.ENDC}")
+            except Exception:
+                raise SystemExit(
+                    f"{bcolors.ERROR}ERROR: Could not regrid to ERA5 grid: {GCM} {varname} {bcolors.ENDC}"
+                )
+
+
+
 
 
 
 ###########################################################
 ###########################################################
-
-def checkpoint(ctime,msg='task'):
-  import time
-
-  """ Computes the spent time from the last checkpoint
-
-  Input: a given time
-  Output: present time
-  Print: the difference between the given time and present time
-  Author: Alejandro Di Luca
-  Modified: Daniel Argüeso
-  Created: 07/08/2013
-  Last Modification: 06/07/2021
-
-  """
-  if ctime==0:
-    ctime=time.time()
-    dtime=0
-  else:
-    dtime=time.time()-ctime
-    ctime=time.time()
-    print(f'{msg}')
-    print(f'======> DONE in {dtime:0.2f} seconds',"\n")
-  return ctime
-
-###########################################################
-###########################################################
-def calculate_annual_cycle(mod_mem,varname):
-    """ For a given model, member and variable,
-    Calculate annual cycle """
-
-    model =  mod_mem.split('_')[0]
-    member =  mod_mem.split('_')[1]
-
-    print(f'{varname} {model} {member}')
-
-    ctime_i=checkpoint(0)
-
-    filenames_all = sorted(glob(f'./{model}_{member}/{varname}_*'))
-    finall= xr.open_mfdataset(filenames_all,concat_dim="time", combine="nested")
-
-    ctime1=checkpoint(ctime_i, 'Read files: done')
+def calculate_annual_cycle(GCM, varname,exp,syear,eyear,idir,odir):
+    """For a given model, member and variable,
+    Calculate annual cycle"""
 
 
-    if not os.path.exists(f'AnnualCycle/{varname}_{model}_{member}_historical_1990-2014_AnnualCycle.nc'):
-        ctime00 = checkpoint(0)
-        fin_p = finall.sel(time=slice('1990','2014'))
 
-        if varname == 'hus':
-            fin_p = fin_p.where((fin_p.hus>=0) & (fin_p.hus<100))
-        elif varname == 'ta':
-            fin_p = fin_p.where((fin_p.ta>=0) & (fin_p.ta<400))
-        elif varname == 'ua':
-            fin_p = fin_p.where((fin_p.ua>-500) & (fin_p.ua<500))
-        elif varname == 'va':
-            fin_p = fin_p.where((fin_p.va>-500) & (fin_p.va<500))
-        elif varname == 'zg':
-            fin_p = fin_p.where((fin_p.zg>-1000) & (fin_p.zg<60000))
+    filenames_all = sorted(glob(f"{idir}/{exp}/{varname}/{GCM}/{varname}*nc"))
+    finall = xr.open_mfdataset(filenames_all, concat_dim="time", combine="nested")
 
+    Path(f"{odir}/{GCM}/").mkdir(exist_ok=True, parents=True)
 
-        fin_p_mm = fin_p.groupby('time.month').mean('time')
-        fin_p_mm.to_netcdf(f'AnnualCycle/{varname}_{model}_{member}_historical_1990-2014_AnnualCycle.nc')
-        ctime2=checkpoint(ctime00, 'historical file done')
+    ofname = f"{odir}/{GCM}/{varname}_{exp}.nc"
+
+    if not os.path.isfile(ofname):
+
+        fin_p = finall.sel(time=slice(str(syear), str(eyear)))
+
+        if varname == "hur":
+            fin_p = fin_p.where((fin_p.hur >= 0) & (fin_p.hur <= 100))
+        elif varname == "ta":
+            fin_p = fin_p.where((fin_p.ta >= 0) & (fin_p.ta < 400))
+        elif varname == "ua":
+            fin_p = fin_p.where((fin_p.ua > -500) & (fin_p.ua < 500))
+        elif varname == "va":
+            fin_p = fin_p.where((fin_p.va > -500) & (fin_p.va < 500))
+        elif varname == "zg":
+            fin_p = fin_p.where((fin_p.zg > -1000) & (fin_p.zg < 60000))
+
+        fin_p_mm = fin_p.groupby("time.month").mean("time")
+        fin_p_mm.to_netcdf(ofname)
+        print(f"{bcolors.OKGREEN}Created annual cycle file for {GCM} {varname} {exp}{bcolors.ENDC}")
     else:
-        print(f' Historical {varname} {model} {member} Already processed')
+        print(f"{bcolors.OKCYAN}{exp} {varname} {GCM} Already processed{bcolors.ENDC}")
 
-    if not os.path.exists(f'AnnualCycle/{varname}_{model}_{member}_ssp585_2076-2100_AnnualCycle.nc'):
-        ctime00 = checkpoint(0)
-        fin_f = finall.sel(time=slice('2076','2100'))
-
-        if varname == 'hus':
-            fin_f = fin_f.where((fin_f.hus>=0) & (fin_f.hus<100))
-        elif varname == 'ta':
-            fin_f = fin_f.where((fin_f.ta>=0) & (fin_f.ta<400))
-        elif varname == 'ua':
-            fin_f = fin_f.where((fin_f.ua>-500) & (fin_f.ua<500))
-        elif varname == 'va':
-            fin_f = fin_f.where((fin_f.va>-500) & (fin_f.va<500))
-        elif varname == 'zg':
-            fin_f = fin_f.where((fin_f.zg>-1000) & (fin_f.zg<60000))
-
-
-
-        fin_f_mm = fin_f.groupby('time.month').mean('time')
-        fin_f_mm.to_netcdf(f'AnnualCycle/{varname}_{model}_{member}_ssp585_2076-2100_AnnualCycle.nc')
-        ctime2=checkpoint(ctime00, 'ssp585 file done')
-    else:
-        print(f' ssp585 {varname} {model} {member} Already processed')
-
-    ctimef = checkpoint(ctime_i,f'Done Acycle {varname} {model} {member}')
     finall.close()
 
 
 ###########################################################
 ###########################################################
-def calculate_CC_signal(mod_mem,varname):
-    """ From present and future annual cycle
+def calculate_CC_signal(GCM, varname,idir,odir):
+    """From present and future annual cycle
     calculate CC signal for every month"""
 
-    ctime00=checkpoint(0)
+    ofname = f"{odir}/{GCM}/{varname}_delta.nc"
+    Path(f"{odir}/{GCM}/").mkdir(exist_ok=True, parents=True)
 
-    model =  mod_mem.split('_')[0]
-    member =  mod_mem.split('_')[1]
+    if not os.path.isfile(ofname):
 
-    if not os.path.exists(f'AnnualCycle_change/{varname}_{model}_{member}_CC_2076-2100_1990-2014_AnnualCycle.nc'):
+        fin_p = xr.open_dataset(f"{idir}/{GCM}/{varname}_historical.nc")
+        fin_f = xr.open_dataset(f"{idir}/{GCM}/{varname}_ssp585.nc")
 
-        fin_p = xr.open_dataset(f'AnnualCycle/{varname}_{model}_{member}_historical_1990-2014_AnnualCycle.nc')
-        fin_f = xr.open_dataset(f'AnnualCycle/{varname}_{model}_{member}_ssp585_2076-2100_AnnualCycle.nc')
 
         fin_d = fin_f - fin_p
 
+        if "plev_bnds" in fin_d.keys():
+            fin_d = fin_d.drop(("plev_bnds"))
+        if "lon_bnds" in fin_d.keys():
+            fin_d = fin_d.drop(("lon_bnds"))
+        if "lat_bnds" in fin_d.keys():
+            fin_d = fin_d.drop(("lat_bnds"))
 
+        datelist = pd.date_range(f"1990-01-01", periods=12, freq="MS")
 
-        if 'plev_bnds' in fin_d.keys():
-            fin_d = fin_d.drop(('plev_bnds'))
-        if 'lon_bnds' in fin_d.keys():
-            fin_d = fin_d.drop(('lon_bnds'))
-        if 'lat_bnds' in fin_d.keys():
-            fin_d = fin_d.drop(('lat_bnds'))
+        foutclean = fin_d.rename({"month": "time"})
+        foutclean = foutclean.assign_coords({"time": datelist})
+        foutclean.to_netcdf(ofname,
+            unlimited_dims="time",
+        )
 
-        datelist = pd.date_range(f'1990-01-01',periods=12,freq='MS')
-
-        foutclean  = fin_d.rename({'month': 'time'})
-        foutclean  = foutclean.assign_coords({"time": datelist})
-        foutclean.to_netcdf(f'AnnualCycle_change/{varname}_{model}_{member}_CC_2076-2100_1990-2014_AnnualCycle.nc',unlimited_dims='time')
-        ctime2=checkpoint(ctime00, 'historical file done')
 
         fin_p.close()
         fin_f.close()
+        print(f"{bcolors.OKGREEN}Created delta file for {GCM} {varname}{bcolors.ENDC}")
     else:
-        print(f' CC file {varname} {model} {member} Already processed')
+        print(f"{bcolors.OKCYAN}CC file {varname} {GCM} Already processed{bcolors.ENDC}")
 
 
-    ctime1=checkpoint(ctime00,f'Done CC {varname} {model} {member}')
 
 
 ###############################################################################
@@ -206,7 +236,6 @@ def calculate_CC_signal(mod_mem,varname):
 ###############################################################################
 
 if __name__ == "__main__":
-
     main()
 
 ###############################################################################
