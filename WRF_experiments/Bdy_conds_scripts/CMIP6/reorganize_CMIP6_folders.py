@@ -74,18 +74,19 @@ tableID = "Amon"
 
 scenarios = {"historical": [1850, 2014], "ssp585": [2015, 2100]}
 variables = [
-    "hur",
-    "hurs",
-    "ps",
-    "psl",
-    "ta",
+    # "hur",
+    # "hurs",
+    # "ps",
+    # "psl",
+    # "ta",
     "tas",
-    "ts",
-    "ua",
-    "uas",
-    "va",
-    "vas",
-    "zg",
+    # "tos", #Omon TableID
+    # "ts",
+    # "ua",
+    # "uas",
+    # "va",
+    # "vas",
+    # "zg",
 ]
 
 #####################################################################
@@ -101,7 +102,8 @@ def main():
             for var in (pbar := tqdm(variables)):
                 pbar.set_description(f"Copying {var}")
                 idir = f"{input_folder}/{scen}/{GCM}/"
-                odir = f"{dest_folder}/{scen}/{tableID}/{var}/{GCM_short}/{variant}"
+                odir = f"{dest_folder}/{scen}/{var}/{GCM_short}/{variant}"
+                odir2 = f"{dest_folder}/{scen}/{var}/{GCM_short}/"
                 if not os.path.exists(odir):
                     os.makedirs(odir)
 
@@ -113,9 +115,11 @@ def main():
 
                 except Exception:
                     print(
-                        f"{bcolors.FAIL}Error copying {var} {GCM} {scen}: {filename}{bcolors.ENDC}"
+                        f"{bcolors.FAIL}Error copying {var} {GCM} {scen} {variant} {bcolors.ENDC}"
                     )
                     continue
+                subprocess.check_output(f"mv -v {odir}/* {odir2}", shell=True)
+                os.rmdir(odir)
 
 
 ###############################################################################
