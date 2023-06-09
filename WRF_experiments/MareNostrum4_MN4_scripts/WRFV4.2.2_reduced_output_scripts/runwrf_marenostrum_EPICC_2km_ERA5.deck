@@ -43,6 +43,10 @@ io_form_restart                     = 2
 io_form_input                       = 2
 io_form_boundary                    = 2
 debug_level                         = 0
+auxhist3_outname                    ='wrfxtrm_d<domain>_<date>',
+io_form_auxhist3                    = 2,
+auxhist3_interval                   = 60,
+frames_per_auxhist3                 = 24,
 auxhist7_outname                    = "wrfprec_d<domain>_<date>"
 auxhist7_interval                   = 10,
 frames_per_auxhist7                 = 144,
@@ -211,9 +215,11 @@ mkdir ${tempdir}
 rm ./wrfprec_d01_%eyear%-%emonth%-%eday%*
 rm ./wrfout_d01_%eyear%-%emonth%-%eday%*
 rm ./wrf3hrly_d01_%eyear%-%emonth%-%eday%*
+rm ./wrfxtrm_d01_%eyear%-%emonth%-%eday%*
 mv ./wrfout* $tempdir
 mv ./wrfprec* $tempdir
 mv ./wrf3hrly* $tempdir
+mv ./wrfxtrm* $tempdir
 mv $tempdir/* %OUTdir%/
 
 
