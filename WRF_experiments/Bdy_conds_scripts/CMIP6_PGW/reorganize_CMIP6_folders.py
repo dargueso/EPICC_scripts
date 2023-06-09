@@ -68,7 +68,7 @@ else:
     models = args.models.split(",")
 
 input_folder = "/home/dargueso/BDY_DATA/CMIP6/all/"
-dest_folder = "/home/dargueso/BDY_DATA/CMIP6/PGW4ERA/"
+dest_folder = "/home/dargueso/BDY_DATA/CMIP6/"
 tableID = "Amon"
 
 scenarios = {"historical": [1850, 2014], "ssp585": [2015, 2100]}
