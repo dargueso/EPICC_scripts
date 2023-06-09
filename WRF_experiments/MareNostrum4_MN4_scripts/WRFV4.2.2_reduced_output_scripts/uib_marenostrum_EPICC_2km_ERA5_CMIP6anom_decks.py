@@ -93,12 +93,12 @@ import datetime as dt
 import calendar
 
 # Start month of the simulation. Will start at day 1.
-start_month = 8
-start_year = 2011
+start_month = 1
+start_year = 2020
 
 # End month of the simulation (included).
-end_month = 8
-end_year = 2012
+end_month = 12
+end_year = 2020
 
 # If starting from scratch (not a continuation run)
 isrestart = False
@@ -115,7 +115,7 @@ indeck = "runwrf_marenostrum_EPICC_2km_ERA5_CMIP6anom.deck"
 # BDY_user = "dargueso@130.206.30.86"      # rsync
 # Path containing the boundary files.
 # BDY_dir = "/home/dargueso/BDY_DATA/ERA5/WRF-boundary/REHIPRE/Original_ERA5"
-BDY_dir = "/gpfs/projects/uib33/WRF_BDY/EPICC_2km_ERA5_CMIP6anom"
+BDY_dir = "/gpfs/projects/uib30/WRF_BDY/EPICC_2km_ERA5_CMIP6anom"
 
 # scp flags required e.g. for port 6512 need "-P 6512"
 BDY_scpflags = " "
@@ -124,7 +124,7 @@ BDY_scpflags = " "
 # RST_user = "dargueso@130.206.30.86"
 # Path containing the restart files.
 # RST_dir = "/home/dargueso/WRF_OUT/REHIPRE/Original_ERA5/restart"
-RST_dir = "/gpfs/projects/uib33/WRF_OUT/EPICC/EPICC_2km_ERA5_CMIP6anom/restart"
+RST_dir = "/gpfs/projects/uib30/WRF_OUT/EPICC/EPICC_2km_ERA5_CMIP6anom/restart"
 # scp flags required e.g. for port 6512 need "-P 6512"
 RST_scpflags = ""
 
@@ -132,7 +132,7 @@ RST_scpflags = ""
 # OUT_user = "dargueso@130.206.30.86"
 # Path containing the boundary files.
 # OUT_dir = "/home/dargueso/WRF_OUT/REHIPRE/Original_ERA5/out"
-OUT_dir = "/gpfs/projects/uib33/WRF_OUT/EPICC/EPICC_2km_ERA5_CMIP6anom/out"
+OUT_dir = "/gpfs/projects/uib30/WRF_OUT/EPICC/EPICC_2km_ERA5_CMIP6anom/out"
 # scp flags required e.g. for port 6512 need "-P 6512"
 OUT_scpflags = " "
 
