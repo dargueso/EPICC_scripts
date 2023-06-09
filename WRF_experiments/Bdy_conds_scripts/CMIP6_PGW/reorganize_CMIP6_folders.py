@@ -49,12 +49,23 @@ def parse_args():
         default=None,
     )
 
+    # variable(s) to process
+    parser.add_argument(
+        "-v",
+        "--var_names",
+        type=str,
+        help="Variable names (e.g. ta) to process. Separate "
+        + 'multiple variable names with "," (e.g. tas,ta). Default is '
+        + "to process all required variables ta,hur,ua,va,zg,hurs,tas,ps,psl,ts,uas,vas",
+        default="ta,hur,ua,va,zg,hurs,tas,ps,psl,ts,uas,vas",
+    )
     args = parser.parse_args()
     return args
 
 
 args = parse_args()
 models_str = args.models
+variables = args.var_names.split(",")
 
 
 if models_str is None:
@@ -72,22 +83,7 @@ dest_folder = "/home/dargueso/BDY_DATA/CMIP6/"
 tableID = "Amon"
 
 scenarios = {"historical": [1850, 2014], "ssp585": [2015, 2100]}
-variables = [
-    "hur",
-    "hurs",
-    "ps",
-    "psl",
-    "ta",
-    "tas",
-    # "tos", #Omon TableID
-    "ts",
-    "ua",
-    "uas",
-    "va",
-    "vas",
-    "zg",
-    # "hus"
-]
+
 
 #####################################################################
 #####################################################################

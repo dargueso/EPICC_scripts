@@ -67,8 +67,8 @@ def parse_args():
         type=str,
         help="Variable names (e.g. ta) to process. Separate "
         + 'multiple variable names with "," (e.g. tas,ta). Default is '
-        + "to process all required variables ta,hus,ua,va,zg,hurs,tas,ps,ts",
-        default="ta,hus,ua,va,zg,hurs,tas,ps,ts,uas",
+        + "to process all required variables ta,hur,ua,va,zg,hurs,tas,ps,psl,ts,uas,vas",
+        default="ta,hur,ua,va,zg,hurs,tas,ps,psl,ts,uas,vas",
     )
 
     # input directory

@@ -34,14 +34,23 @@ def parse_args():
         nargs="?",
         default=None,
     )
-
+    # variable(s) to process
+    parser.add_argument(
+        "-v",
+        "--var_names",
+        type=str,
+        help="Variable names (e.g. ta) to process. Separate "
+        + 'multiple variable names with "," (e.g. tas,ta). Default is '
+        + "to process all required variables ta,hus,ua,va,zg,hurs,tas,ps,ts",
+        default="ta,hur,ua,va,zg,hurs,tas,ps,psl,ts,uas,vas",
+    )
     args = parser.parse_args()
     return args
 
 
 args = parse_args()
 models_str = args.models
-
+variables = args.var_names.split(",")
 
 if models_str is None:
     with open("list_CMIP6.txt") as f:
@@ -71,20 +80,6 @@ logging.info("Checking completeness of CMIP6 files for PGW")
 logger = logging.getLogger("checkCMI6PGW")
 
 scenarios = {"historical": [1850, 2014], "ssp585": [2015, 2100]}
-variables = [
-    "hur",
-    "hurs",
-    "ps",
-    "psl",
-    "ta",
-    "tas",
-    "ts",
-    "ua",
-    "uas",
-    "va",
-    "vas",
-    "zg",
-]
 
 
 class bcolors:
