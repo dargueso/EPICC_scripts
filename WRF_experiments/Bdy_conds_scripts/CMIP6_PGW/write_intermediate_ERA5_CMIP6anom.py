@@ -167,8 +167,8 @@ create_figs = False
 syear = opts.syear
 eyear = opts.eyear
 nyears = eyear - syear + 1
-month_i = 1
-month_f = 12
+smonth = 12
+emonth = 12
 
 vars3d = ["hur", "ta", "ua", "va", "zg"]
 vars3d_codes = {"hur": "r", "ta": "t", "ua": "u", "va": "v", "zg": "z"}
@@ -258,322 +258,327 @@ lon = file_ref.variables["lon"][:]
 olon, olat = np.meshgrid(lon, lat)
 
 
-for y in range(nyears):
-    year = y + syear
+year = syear
+month = smonth
+day = 22
 
+while year < eyear or (year == eyear and month < emonth):
     midmonth = calc_midmonth(year)
 
-    for month in range(month_i, month_f + 1):
-        for day in range(1, calendar.monthrange(year, month)[1] + 1):
-            print("processing year %s month %02d day %02d" % (year, month, day))
 
-            ferapl = nc.Dataset(
-                "%s/era5_daily_pl_%s%02d%02d.nc" % (ERA5_dir, year, month, day), "r"
+    print("processing year %s month %02d day %02d" % (year, month, day))
+
+    ferapl = nc.Dataset(
+        "%s/era5_daily_pl_%s%02d%02d.nc" % (ERA5_dir, year, month, day), "r"
+    )
+    ferasfc = nc.Dataset(
+        "%s/era5_daily_sfc_%s%02d%02d.nc" % (ERA5_dir, year, month, day), "r"
+    )
+
+    date_init = dt.datetime(year, month, day, 00)
+    date_end = dt.datetime(year, month, day, 18)
+
+    time_filepl = ferapl.variables["time"]
+    time_filesfc = ferasfc.variables["time"]
+
+    date1 = nc.date2index(
+        date_init, time_filepl, calendar="standard", select="exact"
+    )
+    date2 = nc.date2index(
+        date_end, time_filepl, calendar="standard", select="exact"
+    )
+    ndays = (date_end - date_init).total_seconds() / 86400.0 + 1
+    nsteps = int((date_end - date_init).total_seconds() / 86400.0 * 4.0 + 1)
+
+    vout = {}
+    print("Looping over timesteps in original ERA5 file")
+
+    for nt in range(date1, date2 + 1):
+        proc_date = nc.num2date(
+            time_filepl[nt], units=time_filepl.units, calendar="standard"
+        )
+        print("processing 3Dvar time: ", proc_date)
+        Y = str(proc_date.year)
+        M = str(proc_date.month)
+        D = str(proc_date.day)
+        H = str(proc_date.hour)
+        filedate = proc_date.strftime("%Y-%m-%d_%H-%M-%S")
+
+        # CHECK IF THE FILE ALREADY EXISTS
+        file_out = (
+            "ERA5:"
+            + filedate.split("_")[0]
+            + "_"
+            + filedate.split("_")[1].split("-")[0]
+        )
+        filewrite = checkfile(file_out, overwrite_file)
+        if filewrite == True:
+            tdelta = np.asarray(
+                [
+                    (midmonth[i] - proc_date).total_seconds()
+                    for i in range(len(midmonth))
+                ]
             )
-            ferasfc = nc.Dataset(
-                "%s/era5_daily_sfc_%s%02d%02d.nc" % (ERA5_dir, year, month, day), "r"
-            )
+            tdelta_min = np.argmin(np.abs(tdelta))
+            if tdelta[tdelta_min] < 0:
+                i1 = (tdelta_min - 1) % 12
+                i2 = (tdelta_min) % 12
+                tdelta_before = np.abs(tdelta[tdelta_min])
+                tdelta_mid_month = (
+                    midmonth[tdelta_min + 1] - midmonth[tdelta_min]
+                ).total_seconds()
+            else:
+                i1 = (tdelta_min - 2) % 12
+                i2 = (tdelta_min - 1) % 12
+                tdelta_before = np.abs(tdelta[tdelta_min - 1])
+                tdelta_mid_month = (
+                    midmonth[tdelta_min] - midmonth[tdelta_min - 1]
+                ).total_seconds()
 
-            date_init = dt.datetime(year, month, day, 00)
-            date_end = dt.datetime(year, month, day, 18)
+            for var in vars3d:
+                print("Processing variable %s" % (var))
 
-            time_filepl = ferapl.variables["time"]
-            time_filesfc = ferasfc.variables["time"]
-
-            date1 = nc.date2index(
-                date_init, time_filepl, calendar="standard", select="exact"
-            )
-            date2 = nc.date2index(
-                date_end, time_filepl, calendar="standard", select="exact"
-            )
-            ndays = (date_end - date_init).total_seconds() / 86400.0 + 1
-            nsteps = int((date_end - date_init).total_seconds() / 86400.0 * 4.0 + 1)
-
-            vout = {}
-            print("Looping over timesteps in original ERA5 file")
-
-            for nt in range(date1, date2 + 1):
-                proc_date = nc.num2date(
-                    time_filepl[nt], units=time_filepl.units, calendar="standard"
+                fanom = nc.Dataset(
+                    "%s/%s_CC_signal_ssp585_2070-2099_1985-2014_pinterp.nc"
+                    % (CMIP6anom_dir, var)
                 )
-                print("processing 3Dvar time: ", proc_date)
-                Y = str(proc_date.year)
-                M = str(proc_date.month)
-                D = str(proc_date.day)
-                H = str(proc_date.hour)
-                filedate = proc_date.strftime("%Y-%m-%d_%H-%M-%S")
-
-                # CHECK IF THE FILE ALREADY EXISTS
-                file_out = (
-                    "ERA5:"
-                    + filedate.split("_")[0]
-                    + "_"
-                    + filedate.split("_")[1].split("-")[0]
+                var_era = ferapl.variables["%s" % (vars3d_codes[var])][
+                    nt, ::-1, :, :
+                ]
+                # anom_units=getattr(fanom.variables["%s" %(var)],'units')
+                ilon, ilat = np.meshgrid(
+                    fanom.variables["lon"][:], fanom.variables["lat"][:]
                 )
-                filewrite = checkfile(file_out, overwrite_file)
-                if filewrite == True:
-                    tdelta = np.asarray(
-                        [
-                            (midmonth[i] - proc_date).total_seconds()
-                            for i in range(len(midmonth))
-                        ]
+
+                # Convert geopotential height from m2/s2 to m
+                if var == "zg":
+                    var_era = var_era / 9.81
+                    var_units_era5["%s" % (vars3d_codes[var])] = "m"
+
+                if np.argmin(np.abs(tdelta)) == 0:
+                    var_anom = fanom.variables["%s" % (var)][i1, ::-1, :, :]
+
+                else:
+                    var_anom_1 = fanom.variables["%s" % (var)][i1, ::-1, :, :]
+                    var_anom_2 = fanom.variables["%s" % (var)][i2, ::-1, :, :]
+
+                    var_anom = (
+                        var_anom_1
+                        + (var_anom_2 - var_anom_1)
+                        * (tdelta_before)
+                        / tdelta_mid_month
                     )
-                    tdelta_min = np.argmin(np.abs(tdelta))
-                    if tdelta[tdelta_min] < 0:
-                        i1 = (tdelta_min - 1) % 12
-                        i2 = (tdelta_min) % 12
-                        tdelta_before = np.abs(tdelta[tdelta_min])
-                        tdelta_mid_month = (
-                            midmonth[tdelta_min + 1] - midmonth[tdelta_min]
-                        ).total_seconds()
-                    else:
-                        i1 = (tdelta_min - 2) % 12
-                        i2 = (tdelta_min - 1) % 12
-                        tdelta_before = np.abs(tdelta[tdelta_min - 1])
-                        tdelta_mid_month = (
-                            midmonth[tdelta_min] - midmonth[tdelta_min - 1]
-                        ).total_seconds()
 
-                    for var in vars3d:
-                        print("Processing variable %s" % (var))
+                # Convert relative humidity to specific humidity
+                # if var == "hus":
+                #     # Read temperature and pressure
+                #     varT = ferapl.variables["%s" % (vars3d_codes["ta"])][
+                #         nt, ::-1, :, :
+                #     ]
+                #     varP = np.repeat(
+                #         np.repeat(plvs, varT.shape[1]), varT.shape[2]
+                #     )
+                #     varP = varP.reshape(
+                #         varT.shape[0], varT.shape[1], varT.shape[2]
+                #     )  # varP is in Pa
 
-                        fanom = nc.Dataset(
-                            "%s/%s_CC_signal_ssp585_2070-2099_1985-2014_pinterp.nc"
-                            % (CMIP6anom_dir, var)
+                #     es = 100.0 * fs.compute_es(
+                #         varT
+                #     )  # the result of compute is in hPa
+                #     es_mod = cp.deepcopy(es)
+                #     es_mod[
+                #         30:, :, :
+                #     ] = 0  # saturation pressure equal zero in the stratosphere (levels over 20 hPa)
+                #     ws = es * const.Rd / (const.Rv * (varP - es_mod))
+                #     w = ws * var_era / 100.0
+                #     var_era = w / (w + 1)
+
+                # # Define the pseudo global warming
+                # temp = var_era + np.nan_to_num(var_anom)
+                # if var == "hus":
+                #     temp[
+                #         temp < 0
+                #     ] = 0  # replace values smaller than zero by zero
+                # vout[var] = temp
+                # fanom.close()
+                # Define the pseudo global warming
+                temp = var_era + np.nan_to_num(var_anom)
+                if var == "hur":
+                    temp[
+                        temp < 0
+                    ] = 0  # replace values smaller than zero by zero
+                    temp[temp > 100] = 100
+                vout[var] = temp
+                fanom.close()
+
+                # -----------------------------------------------------------------------------------------------
+                # MAKE PLOT
+                if create_figs == True:
+                    nlev = 10
+                    file_name = {0: "era5", 1: "anom", 2: "pgw"}
+                    for ii in range(3):
+                        if ii == 0:
+                            aa = var_era[nlev, :]
+                            units = var_units_era5["%s" % (vars3d_codes[var])]
+                        if ii == 1:
+                            aa = var_anom[nlev, :]
+                            units = var_units_era5["%s" % (vars3d_codes[var])]
+                        if ii == 2:
+                            aa = vout[var][nlev, :]
+                        figname = figs_path + "%s_lev%s_%s_%s-%s-%s-%s.png" % (
+                            var,
+                            str(nlev),
+                            file_name[ii],
+                            Y,
+                            M,
+                            D,
+                            H,
                         )
-                        var_era = ferapl.variables["%s" % (vars3d_codes[var])][
-                            nt, ::-1, :, :
-                        ]
-                        # anom_units=getattr(fanom.variables["%s" %(var)],'units')
-                        ilon, ilat = np.meshgrid(
-                            fanom.variables["lon"][:], fanom.variables["lat"][:]
-                        )
+                        plt.contourf(aa)
+                        plt.colorbar()
+                        plt.title(var + " [" + units + "]")
+                        plt.savefig(figname)
+                        plt.close()
 
-                        # Convert geopotential height from m2/s2 to m
-                        if var == "zg":
-                            var_era = var_era / 9.81
-                            var_units_era5["%s" % (vars3d_codes[var])] = "m"
+                # -----------------------------------------------------------------------------------------------
 
-                        if np.argmin(np.abs(tdelta)) == 0:
-                            var_anom = fanom.variables["%s" % (var)][i1, ::-1, :, :]
-
-                        else:
-                            var_anom_1 = fanom.variables["%s" % (var)][i1, ::-1, :, :]
-                            var_anom_2 = fanom.variables["%s" % (var)][i2, ::-1, :, :]
-
-                            var_anom = (
-                                var_anom_1
-                                + (var_anom_2 - var_anom_1)
-                                * (tdelta_before)
-                                / tdelta_mid_month
-                            )
-
-                        # Convert relative humidity to specific humidity
-                        # if var == "hus":
-                        #     # Read temperature and pressure
-                        #     varT = ferapl.variables["%s" % (vars3d_codes["ta"])][
-                        #         nt, ::-1, :, :
-                        #     ]
-                        #     varP = np.repeat(
-                        #         np.repeat(plvs, varT.shape[1]), varT.shape[2]
-                        #     )
-                        #     varP = varP.reshape(
-                        #         varT.shape[0], varT.shape[1], varT.shape[2]
-                        #     )  # varP is in Pa
-
-                        #     es = 100.0 * fs.compute_es(
-                        #         varT
-                        #     )  # the result of compute is in hPa
-                        #     es_mod = cp.deepcopy(es)
-                        #     es_mod[
-                        #         30:, :, :
-                        #     ] = 0  # saturation pressure equal zero in the stratosphere (levels over 20 hPa)
-                        #     ws = es * const.Rd / (const.Rv * (varP - es_mod))
-                        #     w = ws * var_era / 100.0
-                        #     var_era = w / (w + 1)
-
-                        # # Define the pseudo global warming
-                        # temp = var_era + np.nan_to_num(var_anom)
-                        # if var == "hus":
-                        #     temp[
-                        #         temp < 0
-                        #     ] = 0  # replace values smaller than zero by zero
-                        # vout[var] = temp
-                        # fanom.close()
-                        # Define the pseudo global warming
-                        temp = var_era + np.nan_to_num(var_anom)
-                        if var == "hur":
-                            temp[
-                                temp < 0
-                            ] = 0  # replace values smaller than zero by zero
-                            temp[temp > 100] = 100
-                        vout[var] = temp
-                        fanom.close()
-
-                        # -----------------------------------------------------------------------------------------------
-                        # MAKE PLOT
-                        if create_figs == True:
-                            nlev = 10
-                            file_name = {0: "era5", 1: "anom", 2: "pgw"}
-                            for ii in range(3):
-                                if ii == 0:
-                                    aa = var_era[nlev, :]
-                                    units = var_units_era5["%s" % (vars3d_codes[var])]
-                                if ii == 1:
-                                    aa = var_anom[nlev, :]
-                                    units = var_units_era5["%s" % (vars3d_codes[var])]
-                                if ii == 2:
-                                    aa = vout[var][nlev, :]
-                                figname = figs_path + "%s_lev%s_%s_%s-%s-%s-%s.png" % (
-                                    var,
-                                    str(nlev),
-                                    file_name[ii],
-                                    Y,
-                                    M,
-                                    D,
-                                    H,
-                                )
-                                plt.contourf(aa)
-                                plt.colorbar()
-                                plt.title(var + " [" + units + "]")
-                                plt.savefig(figname)
-                                plt.close()
-
-                        # -----------------------------------------------------------------------------------------------
-
-                    for var in vars2d:
-                        print("Processing variable %s" % (var))
-                        if var == "hurs":
-                            # Surface relative humidity doesn't exist in original ERA-INt, must be calculated from T2 and DEWPT
-                            dew_era = (
-                                ferasfc.variables[vars2d_codes["dew"]][nt, :, :]
-                                - const.tkelvin
-                            )
-                            tas_era = (
-                                ferasfc.variables[vars2d_codes["tas"]][nt, :, :]
-                                - const.tkelvin
-                            )
-
-                            var_era = calc_relhum(dew_era, tas_era)
-
-                        else:
-                            var_era = ferasfc.variables["%s" % (vars2d_codes[var])][
-                                nt, :, :
-                            ]
-
-                        fanom = nc.Dataset(
-                            "%s/%s_CC_signal_ssp585_2070-2099_1985-2014.nc"
-                            % (CMIP6anom_dir, var)
-                        )
-                        # if hasattr(fanom.variables["%s" %(var)],'units'):
-                        #     anom_units=getattr(fanom.variables["%s" %(var)],'units')
-                        # else:
-                        #     if var == 'hurs':
-                        #       anom_units=''
-                        #     else:
-                        #       import pdb; pdb.set_trace()
-                        ilon, ilat = np.meshgrid(
-                            fanom.variables["lon"][:], fanom.variables["lat"][:]
-                        )
-
-                        if np.min(np.abs(tdelta)) == 0:
-                            var_anom = fanom.variables["%s" % (var)][i1, :, :]
-                        else:
-                            var_anom_1 = fanom.variables["%s" % (var)][i1, :, :]
-                            var_anom_2 = fanom.variables["%s" % (var)][i2, :, :]
-
-                            var_anom = (
-                                var_anom_1
-                                + (var_anom_2 - var_anom_1)
-                                * (tdelta_before)
-                                / tdelta_mid_month
-                            )
-
-                        # var_anom = interpolate_grid(ilat,ilon,var_anom_c,olat,olon,method='nearest')
-
-                        # Define the pseudo global warming
-                        vout[var] = var_era + np.nan_to_num(var_anom)
-
-                        # if var=='ts':
-                        # import pdb; pdb.set_trace()
-                        # vout[var][var_era.mask==True]=
-                        # vout[var][var_era==-9.e+33]=-9.e+33
-
-                        # -----------------------------------------------------------------------------------------------
-                        # MAKE PLOT
-                        if create_figs == True:
-                            file_name = {0: "era5", 1: "anom", 2: "pgw"}
-                            for ii in range(3):
-                                if ii == 0:
-                                    aa = var_era[:]
-                                    if var == "hurs":
-                                        units = "%"
-                                    else:
-                                        units = var_units_era5[
-                                            "%s" % (vars2d_codes[var])
-                                        ]
-                                if ii == 1:
-                                    aa = var_anom[:]
-                                    units = anom_units
-                                if ii == 2:
-                                    aa = vout[var][:]
-                                figname = figs_path + "%s_%s_%s-%s-%s-%s.png" % (
-                                    var,
-                                    file_name[ii],
-                                    Y,
-                                    M,
-                                    D,
-                                    H,
-                                )
-                                plt.contourf(aa)
-                                plt.colorbar()
-                                plt.title(var + " [" + units + "]")
-                                plt.savefig(figname)
-                                plt.close()
-                                # -----------------------------------------------------------------------------------------------
-
-                        fanom.close()
-
-                    # ###################################################################################################
-                    ####################  Writing to WRF intermediate format  #############################
-                    filedate = proc_date.strftime("%Y-%m-%d_%H-%M-%S")
-
-                    fields3d = np.ndarray(
-                        shape=(nfields3d, len(plvs), nlat, nlon), dtype="float32"
-                    )  # ,order='Fortran')
-                    fields2d = np.ndarray(
-                        shape=(nfields2d, nlat, nlon), dtype="float32"
-                    )  # ,order='Fortran')
-
-                    startlat = lat[0]
-                    startlon = lon[0]
-                    deltalon = 0.30
-                    deltalat = -0.30
-
-                    fields3d[0, :, :, :] = np.float32(vout["hur"])
-                    fields3d[1, :, :, :] = np.float32(vout["ta"])
-                    fields3d[2, :, :, :] = np.float32(vout["ua"])
-                    fields3d[3, :, :, :] = np.float32(vout["va"])
-                    fields3d[4, :, :, :] = np.float32(vout["zg"])
-
-                    fields2d[0, :, :] = np.float32(vout["uas"])
-                    fields2d[1, :, :] = np.float32(vout["vas"])
-                    fields2d[2, :, :] = np.float32(vout["hurs"])
-                    fields2d[3, :, :] = np.float32(vout["ps"])
-                    fields2d[4, :, :] = np.float32(vout["psl"])
-                    fields2d[5, :, :] = np.float32(vout["tas"])
-                    fields2d[6, :, :] = np.float32(vout["ts"])
-
-                    f90.writeint(
-                        plvs,
-                        fields3d,
-                        fields2d,
-                        filedate,
-                        nlat,
-                        nlon,
-                        startlat,
-                        startlon,
-                        deltalon,
-                        deltalat,
+            for var in vars2d:
+                print("Processing variable %s" % (var))
+                if var == "hurs":
+                    # Surface relative humidity doesn't exist in original ERA-INt, must be calculated from T2 and DEWPT
+                    dew_era = (
+                        ferasfc.variables[vars2d_codes["dew"]][nt, :, :]
+                        - const.tkelvin
                     )
-                    # ###################################################################################################
+                    tas_era = (
+                        ferasfc.variables[vars2d_codes["tas"]][nt, :, :]
+                        - const.tkelvin
+                    )
+
+                    var_era = calc_relhum(dew_era, tas_era)
+
+                else:
+                    var_era = ferasfc.variables["%s" % (vars2d_codes[var])][
+                        nt, :, :
+                    ]
+
+                fanom = nc.Dataset(
+                    "%s/%s_CC_signal_ssp585_2070-2099_1985-2014.nc"
+                    % (CMIP6anom_dir, var)
+                )
+                # if hasattr(fanom.variables["%s" %(var)],'units'):
+                #     anom_units=getattr(fanom.variables["%s" %(var)],'units')
+                # else:
+                #     if var == 'hurs':
+                #       anom_units=''
+                #     else:
+                #       import pdb; pdb.set_trace()
+                ilon, ilat = np.meshgrid(
+                    fanom.variables["lon"][:], fanom.variables["lat"][:]
+                )
+
+                if np.min(np.abs(tdelta)) == 0:
+                    var_anom = fanom.variables["%s" % (var)][i1, :, :]
+                else:
+                    var_anom_1 = fanom.variables["%s" % (var)][i1, :, :]
+                    var_anom_2 = fanom.variables["%s" % (var)][i2, :, :]
+
+                    var_anom = (
+                        var_anom_1
+                        + (var_anom_2 - var_anom_1)
+                        * (tdelta_before)
+                        / tdelta_mid_month
+                    )
+
+                # var_anom = interpolate_grid(ilat,ilon,var_anom_c,olat,olon,method='nearest')
+
+                # Define the pseudo global warming
+                vout[var] = var_era + np.nan_to_num(var_anom)
+
+                # if var=='ts':
+                # import pdb; pdb.set_trace()
+                # vout[var][var_era.mask==True]=
+                # vout[var][var_era==-9.e+33]=-9.e+33
+
+                # -----------------------------------------------------------------------------------------------
+                # MAKE PLOT
+                if create_figs == True:
+                    file_name = {0: "era5", 1: "anom", 2: "pgw"}
+                    for ii in range(3):
+                        if ii == 0:
+                            aa = var_era[:]
+                            if var == "hurs":
+                                units = "%"
+                            else:
+                                units = var_units_era5[
+                                    "%s" % (vars2d_codes[var])
+                                ]
+                        if ii == 1:
+                            aa = var_anom[:]
+                            units = anom_units
+                        if ii == 2:
+                            aa = vout[var][:]
+                        figname = figs_path + "%s_%s_%s-%s-%s-%s.png" % (
+                            var,
+                            file_name[ii],
+                            Y,
+                            M,
+                            D,
+                            H,
+                        )
+                        plt.contourf(aa)
+                        plt.colorbar()
+                        plt.title(var + " [" + units + "]")
+                        plt.savefig(figname)
+                        plt.close()
+                        # -----------------------------------------------------------------------------------------------
+
+                fanom.close()
+
+            # ###################################################################################################
+            ####################  Writing to WRF intermediate format  #############################
+            filedate = proc_date.strftime("%Y-%m-%d_%H-%M-%S")
+
+            fields3d = np.ndarray(
+                shape=(nfields3d, len(plvs), nlat, nlon), dtype="float32"
+            )  # ,order='Fortran')
+            fields2d = np.ndarray(
+                shape=(nfields2d, nlat, nlon), dtype="float32"
+            )  # ,order='Fortran')
+
+            startlat = lat[0]
+            startlon = lon[0]
+            deltalon = 0.30
+            deltalat = -0.30
+
+            fields3d[0, :, :, :] = np.float32(vout["hur"])
+            fields3d[1, :, :, :] = np.float32(vout["ta"])
+            fields3d[2, :, :, :] = np.float32(vout["ua"])
+            fields3d[3, :, :, :] = np.float32(vout["va"])
+            fields3d[4, :, :, :] = np.float32(vout["zg"])
+
+            fields2d[0, :, :] = np.float32(vout["uas"])
+            fields2d[1, :, :] = np.float32(vout["vas"])
+            fields2d[2, :, :] = np.float32(vout["hurs"])
+            fields2d[3, :, :] = np.float32(vout["ps"])
+            fields2d[4, :, :] = np.float32(vout["psl"])
+            fields2d[5, :, :] = np.float32(vout["tas"])
+            fields2d[6, :, :] = np.float32(vout["ts"])
+
+            f90.writeint(
+                plvs,
+                fields3d,
+                fields2d,
+                filedate,
+                nlat,
+                nlon,
+                startlat,
+                startlon,
+                deltalon,
+                deltalat,
+            )
+            # ###################################################################################################
+    end_date = dt.datetime(year, month, day) + dt.timedelta(days=1)
+    year = end_date.year
+    month = end_date.month
+    day = end_date.day
