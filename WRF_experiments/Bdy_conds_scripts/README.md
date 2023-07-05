@@ -126,7 +126,7 @@ python Interpolate_CMIP6_Annual_cycle-CC_pinterp.py
         ```
         ncea era5_daily_sfc_20??07??.nc aux.nc
         ```
-    - Create a python module from FROTRAN to create intermediate files from the climatology. This `outputInter_soil.f90` was created from the original `outputInter.f90`. The `write_intermediate_ERA5_CMIP6anom_SOILCLIM.py` file was also created from `write_intermediate_ERA5_CMIP6anom.py`.
+    - Create a python module from FROTRAN to create intermediate files from the climatology. This `outputInter_soil.f90` was created from the original `outputInter.f90`. The `write_intermediate_ERA5_CMIP6anom_SOILCLIM.py` file was also created from `write_intermediate_ERA5_CMIP6anom.py`. [In mc4 at UIB, the corresponding modules must be loaded before running this: intel/19.1 and netcdf-intel]
         ```
         f2py -c -m outputInter_soil outputInter_soil.f90 -DF2PY_REPORT_ON_ARRAY_COPY=1000000
         mv outputInter_soil.cpython-37m-x86_64-linux-gnu.so outputInter_soil.so
