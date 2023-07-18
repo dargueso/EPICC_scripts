@@ -162,13 +162,13 @@ parser.add_option(
 (opts, args) = parser.parse_args()
 ###
 
-overwrite_file = True
+overwrite_file = False
 create_figs = False
 syear = opts.syear
 eyear = opts.eyear
 nyears = eyear - syear + 1
-smonth = 12
-emonth = 12
+smonth = 1
+emonth = 1 
 
 vars3d = ["hur", "ta", "ua", "va", "zg"]
 vars3d_codes = {"hur": "r", "ta": "t", "ua": "u", "va": "v", "zg": "z"}
@@ -251,7 +251,7 @@ nlat = 601
 nlon = 1200
 
 
-file_ref = nc.Dataset("%s/era5_daily_sfc_20200101.nc" % (ERA5_dir), "r")
+file_ref = nc.Dataset("%s/era5_daily_sfc_20140101.nc" % (ERA5_dir), "r")
 lat = file_ref.variables["lat"][:]
 lon = file_ref.variables["lon"][:]
 
@@ -260,11 +260,10 @@ olon, olat = np.meshgrid(lon, lat)
 
 year = syear
 month = smonth
-day = 22
+day = 1
 
 while year < eyear or (year == eyear and month < emonth):
     midmonth = calc_midmonth(year)
-
 
     print("processing year %s month %02d day %02d" % (year, month, day))
 
@@ -281,12 +280,8 @@ while year < eyear or (year == eyear and month < emonth):
     time_filepl = ferapl.variables["time"]
     time_filesfc = ferasfc.variables["time"]
 
-    date1 = nc.date2index(
-        date_init, time_filepl, calendar="standard", select="exact"
-    )
-    date2 = nc.date2index(
-        date_end, time_filepl, calendar="standard", select="exact"
-    )
+    date1 = nc.date2index(date_init, time_filepl, calendar="standard", select="exact")
+    date2 = nc.date2index(date_end, time_filepl, calendar="standard", select="exact")
     ndays = (date_end - date_init).total_seconds() / 86400.0 + 1
     nsteps = int((date_end - date_init).total_seconds() / 86400.0 * 4.0 + 1)
 
@@ -342,9 +337,7 @@ while year < eyear or (year == eyear and month < emonth):
                     "%s/%s_CC_signal_ssp585_2070-2099_1985-2014_pinterp.nc"
                     % (CMIP6anom_dir, var)
                 )
-                var_era = ferapl.variables["%s" % (vars3d_codes[var])][
-                    nt, ::-1, :, :
-                ]
+                var_era = ferapl.variables["%s" % (vars3d_codes[var])][nt, ::-1, :, :]
                 # anom_units=getattr(fanom.variables["%s" %(var)],'units')
                 ilon, ilat = np.meshgrid(
                     fanom.variables["lon"][:], fanom.variables["lat"][:]
@@ -364,9 +357,7 @@ while year < eyear or (year == eyear and month < emonth):
 
                     var_anom = (
                         var_anom_1
-                        + (var_anom_2 - var_anom_1)
-                        * (tdelta_before)
-                        / tdelta_mid_month
+                        + (var_anom_2 - var_anom_1) * (tdelta_before) / tdelta_mid_month
                     )
 
                 # Convert relative humidity to specific humidity
@@ -404,9 +395,7 @@ while year < eyear or (year == eyear and month < emonth):
                 # Define the pseudo global warming
                 temp = var_era + np.nan_to_num(var_anom)
                 if var == "hur":
-                    temp[
-                        temp < 0
-                    ] = 0  # replace values smaller than zero by zero
+                    temp[temp < 0] = 0  # replace values smaller than zero by zero
                     temp[temp > 100] = 100
                 vout[var] = temp
                 fanom.close()
@@ -447,20 +436,16 @@ while year < eyear or (year == eyear and month < emonth):
                 if var == "hurs":
                     # Surface relative humidity doesn't exist in original ERA-INt, must be calculated from T2 and DEWPT
                     dew_era = (
-                        ferasfc.variables[vars2d_codes["dew"]][nt, :, :]
-                        - const.tkelvin
+                        ferasfc.variables[vars2d_codes["dew"]][nt, :, :] - const.tkelvin
                     )
                     tas_era = (
-                        ferasfc.variables[vars2d_codes["tas"]][nt, :, :]
-                        - const.tkelvin
+                        ferasfc.variables[vars2d_codes["tas"]][nt, :, :] - const.tkelvin
                     )
 
                     var_era = calc_relhum(dew_era, tas_era)
 
                 else:
-                    var_era = ferasfc.variables["%s" % (vars2d_codes[var])][
-                        nt, :, :
-                    ]
+                    var_era = ferasfc.variables["%s" % (vars2d_codes[var])][nt, :, :]
 
                 fanom = nc.Dataset(
                     "%s/%s_CC_signal_ssp585_2070-2099_1985-2014.nc"
@@ -485,9 +470,7 @@ while year < eyear or (year == eyear and month < emonth):
 
                     var_anom = (
                         var_anom_1
-                        + (var_anom_2 - var_anom_1)
-                        * (tdelta_before)
-                        / tdelta_mid_month
+                        + (var_anom_2 - var_anom_1) * (tdelta_before) / tdelta_mid_month
                     )
 
                 # var_anom = interpolate_grid(ilat,ilon,var_anom_c,olat,olon,method='nearest')
@@ -510,9 +493,7 @@ while year < eyear or (year == eyear and month < emonth):
                             if var == "hurs":
                                 units = "%"
                             else:
-                                units = var_units_era5[
-                                    "%s" % (vars2d_codes[var])
-                                ]
+                                units = var_units_era5["%s" % (vars2d_codes[var])]
                         if ii == 1:
                             aa = var_anom[:]
                             units = anom_units
