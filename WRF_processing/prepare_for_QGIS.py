@@ -3,7 +3,7 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 
-fin = xr.open_dataset("UIB_RAIN_2011-2020_mon.nc")
+fin = xr.open_dataset("UIB_MON_TAS_2011-2020.nc")
 
 newfin = fin.rename_dims({'y':'south_north','x':'west_east'})
 
