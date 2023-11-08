@@ -74,9 +74,10 @@ def main():
                 # total_hours = (d2 - d1).days * 24 + (d2 - d1).seconds // 3600
                 total_days = (d2 - d1).days
                 date_list = [d1 + dt.timedelta(days=x) for x in range(0, total_days)]
+                #import pdb; pdb.set_trace()
                 Parallel(n_jobs=10)(
-                    delayed(postproc_var_byday)(wrun, varn, date) for date in date_list
-                )
+                        delayed(postproc_var_byday)(wrun, varn, date) for date in date_list
+                        )
 
             ctime = checkpoint(ctime_i)
 
@@ -112,14 +113,16 @@ def postproc_var_byday(wrun, varn, date):
     x = []
     t = []
 
+    
     if len(filesin) == 1:
         print(filesin)
         ncfile = nc.Dataset(filesin[0])
         if patt == "wrf3hrly":
             filein_wrf3d = filesin[0]
             filein_wrf2d = filein_wrf3d.replace("wrf3hrly", "wrfout")
-            fwrfgeo = xr.open_dataset(f"{cfg.path_geo}/{cfg.file_geo}")
+            fwrfgeo = xr.open_dataset(f"{cfg.path_geo}/{cfg.geofile_ref}")
             filein_aux = f"aux_{sdate}.nc"
+            #import pdb; pdb.set_trace()
             os.system(f"ncks -d Time,0,23,3 {filein_wrf2d} {filein_aux}")
             fwrf2d = nc.Dataset(filein_aux)
             for varname in fwrf2d.variables.keys():
@@ -128,7 +131,8 @@ def postproc_var_byday(wrun, varn, date):
             for varname in fwrfgeo.variables.keys():
                 if varname not in ncfile.variables.keys():
                     ncfile.variables[varname] = fwrfgeo.variables[varname]
-
+        
+        #import pdb; pdb.set_trace()
         varout, atts = cvars.compute_WRFvar(ncfile, varn)
         otimes = wrftime2date(filesin[0].split())[:]
         if patt == "wrf3hrly":
@@ -144,7 +148,7 @@ def postproc_var_byday(wrun, varn, date):
             if patt == "wrf3hrly":
                 filein_wrf3d = filesin[n]
                 filein_wrf2d = filein_wrf3d.replace("wrf3hrly", "wrfout")
-                fwrfgeo = nc.Dataset(f"{cfg.path_geo}/{cfg.file_geo}")
+                fwrfgeo = nc.Dataset(f"{cfg.path_geo}/{cfg.geofile_ref}")
                 filein_aux = f"aux_{sdate}.nc"
                 os.system(f"ncks -d Time,0,23,3 {filein_wrf2d} {filein_aux}")
                 fwrf2d = nc.Dataset(filein_aux)

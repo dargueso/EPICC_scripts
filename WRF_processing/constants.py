@@ -50,3 +50,4 @@ class const:
     c = a*L/Rd
     secinday = 86400 # Number of seconds in a day
     earth_radius=6371000 #Earth radius in m
+    omega = 0.000072921 #angular velocity of eart, r/s

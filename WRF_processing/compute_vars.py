@@ -26,6 +26,8 @@ from constants import const as const
 from scipy.ndimage import gaussian_filter
 import wrf_utils as wrfu
 import EPICC_post_config as cfg
+import math
+import xarray as xr
 
 # wrf.set_cache_size(0)
 wrf.disable_xarray()
@@ -365,21 +367,21 @@ def compute_PSL(ncfile):
     return psl, atts
 
 
-def compute_PVO(ncfile):
-    """Function to calculate PVU (potential vorticity) using wrf-python diagnostics
-    It also provides variable attribute CF-Standard
-    """
-
-    # Get the sea level pressure using wrf-python
-    psl = wrf.getvar(ncfile, "pvo", wrf.ALL_TIMES)
-
-    atts = {
-        "standard_name": "air_pressure_at_mean_sea_level",
-        "long_name": "Sea Level Pressure",
-        "units": "PVU",
-    }
-
-    return psl, atts
+#def compute_PVO(ncfile):
+#    """Function to calculate PVU (potential vorticity) using wrf-python diagnostics
+#    It also provides variable attribute CF-Standard
+#    """
+#
+#    # Get the sea level pressure using wrf-python
+#    psl = wrf.getvar(ncfile, "pvo", wrf.ALL_TIMES)
+#
+#    atts = {
+#        "standard_name": "air_pressure_at_mean_sea_level",
+#        "long_name": "Sea Level Pressure",
+#        "units": "PVU",
+#    }
+#
+#    return psl, atts
 
 
 def compute_U10MET(ncfile):
@@ -494,3 +496,131 @@ def compute_CAPE2D(ncfile):
     }
 
     return cape2d, atts
+
+
+###########################################################
+###########################################################
+
+
+def compute_Z(ncfile):
+    """Function to calculate GEOPOTENTIAL using methods described in:
+    """
+
+    z = wrf.getvar(ncfile, "geopotential", wrf.ALL_TIMES) / const.g
+
+    atts = {
+        "standard_name": "geopotential",
+        "long_name": "geopotential heigh",
+        "units": "m",
+    }
+
+    return z, atts
+
+
+###########################################################
+###########################################################
+
+# def compute_AVO(ncfile):
+
+#     avo = wrf.getvar(ncfile,"avo",wrf.ALL_TIMES)
+
+#     atts = {
+#         "standard_name": "absolute_vorticity",
+#         "long_name": "absolute vorticity",
+#         "units": "10-5 s-1",
+#     }
+
+#     return avo, atts
+
+def compute_RV(ncfile):
+
+
+    georef = nc.Dataset(cfg.geofile_ref)
+
+    ntimes = ncfile.dimensions['Time'].size
+    #nlevs = ncfile.dimensions['levels'].size
+    nlevs = ncfile.dimensions['bottom_top'].size
+    
+    ncfile.variables['MAPFAC_U'] = np.broadcast_to(georef.variables['MAPFAC_U'][:],(ntimes,) + georef.variables['MAPFAC_U'][:].squeeze().shape)
+    ncfile.variables['MAPFAC_V'] = np.broadcast_to(georef.variables['MAPFAC_V'][:],(ntimes,) + georef.variables['MAPFAC_V'][:].squeeze().shape)
+    ncfile.variables['MAPFAC_M'] = np.broadcast_to(georef.variables['MAPFAC_M'][:],(ntimes,) + georef.variables['MAPFAC_M'][:].squeeze().shape)
+
+    avo = wrf.getvar(ncfile,"avo",wrf.ALL_TIMES)
+    #rv = avo - 2*const.omega*np.sin(wrf.getvar(ncfile, "lat", wrf.ALL_TIMES))
+    #import pdb; pdb.set_trace()
+    F = np.transpose(np.repeat(ncfile.variables['F'][:][..., None], nlevs, axis=3),(0, 3, 1,2))
+
+    rv = avo - F
+
+    atts = {
+        "standard_name": "relative vorticity",
+        "long_name": "relative vorticity",
+        "units": "s-1",
+    }
+
+    return rv, atts
+
+
+# def compute_RV(ncfile):
+#     """Function to calculate Relative Vorticity
+#     """
+
+#    # Get the sea level pressure using wrf-python
+#     #Relative Vorticity = Absolute vorticity - Coriolis(lat)
+#     #import pdb; pdb.set_trace()
+   
+#    #Load data for the use of python-wrf avo()
+#     udata = ncfile.variables['U'][:]
+#     vdata = ncfile.variables['V'][:]
+#     georef = nc.Dataset(cfg.geofile_ref)
+#     mapfac_u = georef.variables['MAPFAC_U'][:]
+#     mapfac_v = georef.variables['MAPFAC_V'][:]
+#     msfm = georef.variables['MAPFAC_M'][:]
+#     cor = ncfile.variables['F'][:]
+#     dx = ncfile.getncattr('DX')
+#     dy = ncfile.getncattr('DY')
+#     import pdb; pdb.set_trace()
+    
+#     #Adapt data format    
+#     ustack = xr.DataArray(udata, dims=["Time", "bottom_top", "south_north", "west_east_stag"]) #wrf.avo want xarray
+#     vstack = xr.DataArray(vdata, dims=["Time", "bottom_top", "south_north", "west_east_stag"])
+#     mapfac_u = np.broadcast_to(mapfac_u, ustack.shape)
+#     mapfac_v = np.broadcast_to(mapfac_v, vstack.shape)
+    
+
+#     #ressure_variable = ncfile.variables['P'][:]
+#     #u_destag = wrf.destagger(udata, 3)
+#     #v_destag = wrf.destagger(vdata, 2)
+#     #u_lev = wrf.interplevel(ustack, pressure_variable, cfg.plevs)
+
+#     #v = wrf.avo(u_destag, v_destag, mapfac_u, mapfac_v, msfm, cor, dx, dy) #absolute vorticity
+    
+#     av = wrf.avo(ustack, vstack, mapfac_u, mapfac_v, msfm, cor, dx, dy) #absolute vorticity 
+#     rv = av - 2*const.omega*math.sin(wrf.getvar(ncfile, "lat", wrf.ALL_TIMES))
+
+#    # #V2
+#    # U = ncfile.variables['U'][:]
+#    # V = ncfile.variables['V'][:]
+#    # 
+#    ## #try to get U and V same dimension
+#    ## lat = wrf.getvar(ncfile, "lat", timeidx=wrf.ALL_TIMES)
+#    ## lon = wrf.getvar(ncfile, "lon", timeidx=wrf.ALL_TIMES)
+#    ## geo_file = nc.Dataset(cfg.file_geo)
+#    ## cen_long = geo_file.variables['CLONG'][:]
+#    ## cone = geo_file.variables['CON'][:]
+#    ## u,v = wrf.uvmet(U, V, lat, lon, cen_long, cone, meta=True, units='m s-1')
+
+#    # dU_dlon = np.gradient(U, axis=2)  # Derivative of U with respect to longitude
+#    # dV_dlat = np.gradient(V, axis=1)  # Derivative of V with respect to latitude
+#    # f = 2 * 7.29e-5 * np.sin(np.radians(lat))  # Earth's angular velocity
+#    # rv = (dV_dlat - dU_dlon) + f
+
+
+#     atts = {
+#         "standard_name": "relative vorticity",
+#         "long_name": "relative vorticity",
+#         "units": "s-1",
+#     }
+
+#     return rv, atts
+

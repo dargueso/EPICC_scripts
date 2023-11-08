@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#/usr/bin/env python
 """
 #####################################################################
 # Author: Daniel Argueso <daniel> @ UIB
@@ -37,31 +37,32 @@ import wrf_utils as wrfu
 import calendar
 
 from joblib import Parallel, delayed
-import epicc_config as cfg
+#import epicc_config as cfg
+import EPICC_post_config as cfg
 
 ###########################################################
 ###########################################################
 
 
 WRF_runs = ["EPICC_2km_ERA5"]
-varnames = ["TC", "QVAPOR"]  #'TC','TD','RH','UA','Z','VA','WA']
+varnames = cfg.variables # ["Z"]  # ["Z"] #["TC", "QVAPOR"]  #'TC','TD','RH','UA','Z','VA','WA']
 
 numvar = len(varnames)
-path_out = "/vg6a/dargueso/postprocessed/EPICC/plevs"
-path_in = "/vg6a/dargueso/WRF_OUT/"
-path_proc = "/vg6a/dargueso/postprocessed/EPICC/temp/"
+path_out = "/home/yseut/MetMed_work/data/WRF_atmo_variables/EPICC/plevs"
+path_in = "/vg9a/dargueso/WRF_OUT"
+path_proc = "/home/yseut/MetMed_work/data/WRF_atmo_variables/EPICC/temp"
 
-smonth = 1
-emonth = 12
+smonth = cfg.smonth
+emonth = cfg.emonth
 
-periods = np.arange(2013, 2013)
+periods = np.arange(cfg.syear, cfg.eyear+1)
 
 plevs = cfg.plevs
 
 patt = "UIB"
 patt_wrf = "wrf3hrly"
 dom = "d01"
-patt_inst = "UIB_850hPa"
+patt_inst = f"UIB_{cfg.plevs[0]}hPa"
 
 ###########################################################
 ###########################################################
@@ -69,16 +70,15 @@ patt_inst = "UIB_850hPa"
 for wrun in WRF_runs:
     for syear in periods:
         eyear = syear
-
         fullpathin = path_in + "/" + wrun + "/out"
-        fullpathout = path_out + "/" + wrun + "/"
+        fullpathout = path_out + "/" + wrun  + "/"
 
         if not os.path.exists(fullpathout):
             os.makedirs(fullpathout)
 
         # Parallel(n_jobs=numvar)(delayed(wrfu.plevs_interp)(path_in,path_out,path_geo,syear,eyear,smonth,emonth,plevs,patt,patt_wrf,dom,wrun,varn) for varn in varnames)
         for varn in varnames:
-            d1 = dt.datetime(int(syear), smonth, 2)
+            d1 = dt.datetime(int(syear), smonth, 1)
             d2 = dt.datetime(
                 int(eyear), emonth, calendar.monthrange(int(eyear), emonth)[1]
             ) + dt.timedelta(days=1)
