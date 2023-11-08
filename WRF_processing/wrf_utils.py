@@ -210,7 +210,7 @@ def plevs_interp_byday(
 
     filein_wrf3d = "%s/%s_%s_%s_00:00:00" % (fullpathin, patt_wrf, dom, sdate)
     filein_wrf2d = filein_wrf3d.replace(patt_wrf, "wrfout")
-    filein_aux = f"./aux_mientras2/aux_{sdate}.nc"
+    filein_aux = f"./aux_{sdate}.nc"
 
     os.system(f"ncks -d Time,0,23,3 {filein_wrf2d} {filein_aux}")
 
