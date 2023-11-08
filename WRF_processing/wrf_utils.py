@@ -38,17 +38,17 @@ def sel_wrfout_files(filelist, sdate, edate):
     Output: list of files
     """
 
-    d1 = dt.date(np.int(sdate[0:4]), np.int(sdate[5:7]), np.int(sdate[8:10]))
-    d2 = dt.date(np.int(edate[0:4]), np.int(edate[5:7]), np.int(edate[8:10]))
+    d1 = dt.date(np.int64(sdate[0:4]), np.int64(sdate[5:7]), np.int64(sdate[8:10]))
+    d2 = dt.date(np.int64(edate[0:4]), np.int64(edate[5:7]), np.int64(edate[8:10]))
 
     years = np.array(
-        [fname.split("/")[-1].split("_")[2][0:4] for fname in filelist], np.int
+        [fname.split("/")[-1].split("_")[2][0:4] for fname in filelist], np.int64
     )
     months = np.array(
-        [fname.split("/")[-1].split("_")[2][5:7] for fname in filelist], np.int
+        [fname.split("/")[-1].split("_")[2][5:7] for fname in filelist], np.int64
     )
     days = np.array(
-        [fname.split("/")[-1].split("_")[2][8:10] for fname in filelist], np.int
+        [fname.split("/")[-1].split("_")[2][8:10] for fname in filelist], np.int64
     )
 
     file_dates = np.array(
@@ -210,7 +210,7 @@ def plevs_interp_byday(
 
     filein_wrf3d = "%s/%s_%s_%s_00:00:00" % (fullpathin, patt_wrf, dom, sdate)
     filein_wrf2d = filein_wrf3d.replace(patt_wrf, "wrfout")
-    filein_aux = f"aux_{sdate}.nc"
+    filein_aux = f"./aux_{sdate}.nc"
 
     os.system(f"ncks -d Time,0,23,3 {filein_wrf2d} {filein_aux}")
 
@@ -224,7 +224,9 @@ def plevs_interp_byday(
     fwrf2d = nc.Dataset(filein_aux)
     otimes = wrftime2date(filein_wrf3d.split())[:]
 
-    fwrf3d.variables["F"] = geofile.variables["F"]
+    # fwrf3d.variables["F"] = geofile.variables["F"]
+    ntimes = fwrf3d.dimensions['Time'].size
+    fwrf3d.variables['F'] = np.broadcast_to(geofile.variables['F'][:],(ntimes,) + geofile.variables['F'][:].squeeze().shape)
 
     for varname in fwrf2d.variables.keys():
         fwrf3d.variables[varname] = fwrf2d.variables[varname]
@@ -313,7 +315,7 @@ def create_plevs_netcdf(var, filename):
     setattr(outtime_bnds, "units", "hours since 1949-12-01 00:00:00")
     setattr(outtime_bnds, "calendar", "standard")
 
-    step_seconds = np.int((otimes[1] - otimes[0]).total_seconds())
+    step_seconds = np.int64((otimes[1] - otimes[0]).total_seconds())
 
     outtime[:] = nc.date2num(
         [otimes[x] for x in range(len(otimes))],
@@ -411,7 +413,7 @@ def create_zlevs_netcdf(var, filename):
     setattr(outtime_bnds, "units", "hours since 1949-12-01 00:00:00")
     setattr(outtime_bnds, "calendar", "standard")
 
-    step_seconds = np.int((otimes[1] - otimes[0]).total_seconds())
+    step_seconds = np.int64((otimes[1] - otimes[0]).total_seconds())
 
     outtime[:] = nc.date2num(
         [otimes[x] for x in range(len(otimes))],
@@ -512,7 +514,7 @@ def create_netcdf_vcross(var, filename):
     setattr(outtime_bnds, "units", "hours since 1949-12-01 00:00:00")
     setattr(outtime_bnds, "calendar", "standard")
 
-    step_seconds = np.int((otimes[1] - otimes[0]).total_seconds())
+    step_seconds = np.int64((otimes[1] - otimes[0]).total_seconds())
 
     outtime[:] = nc.date2num(
         [otimes[x] for x in range(len(otimes))],
@@ -603,7 +605,7 @@ def create_netcdf(var, filename):
     setattr(outtime_bnds, "units", "hours since 1949-12-01 00:00:00")
     setattr(outtime_bnds, "calendar", "standard")
 
-    step_seconds = np.int((otimes[1] - otimes[0]).total_seconds())
+    step_seconds = np.int64((otimes[1] - otimes[0]).total_seconds())
 
     outtime[:] = nc.date2num(
         [otimes[x] for x in range(len(otimes))],

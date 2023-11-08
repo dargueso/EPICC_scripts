@@ -26,6 +26,7 @@ from constants import const as const
 from scipy.ndimage import gaussian_filter
 import wrf_utils as wrfu
 import EPICC_post_config as cfg
+import xarray as xr
 
 # wrf.set_cache_size(0)
 wrf.disable_xarray()
@@ -494,3 +495,61 @@ def compute_CAPE2D(ncfile):
     }
 
     return cape2d, atts
+
+
+###########################################################
+###########################################################
+
+
+def compute_Z(ncfile):
+    """Function to calculate GEOPOTENTIAL using methods described in:"""
+
+    z = wrf.getvar(ncfile, "geopotential", wrf.ALL_TIMES) / const.g
+
+    atts = {
+        "standard_name": "geopotential",
+        "long_name": "geopotential heigh",
+        "units": "m",
+    }
+
+    return z, atts
+
+
+###########################################################
+###########################################################
+
+
+def compute_RV(ncfile):
+    georef = nc.Dataset(cfg.geofile_ref)
+
+    ntimes = ncfile.dimensions["Time"].size
+    # nlevs = ncfile.dimensions['levels'].size
+    nlevs = ncfile.dimensions["bottom_top"].size
+
+    ncfile.variables["MAPFAC_U"] = np.broadcast_to(
+        georef.variables["MAPFAC_U"][:],
+        (ntimes,) + georef.variables["MAPFAC_U"][:].squeeze().shape,
+    )
+    ncfile.variables["MAPFAC_V"] = np.broadcast_to(
+        georef.variables["MAPFAC_V"][:],
+        (ntimes,) + georef.variables["MAPFAC_V"][:].squeeze().shape,
+    )
+    ncfile.variables["MAPFAC_M"] = np.broadcast_to(
+        georef.variables["MAPFAC_M"][:],
+        (ntimes,) + georef.variables["MAPFAC_M"][:].squeeze().shape,
+    )
+
+    avo = wrf.getvar(ncfile, "avo", wrf.ALL_TIMES)
+    F = np.transpose(
+        np.repeat(ncfile.variables["F"][:][..., None], nlevs, axis=3), (0, 3, 1, 2)
+    )
+
+    rv = avo - F
+
+    atts = {
+        "standard_name": "relative vorticity",
+        "long_name": "relative vorticity",
+        "units": "s-1",
+    }
+
+    return rv, atts
