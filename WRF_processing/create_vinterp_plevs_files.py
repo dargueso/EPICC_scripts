@@ -54,14 +54,14 @@ path_proc = "/vg6a/dargueso/postprocessed/EPICC/temp/"
 smonth = 1
 emonth = 12
 
-periods = np.arange(2013, 2013)
+periods = np.arange(cfg.syear, cfg.eyear + 1)
 
 plevs = cfg.plevs
 
 patt = "UIB"
 patt_wrf = "wrf3hrly"
 dom = "d01"
-patt_inst = "UIB_850hPa"
+patt_inst = "UIB_"
 
 ###########################################################
 ###########################################################
@@ -78,7 +78,7 @@ for wrun in WRF_runs:
 
         # Parallel(n_jobs=numvar)(delayed(wrfu.plevs_interp)(path_in,path_out,path_geo,syear,eyear,smonth,emonth,plevs,patt,patt_wrf,dom,wrun,varn) for varn in varnames)
         for varn in varnames:
-            d1 = dt.datetime(int(syear), smonth, 2)
+            d1 = dt.datetime(int(syear), smonth, 1)
             d2 = dt.datetime(
                 int(eyear), emonth, calendar.monthrange(int(eyear), emonth)[1]
             ) + dt.timedelta(days=1)
