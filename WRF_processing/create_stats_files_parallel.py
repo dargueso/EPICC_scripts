@@ -52,8 +52,8 @@ def main():
     parser.add_argument("-e", "--end"  ,dest="edatestr",type=str,help="Ending date  of the period to plot in format 2019-09-11 09:00\n partial datestrings such as 2019-09 also valid\n [default: 2019-09-15 09:30]",metavar="DATE",default=f'{cfg.eyear}-12-31 23:59')
     parser.add_argument("-v", "--var", dest="var", help="Variable to plot \n [default: RAIN]",metavar="VAR",default='RAIN')
     parser.add_argument("-t", "--stat"  ,dest="stat",type=str,help="Statistic metric to calculate",metavar="STAT",default='max',choices=['max','min','mean'])
-    parser.add_argument("-a", "--seas"  ,dest="seas",type=str,help="Season to calculate stat over",metavar="SEAS",default='year',choices=['year','DJF','MAM','JJA','SON','all'])
-    parser.add_argument("-f", "--freq", dest="freq",help="Frequency to plot from 10min to monthly\n [default: hourly]",metavar="FREQ",default='10MIN',choices=['10MIN','01H','DAY','MON'])
+    parser.add_argument("-a", "--seas"  ,dest="seas",type=str,help="Season to calculate stat over",metavar="SEAS",default='YEAR',choices=['YEAR','DJF','MAM','JJA','SON','all'])
+    parser.add_argument("-f", "--freq", dest="freq",help="Frequency to plot from 10min to monthly\n [default: hourly]",metavar="FREQ",default='01H',choices=['10MIN','01H','DAY','MON'])
 
     args = parser.parse_args()
 
