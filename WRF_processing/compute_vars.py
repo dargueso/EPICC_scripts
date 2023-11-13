@@ -244,6 +244,22 @@ def compute_TD2(ncfile):
     return td2, atts
 
 
+def compute_RH2(ncfile):
+    """Function to calculate 2-m relative humidity from WRF OUTPUTS
+    It also provides variable attributes CF-Standard
+    """
+    rh2 = wrf.getvar(ncfile, "rh2", wrf.ALL_TIMES)
+
+    atts = {
+        "standard_name": "relative_humidity",
+        "long_name": "Relative Humidity",
+        "units": "%",
+        "hgt": "2 m",
+    }
+
+    return rh2, atts
+
+
 ###########################################################
 ###########################################################
 def compute_TC(ncfile):
@@ -445,6 +461,29 @@ def compute_WSPD10(ncfile):
     return uvmet10_wind, atts
 
 
+def compute_WDIR10(ncfile):
+    """Function to calculate 10-m wind direction on Earth coordinates
+    from WRF OUTPUTS
+    It also provides variable attributes CF-Standard
+    """
+
+    # Get wind direction (this function calculates both speed and direction)
+    # We select direction only
+
+    uvmet10_wind = np.squeeze(
+        wrf.getvar(ncfile, "uvmet10_wspd_wdir", wrf.ALL_TIMES)[1, :]
+    )
+
+    atts = {
+        "standard_name": "wind_direction",
+        "long_name": "Earth coordinates wind speed",
+        "units": "degrees north",
+        "hgt": "10 m",
+    }
+
+    return uvmet10_wind, atts
+
+
 def compute_PW(ncfile):
     """Function to calculate precipitable water in the column"""
 
@@ -457,6 +496,23 @@ def compute_PW(ncfile):
     }
 
     return pw, atts
+
+
+def compute_RH(ncfile):
+    """Function to calculate relative humidity at model full levels from WRF outputs
+    It also provides variable attributes CF-Standard
+    """
+
+    rh = wrf.getvar(ncfile, "rh", wrf.ALL_TIMES)
+
+    atts = {
+        "standard_name": "relative_humidity",
+        "long_name": "Relative Humidity",
+        "units": "%",
+        "hgt": "full_model_level",
+    }
+
+    return rh, atts
 
 
 ###########################################################
