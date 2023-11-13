@@ -47,9 +47,9 @@ WRF_runs = ["EPICC_2km_ERA5"]
 varnames = ["TC", "QVAPOR"]  #'TC','TD','RH','UA','Z','VA','WA']
 
 numvar = len(varnames)
-path_out = "/vg6a/dargueso/postprocessed/EPICC/plevs"
-path_in = "/vg6a/dargueso/WRF_OUT/"
-path_proc = "/vg6a/dargueso/postprocessed/EPICC/temp/"
+path_out = "/home/dargueso/postprocessed/EPICC/plevs"
+path_in = "/home/dargueso/WRF_OUT/"
+path_proc = "/home/dargueso/postprocessed/EPICC/temp/"
 
 smonth = 1
 emonth = 12
