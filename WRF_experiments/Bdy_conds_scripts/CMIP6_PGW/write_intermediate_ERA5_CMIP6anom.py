@@ -168,7 +168,7 @@ syear = opts.syear
 eyear = opts.eyear
 nyears = eyear - syear + 1
 smonth = 1
-emonth = 1 
+emonth = 1
 
 vars3d = ["hur", "ta", "ua", "va", "zg"]
 vars3d_codes = {"hur": "r", "ta": "t", "ua": "u", "va": "v", "zg": "z"}
@@ -251,7 +251,7 @@ nlat = 601
 nlon = 1200
 
 
-file_ref = nc.Dataset("%s/era5_daily_sfc_20140101.nc" % (ERA5_dir), "r")
+file_ref = nc.Dataset("%s/era5_daily_sfc_20130901.nc" % (ERA5_dir), "r")
 lat = file_ref.variables["lat"][:]
 lon = file_ref.variables["lon"][:]
 
@@ -275,7 +275,7 @@ while year < eyear or (year == eyear and month < emonth):
     )
 
     date_init = dt.datetime(year, month, day, 00)
-    date_end = dt.datetime(year, month, day, 18)
+    date_end = dt.datetime(year, month, day, 21)
 
     time_filepl = ferapl.variables["time"]
     time_filesfc = ferasfc.variables["time"]
@@ -283,7 +283,7 @@ while year < eyear or (year == eyear and month < emonth):
     date1 = nc.date2index(date_init, time_filepl, calendar="standard", select="exact")
     date2 = nc.date2index(date_end, time_filepl, calendar="standard", select="exact")
     ndays = (date_end - date_init).total_seconds() / 86400.0 + 1
-    nsteps = int((date_end - date_init).total_seconds() / 86400.0 * 4.0 + 1)
+    nsteps = int((date_end - date_init).total_seconds() / 86400.0 * 8.0 + 1)
 
     vout = {}
     print("Looping over timesteps in original ERA5 file")
