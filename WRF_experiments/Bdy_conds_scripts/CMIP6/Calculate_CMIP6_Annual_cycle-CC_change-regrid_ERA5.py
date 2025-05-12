@@ -63,8 +63,8 @@ def parse_args():
     parser.add_argument('-v', '--var_names', type=str,
             help='Variable names (e.g. ta) to process. Separate ' +
             'multiple variable names with "," (e.g. tas,ta). Default is ' +
-            'to process all required variables ta,hus,ua,va,zg,hurs,tas,ps,ts',
-            default='ta,hus,ua,va,zg,hurs,tas,ps,ts,uas')
+            'to process all required variables ta,hur,ua,va,zg,hurs,tas,ps,ts',
+            default='ta,hur,ua,va,zg,hurs,tas,ps,ts,uas')
 
     # input directory
     parser.add_argument('-i', '--input_dir', type=str,
@@ -116,8 +116,8 @@ def main():
   
     
 
-    for GCM in (tqdm(models)):
-        #pbar.set_description(f"{GCM}")
+    for GCM in (pbar := tqdm(models)):
+        pbar.set_description(f"{GCM}")
 
         for vn, varname in enumerate(variables):
 
@@ -172,9 +172,7 @@ def calculate_annual_cycle(GCM, varname,exp,syear,eyear,idir,odir):
     if not os.path.isfile(ofname):
         fin_p = finall.sel(time=slice(str(syear), str(eyear)))
 
-        if varname == "hus":
-            fin_p = fin_p.where((fin_p.hus >= 0) & (fin_p.hus <= 100))
-        elif varname == "hur":
+        if varname == "hur":
             fin_p = fin_p.where((fin_p.hur >= 0) & (fin_p.hur <= 100))
         elif varname == "ta":
             fin_p = fin_p.where((fin_p.ta >= 0) & (fin_p.ta < 400))

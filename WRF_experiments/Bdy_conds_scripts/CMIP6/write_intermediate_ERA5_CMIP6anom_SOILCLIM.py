@@ -164,12 +164,7 @@ for y in range(nyears):
 
     for var in varsoil:
         print("Processing variable %s" % (var))
-
-        if var == "LANDSEA":
-            sst = ferasfc.variables["sst"][:, :]
-            vout[var] = np.int32(np.ma.getmask(sst))
-        else:
-            vout[var] = ferasfc.variables["%s" % (varsoil_codes[var])][:, :]
+        vout[var] = ferasfc.variables["%s" % (varsoil_codes[var])][:, :]
 
     fieldssoil = np.ndarray(
         shape=(nfieldssoil, nlat, nlon), dtype="float32"

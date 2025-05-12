@@ -149,7 +149,7 @@ def main():
                 filename = filepath.split("/")[-1]
                 print(filename)
                 fin = xr.open_dataset(filepath)
-                if varname in ["ta", "hus", "ua", "va", "zg"]:
+                if varname in ["ta", "hus","hur", "ua", "va", "zg"]:
                     fin.coords["plev"] = plvs
                     fin.to_netcdf(f"{args.corrected_plevs_dir}/{filename}")
                 else:
@@ -173,7 +173,6 @@ def main():
         #         f"{bcolors.ERROR}ERROR: Could not make the ensemble mean{bcolors.ENDC}"
         #     )
         filesin = sorted(glob(f"{args.corrected_plevs_dir}/{varname}_*"))
-
         fin = xr.open_mfdataset(filesin, concat_dim="model", combine="nested")
         fin_ensmean = fin.mean(dim="model").squeeze()
         fin_ensmean.to_netcdf(f"{varname}_CC_signal_ssp585_2070-2099_1985-2014.nc")

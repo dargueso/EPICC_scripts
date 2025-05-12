@@ -65,19 +65,19 @@ integer :: status,nf,nl,nfields3d,nfields2d
 nfields3d=size(fields3d,1)
 nfields2d=size(fields2d,1)
 
-fields3d_name(1) = 'RH       '
+fields3d_name(1) = 'SPECHUMD '
 fields3d_name(2) = 'TT       '
 fields3d_name(3) = 'UU       '
 fields3d_name(4) = 'VV       '
 fields3d_name(5) = 'GHT      '
 
-fields3d_units(1) = 'percent                  '
+fields3d_units(1) = 'kg kg-1                  '
 fields3d_units(2) = 'K                        '
 fields3d_units(3) = 'm s-1                    '
 fields3d_units(4) = 'm s-1                    '
 fields3d_units(5) = 'm                        '
 
-fields3d_desc(1) = 'Relative Humidity                           '
+fields3d_desc(1) = 'Specific Humidity                           '
 fields3d_desc(2) = 'Temperature                                 '
 fields3d_desc(3) = 'U                                           '
 fields3d_desc(4) = 'V                                           '
@@ -89,7 +89,7 @@ fields2d_name(3) = 'RH       '
 fields2d_name(4) = 'PSFC     '
 fields2d_name(5) = 'PMSL     '
 fields2d_name(6) = 'TT       '
-fields2d_name(7) = 'SKINTEMP '
+fields2d_name(7) = 'SST      '
 
 fields2d_units(1) = 'm s-1                    '
 fields2d_units(2) = 'm s-1                    '

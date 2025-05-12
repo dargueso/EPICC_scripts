@@ -72,38 +72,6 @@ INSTEAD WE DID THE FOLLOWING TO CREATE SOIL VARIABLE INTERMEDIATE FILES:
   mv outputInter_soil.cpython-37m-x86_64-linux-gnu.so outputInter_soil.so
   python write_intermediate_ERA5_CMIP6anom_SOILCLIM.py -s 2010 -e 2020 #Same for this one, it was created from the originla write_intermediate_ERA5_CMIP6anom.py
 
-NOTE (7/06/2023):
-The previous method (step 10) causes issues because the landmask (LANDSEA) in the resulting SOILCLIM is not 1/0 and using it as landmask is troublesome.
-
-  cdo cat era5_daily_sfc_20??0[6-8]??.grb aux.grb
-  cdo dhourmean aux.grb aux2.grb
-  cdo setdate,2020-07-22 aux2.grb SOILCLIM_June-Aug.grb 
-
-  Then link Vtable.ERA5.SOIL1ststep to Vtable
-  Copy namelist_soilera5_cmip6_pgw.wps to namelist.wps
-  And run ungrib.exe normally.
-  
-  ========
-
-  python write_intermediate_ERA5_CMIP6anom_SOILCLIM.py -s 2010 -e 2020
-
-  There are two options:
-
-  1) Using climatological soil varaibles:
-  ncea era5_daily_sfc_20??12??.nc aux.nc
-  ncra aux.nc sfcclim.nc
-  f2py -c -m outputInter_soil outputInter_soil.f90 -DF2PY_REPORT_ON_ARRAY_COPY=1000000 #This outputInter_soil.f90 was created from the original outputInter.f90
-  mv outputInter_soil.cpython-37m-x86_64-linux-gnu.so outputInter_soil.so
-
-  2) Using the soil variables from the initial date (same initial conditions for soil as the present run):
-  python myrunWPSandreal_UIB_daily_EPICC_2km_ERA5_CMIP6anom_SOILERA.py
-
-  
-
-
-
-
-
 
 
   [TO BE CHECKED STILL]

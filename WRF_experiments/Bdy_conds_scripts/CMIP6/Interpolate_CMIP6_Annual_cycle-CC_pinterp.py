@@ -31,7 +31,7 @@ import os
 ERA5_dir = "/home/dargueso/BDY_DATA/ERA5/ERA5_netcdf"
 CMIP6anom_dir = "/home/dargueso/BDY_DATA/CMIP6/"
 
-variables = ["hur"]#"ta", "ua", "va", "zg", "hus"]
+variables = ["ta", "ua", "va", "zg", "hus"]
 era5_ref = xr.open_dataset(f"{ERA5_dir}/era5_daily_pl_20160101.nc")
 era5_plev = era5_ref.plev.values
 
