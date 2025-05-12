@@ -15,14 +15,14 @@ def retrieve_era5():
     You can use the variable 'target' to organise the requested data in files as you wish.
     In the example below the data are organised in files per day. (eg "era5_daily_20151001.grb")
     """
-    yearStart = 2010
-    yearEnd = 2011
-    monthStart =12 
-    monthEnd = 1
+    yearStart = 2015
+    yearEnd = 2015
+    monthStart =8 
+    monthEnd = 12
 
     y = yearStart
     m = monthStart
-    d = 22
+    d = 1
 
     while y < yearEnd or (y == yearEnd and m <= monthEnd):
 
@@ -72,7 +72,7 @@ def era5_request(year, month, day, target):
             "year": "%s" % (year),
             "month": "%02d" % (month),
             "day": "%02d" % (day),
-            "time": ["00:00", "03:00", "06:00","09:00", "12:00","15:00", "18:00","21:00"], 
+            "time": ["00:00", "06:00", "12:00", "18:00"],
             "grid": [0.3, 0.3],
         },
         target,

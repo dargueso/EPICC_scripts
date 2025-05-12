@@ -1,0 +1,1648 @@
+&share
+ wrf_core = 'ARW',
+ max_dom = 1,
+ start_date = '2021-01-01_00:00:00',
+ end_date   = '2021-01-01_00:00:00',
+ interval_seconds = 21600
+ io_form_geogrid = 2,
+/
+
+&geogrid
+ parent_id         =   1,
+ parent_grid_ratio =   1,
+ i_parent_start    =   1,
+ j_parent_start    =   1,
+ e_we              =  1250,
+ e_sn              =  750,
+
+ geog_data_res = 'default',
+ dx = 2000,
+ dy = 2000,
+ map_proj = 'lambert',
+ ref_lat   =  41.8,
+ ref_lon   =  4.2,
+ truelat1  =  60,
+ truelat2  =  30,
+ stand_lon = 4.2,
+ geog_data_path = '/home/dargueso/GEOG_DATA_4.1/WPS_GEOG/'
+/
+
+&ungrib
+ out_format = 'WPS',
+ prefix = 'LSERA5',
+/
+
+&metgrid
+ fg_name = 'ERA5'
+ io_form_metgrid = 2,
+ constants_name='Last login: Tue Dec 14 00:35:23 on ttys000
+daniel@Daniels-iMac ~ % e3
+Warning: No xauth data; using fake authentication data for X11 forwarding.
+Welcome to Ubuntu 18.04.6 LTS (GNU/Linux 4.15.0-135-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/advantage
+
+60 updates can be applied immediately.
+To see these additional updates run: apt list --upgradable
+
+New release '20.04.3 LTS' available.
+Run 'do-release-upgrade' to upgrade to it.
+
+*** System restart required ***
+Last login: Tue Dec 14 13:46:49 2021 from 81.203.16.5
+dargueso@eady3:~$ ssh mc4
+Welcome to Ubuntu 20.04.3 LTS (GNU/Linux 5.4.0-88-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/advantage
+
+39 updates can be applied immediately.
+7 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+
+7 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+*** System restart required ***
+Last login: Tue Dec 14 13:25:21 2021 from 192.168.0.233
+cdargueso@mc4:~$ cd ~/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS/r
+-bash: cd: /home/dargueso/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS/r: No such file or directory
+dargueso@mc4:~$ cd ~/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS/
+dargueso@mc4:~/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS$ ls
+arch                  LSERA5:2012-12-22_00             PFILE:                  SOILERA5:2017-07-22_00
+clean                 LSERA5:2012-12-22_00.nc          rd_orig.txt             SOILERA5:2018-07-22_00
+compile               metgrid                          rd.txt                  SOILERA5:2019-07-22_00
+compile.log           metgrid.exe                      README                  SOILERA5:2020-07-22_00
+configure             metgrid.log                      SOILERA5:2010-07-22_00  ungrib
+configure.wps         namelist_EPICC.wps               SOILERA5:2010-12-22_00  ungrib.exe
+configure.wps.backup  namelist_soilera5_cmip6_pgw.wps  SOILERA5:2011-07-22_00  ungrib.log
+geo_em.d01.nc         namelist.wps                     SOILERA5:2012-07-22_00  Untitled.ipynb
+geogrid               namelist.wps.all_options         SOILERA5:2013-07-22_00  util
+geogrid.exe           namelist.wps.fire                SOILERA5:2014-07-22_00  Vtable
+geogrid.log           namelist.wps.global              SOILERA5:2015-07-22_00  Vtable.ERA5.SOIL1ststep
+link_grib.csh         namelist.wps.nmm                 SOILERA5:2016-07-22_00
+dargueso@mc4:~/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS$ cd util/
+dargueso@mc4:~/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS/util$ ./int2nc.exe ../LSERA5\:2012-12-22_00
+./int2nc.exe: error while loading shared libraries: libnetcdf.so.18: cannot open shared object file: No such file or directory
+dargueso@mc4:~/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS/util$ !module 
+-bash: !module: event not found
+dargueso@mc4:~/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS/util$ module avail
+-------------------------------------------------- /usr/share/modules/mc4 ---------------------------------------------------
+intel/19.1  math-utils/1.0.0  netcdf-intel  nvidia-pgi/20.9  
+dargueso@mc4:~/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS/util$ module load intel/19.1 netcdf-intel
+------------------------------
+Carregam el mòdul del compilador intel 19.1. Per llevar-lo feu module unload nom_fitxer.
+Executeu-lo amb les comandes ifort, icc...
+------------------------------
+------------------------------
+Carregam el mòdul NetCDF 4.7.4. Per llevar-lo feu module unload nom_fitxer.
+El directori on es troba el programa és /opt/wrf_install_intel/wrf_libs_intel/.
+------------------------------
+ATENCIÓ: NETCDF ESTÀ COMPILAT AMB ELS COMPILADORS D'INTEL I NECESSITAREU TAMBÉ CARREGAR EL SEU MÒDUL
+$ module load intel/19.1
+------------------------------
+dargueso@mc4:~/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS/util$ ./int2nc.exe ../LSERA5\:2012-12-22_00
+ OPENING FILE: ../LSERA5:2012-12-22_00
+ Reading Field, Level: LANDSEA, 200100
+ SUCCESSFUL COMPLETION OF PROGRAM INT2NC, ../LSERA5:2012-12-22_00.nc WRITTEN.
+dargueso@mc4:~/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS/util$ cd ..
+dargueso@mc4:~/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS$ ncview LSERA5\:2012-12-22_00.nc 
+Ncview 2.1.8 David W. Pierce  8 March 2017
+http://meteora.ucsd.edu:80/~pierce/ncview_home_page.html
+Copyright (C) 1993 through 2015, David W. Pierce
+Ncview comes with ABSOLUTELY NO WARRANTY; for details type `ncview -w'.
+This is free software licensed under the Gnu General Public License version 3; type `ncview -c' for redistribution details.
+
+Error: Can't open display: 
+dargueso@mc4:~/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS$ ls
+arch                  LSERA5:2012-12-22_00             PFILE:                  SOILERA5:2017-07-22_00
+clean                 LSERA5:2012-12-22_00.nc          rd_orig.txt             SOILERA5:2018-07-22_00
+compile               metgrid                          rd.txt                  SOILERA5:2019-07-22_00
+compile.log           metgrid.exe                      README                  SOILERA5:2020-07-22_00
+configure             metgrid.log                      SOILERA5:2010-07-22_00  ungrib
+configure.wps         namelist_EPICC.wps               SOILERA5:2010-12-22_00  ungrib.exe
+configure.wps.backup  namelist_soilera5_cmip6_pgw.wps  SOILERA5:2011-07-22_00  ungrib.log
+geo_em.d01.nc         namelist.wps                     SOILERA5:2012-07-22_00  Untitled.ipynb
+geogrid               namelist.wps.all_options         SOILERA5:2013-07-22_00  util
+geogrid.exe           namelist.wps.fire                SOILERA5:2014-07-22_00  Vtable
+geogrid.log           namelist.wps.global              SOILERA5:2015-07-22_00  Vtable.ERA5.SOIL1ststep
+link_grib.csh         namelist.wps.nmm                 SOILERA5:2016-07-22_00
+dargueso@mc4:~/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS$ cd ../
+dargueso@mc4:~/WRF_runs/EPICC_PGW_WRFV4.2.2$ cd ..
+dargueso@mc4:~/WRF_runs$ cd EPICC_WRFV4.2.2/
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2$ ls
+WPS  WRF
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2$ cd WPS
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2/WPS$ ls
+arch                  ERA5:2021-01-01_06     GRIBFILE.AAA          namelist_soilera5_cmip6_pgw.wps  ungrib.exe
+clean                 ERA5:2021-01-01_06.nc  GRIBFILE.AAB          namelist.wps                     ungrib.log
+compile               ERA5:2021-01-01_12     link_grib.csh         namelist.wps.all_options         util
+compile.log           ERA5:2021-01-01_18     LSERA5:2012-12-22_00  namelist.wps.fire                Vtable
+configure             geo_em.d01.nc          metgrid               namelist.wps.global              Vtable.ERA5.SOIL1ststep
+configure.wps         geogrid                metgrid.exe           namelist.wps.nmm
+configure.wps.backup  geogrid.exe            metgrid.log           README
+ERA5:2021-01-01_00    geogrid.log            namelist_EPICC.wps    ungrib
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2/WPS$ cd ..
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2$ cd ..
+dargueso@mc4:~/WRF_runs$ cp -R EPICC_WRFV4.2.2 EPICC_WRFV4.2.2_LSERA5
+dargueso@mc4:~/WRF_runs$ cd EPICC_WRFV4.2.2
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2$ ls
+WPS  WRF
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2$ cd WPS
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2/WPS$ ls
+arch                  ERA5:2021-01-01_06     GRIBFILE.AAA          namelist_soilera5_cmip6_pgw.wps  ungrib.exe
+clean                 ERA5:2021-01-01_06.nc  GRIBFILE.AAB          namelist.wps                     ungrib.log
+compile               ERA5:2021-01-01_12     link_grib.csh         namelist.wps.all_options         util
+compile.log           ERA5:2021-01-01_18     LSERA5:2012-12-22_00  namelist.wps.fire                Vtable
+configure             geo_em.d01.nc          metgrid               namelist.wps.global              Vtable.ERA5.SOIL1ststep
+configure.wps         geogrid                metgrid.exe           namelist.wps.nmm
+configure.wps.backup  geogrid.exe            metgrid.log           README
+ERA5:2021-01-01_00    geogrid.log            namelist_EPICC.wps    ungrib
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2/WPS$ rm -fr ERA5\:2021-01-01_*
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2/WPS$ rm -fr GRIBFILE.AA
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2/WPS$ rm -fr LSERA5\:2012-12-22_00 
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2/WPS$ ls
+arch                  geo_em.d01.nc  metgrid                          namelist.wps.fire    util
+clean                 geogrid        metgrid.exe                      namelist.wps.global  Vtable
+compile               geogrid.exe    metgrid.log                      namelist.wps.nmm     Vtable.ERA5.SOIL1ststep
+compile.log           geogrid.log    namelist_EPICC.wps               README
+configure             GRIBFILE.AAA   namelist_soilera5_cmip6_pgw.wps  ungrib
+configure.wps         GRIBFILE.AAB   namelist.wps                     ungrib.exe
+configure.wps.backup  link_grib.csh  namelist.wps.all_options         ungrib.log
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2/WPS$ cd ../../EPICC_WRFV4.2.2_LSERA5/WPS
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ ls
+arch                  ERA5:2021-01-01_06     GRIBFILE.AAA          namelist_soilera5_cmip6_pgw.wps  ungrib.exe
+clean                 ERA5:2021-01-01_06.nc  GRIBFILE.AAB          namelist.wps                     ungrib.log
+compile               ERA5:2021-01-01_12     link_grib.csh         namelist.wps.all_options         util
+compile.log           ERA5:2021-01-01_18     LSERA5:2012-12-22_00  namelist.wps.fire                Vtable
+configure             geo_em.d01.nc          metgrid               namelist.wps.global              Vtable.ERA5.SOIL1ststep
+configure.wps         geogrid                metgrid.exe           namelist.wps.nmm
+configure.wps.backup  geogrid.exe            metgrid.log           README
+ERA5:2021-01-01_00    geogrid.log            namelist_EPICC.wps    ungrib
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ ./link_grib.csh /vg6/dargueso-NO-BKUP/
+BDY_DATA/                       EHF_EOBS/                       OBS_DATA/
+CMIP5/                          GEOG_DATA/                      postprocessed/
+CMIP6/                          GEOG_DATA_4.1/                  WRF_OUT/
+EHF_CORDEX/                     Jakarta_KL/                     wrfout_d01_2015-10-22_00:00:00
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ ./link_grib.csh /vg6/dargueso-NO-BKUP/BDY_DATA/
+CMIP5_ANOMALY/  CMIP6_ANOMALY/  ERA5/           ERA5_CMIP6anom/ Figures/        OCEAN_bdy/      ORCA_CMIP5anom/
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ ./link_grib.csh /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5
+ERA5/           ERA5_CMIP6anom/ 
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ ./link_grib.csh /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/
+Display all 181 possibilities? (y or n)
+era5_daily_pl_20210101.grb      era5land_hourly_prec_201312.nc  era5land_hourly_prec_201901.nc
+era5_daily_sfc_20210101.grb     era5land_hourly_prec_201401.nc  era5land_hourly_prec_201902.nc
+era5land_daily_sfc_20200101.nc  era5land_hourly_prec_201402.nc  era5land_hourly_prec_201903.nc
+era5land_daily_sfc_20200102.nc  era5land_hourly_prec_201403.nc  era5land_hourly_prec_201904.nc
+era5land_daily_sfc_20200103.nc  era5land_hourly_prec_201404.nc  era5land_hourly_prec_201905.nc
+era5land_daily_sfc_20200104.nc  era5land_hourly_prec_201405.nc  era5land_hourly_prec_201906.nc
+era5land_daily_sfc_20200105.nc  era5land_hourly_prec_201406.nc  era5land_hourly_prec_201907.nc
+era5land_daily_sfc_20200106.nc  era5land_hourly_prec_201407.nc  era5land_hourly_prec_201908.nc
+era5land_daily_sfc_20200107.nc  era5land_hourly_prec_201408.nc  era5land_hourly_prec_201909.nc
+era5land_daily_sfc_20200108.nc  era5land_hourly_prec_201409.nc  era5land_hourly_prec_201910.nc
+era5land_daily_sfc_20200109.nc  era5land_hourly_prec_201410.nc  era5land_hourly_prec_201911.nc
+era5land_daily_sfc_20200110.nc  era5land_hourly_prec_201411.nc  era5land_hourly_prec_201912.nc
+era5land_daily_sfc_20200111.nc  era5land_hourly_prec_201412.nc  era5land_hourly_prec_202001.nc
+era5land_daily_sfc_20200112.nc  era5land_hourly_prec_201501.nc  era5land_hourly_prec_202002.nc
+era5land_hourly_prec_201001.nc  era5land_hourly_prec_201502.nc  era5land_hourly_prec_202003.nc
+era5land_hourly_prec_201002.nc  era5land_hourly_prec_201503.nc  era5land_hourly_prec_202004.nc
+era5land_hourly_prec_201003.nc  era5land_hourly_prec_201504.nc  era5land_hourly_prec_202005.nc
+era5land_hourly_prec_201004.nc  era5land_hourly_prec_201505.nc  era5land_hourly_prec_202006.nc
+era5land_hourly_prec_201005.nc  era5land_hourly_prec_201506.nc  era5land_hourly_prec_202007.nc
+era5land_hourly_prec_201006.nc  era5land_hourly_prec_201507.nc  era5land_hourly_prec_202008.nc
+era5land_hourly_prec_201007.nc  era5land_hourly_prec_201508.nc  era5land_hourly_prec_202009.nc
+era5land_hourly_prec_201008.nc  era5land_hourly_prec_201509.nc  era5land_hourly_prec_202010.nc
+era5land_hourly_prec_201009.nc  era5land_hourly_prec_201510.nc  era5land_hourly_prec_202011.nc
+era5land_hourly_prec_201010.nc  era5land_hourly_prec_201511.nc  era5land_hourly_prec_202012.nc
+era5land_hourly_prec_201011.nc  era5land_hourly_prec_201512.nc  era5land_hourly_prec_202101.nc
+era5land_hourly_prec_201012.nc  era5land_hourly_prec_201601.nc  era5land_hourly_prec_202102.nc
+era5land_hourly_prec_201101.nc  era5land_hourly_prec_201602.nc  era5land_hourly_prec_202103.nc
+era5land_hourly_prec_201102.nc  era5land_hourly_prec_201603.nc  era5land_hourly_prec_202104.nc
+era5land_hourly_prec_201103.nc  era5land_hourly_prec_201604.nc  era5land_hourly_prec_202105.nc
+era5land_hourly_prec_201104.nc  era5land_hourly_prec_201605.nc  era5land_hourly_prec_202106.nc
+era5land_hourly_prec_201105.nc  era5land_hourly_prec_201606.nc  era5land_hourly_prec_202107.nc
+era5land_hourly_prec_201106.nc  era5land_hourly_prec_201607.nc  era5land_hourly_prec_202108.nc
+era5land_hourly_prec_201107.nc  era5land_hourly_prec_201608.nc  era5land_hourly_prec_202109.nc
+era5land_hourly_prec_201108.nc  era5land_hourly_prec_201609.nc  era5land_hourly_prec_202110.nc
+era5land_hourly_prec_201109.nc  era5land_hourly_prec_201610.nc  ERA5_netcdf/
+era5land_hourly_prec_201110.nc  era5land_hourly_prec_201611.nc  ERALS.grb
+era5land_hourly_prec_201111.nc  era5land_hourly_prec_201612.nc  Get_ERA5_ECMWF_plevs.py
+era5land_hourly_prec_201112.nc  era5land_hourly_prec_201701.nc  Get_ERA5_ECMWF_plevs.py~
+era5land_hourly_prec_201201.nc  era5land_hourly_prec_201702.nc  Get_ERA5_ECMWF_psl.py
+era5land_hourly_prec_201202.nc  era5land_hourly_prec_201703.nc  Get_ERA5_ECMWF_sfc.py
+era5land_hourly_prec_201203.nc  era5land_hourly_prec_201704.nc  .Get_ERA5_ECMWF_sfc.py.swp
+era5land_hourly_prec_201204.nc  era5land_hourly_prec_201705.nc  Get_ERA5_ECMWF_testMcardell.py
+era5land_hourly_prec_201205.nc  era5land_hourly_prec_201706.nc  Get_ERA5_ECMWF_UV10m.py
+era5land_hourly_prec_201206.nc  era5land_hourly_prec_201707.nc  Get_ERA5Land_ECMWF_prec.py
+era5land_hourly_prec_201207.nc  era5land_hourly_prec_201708.nc  Get_ERA5Land_ECMWF.py
+era5land_hourly_prec_201208.nc  era5land_hourly_prec_201709.nc  grib2netcdf.py
+era5land_hourly_prec_201209.nc  era5land_hourly_prec_201710.nc  grib2netcdf_UV10m.py
+era5land_hourly_prec_201210.nc  era5land_hourly_prec_201711.nc  LSERA2.grb
+era5land_hourly_prec_201211.nc  era5land_hourly_prec_201712.nc  LSERA3.gbr
+era5land_hourly_prec_201212.nc  era5land_hourly_prec_201801.nc  LSERA4.grb
+era5land_hourly_prec_201301.nc  era5land_hourly_prec_201802.nc  LSERA5_2012-12-22_00.grb
+era5land_hourly_prec_201302.nc  era5land_hourly_prec_201803.nc  LSERA5_2012-12-22_00.nc
+era5land_hourly_prec_201303.nc  era5land_hourly_prec_201804.nc  LSERA5.grb
+era5land_hourly_prec_201304.nc  era5land_hourly_prec_201805.nc  LSERA6.grb
+era5land_hourly_prec_201305.nc  era5land_hourly_prec_201806.nc  LSERA.grb
+era5land_hourly_prec_201306.nc  era5land_hourly_prec_201807.nc  newERA5/
+era5land_hourly_prec_201307.nc  era5land_hourly_prec_201808.nc  SOILCLIM.grb
+era5land_hourly_prec_201308.nc  era5land_hourly_prec_201809.nc  WRF-boundary/
+era5land_hourly_prec_201309.nc  era5land_hourly_prec_201810.nc  WRF-Intermediate/
+era5land_hourly_prec_201310.nc  era5land_hourly_prec_201811.nc  
+era5land_hourly_prec_201311.nc  era5land_hourly_prec_201812.nc  
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ ./link_grib.csh /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/LSERA5_2012-12-22_00. 
+LSERA5_2012-12-22_00.grb  LSERA5_2012-12-22_00.nc   
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ ./link_grib.csh /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/LSERA5_2012-12-22_00.grb 
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ ls
+arch                  ERA5:2021-01-01_06.nc  LSERA5:2012-12-22_00             namelist.wps.global
+clean                 ERA5:2021-01-01_12     metgrid                          namelist.wps.nmm
+compile               ERA5:2021-01-01_18     metgrid.exe                      README
+compile.log           geo_em.d01.nc          metgrid.log                      ungrib
+configure             geogrid                namelist_EPICC.wps               ungrib.exe
+configure.wps         geogrid.exe            namelist_soilera5_cmip6_pgw.wps  ungrib.log
+configure.wps.backup  geogrid.log            namelist.wps                     util
+ERA5:2021-01-01_00    GRIBFILE.AAA           namelist.wps.all_options         Vtable
+ERA5:2021-01-01_06    link_grib.csh          namelist.wps.fire                Vtable.ERA5.SOIL1ststep
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ cd util/
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS/util$ ls
+avg_tsfc.exe      gfs.ncl          Makefile        plotgrids.ncl        src
+calc_ecmwf_p.exe  gfs_old.ncl      mod_levs.exe    plotgrids_new.ncl    vertical_grid_38_20m_G3.txt
+g1print.exe       height_ukmo.exe  plotfmt.ncl     plotgrids_old.ncl    vertical_grid_50_20m_63km.txt
+g2print.exe       int2nc.exe       plotfmt_nc.ncl  rd_intermediate.exe  vertical_grid_70_20m_80km.txt
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS/util$ cd ..
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ cd ungrib/
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS/ungrib$ ls
+g1print.exe  g2print.exe  Makefile  README_LIBS  src  ungrib.exe  Variable_Tables
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS/ungrib$ cd Variable_Tables/
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS/ungrib/Variable_Tables$ ls
+README              Vtable.AWIP            Vtable.GFSENS   Vtable.NOGAPS                 Vtable.SST
+Vtable.AFWAICE      Vtable.CFSR            Vtable.GODAS    Vtable.NOGAPS_needs_GFS_soil  Vtable.TCRP
+Vtable.AGRMETSNOW   Vtable.CFSR_mean       Vtable.GSM      Vtable.raphrrr                Vtable.UKMO_ENDGame
+Vtable.AGRMETSOIL   Vtable.ECMWF           Vtable.JMAGSM   Vtable.RAP.hybrid.ncep        Vtable.UKMO_LANDSEA
+Vtable.AGRMETSOIL2  Vtable.ECMWF_sigma     Vtable.NAM      Vtable.RAP.pressure.ncep      Vtable.UKMO_no_heights
+Vtable.AGRWRF       Vtable.ERA-interim.ml  Vtable.NARR     Vtable.RAP.sigma.gsd
+Vtable.ARWp.UPP     Vtable.ERA-interim.pl  Vtable.NavySST  Vtable.RUCb
+Vtable.ARW.UPP      Vtable.GFDL            Vtable.NCEP2    Vtable.RUCp
+Vtable.AVN0P5WRF    Vtable.GFS             Vtable.NNRP     Vtable.SREF
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS/ungrib/Variable_Tables$ cd ..
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS/ungrib$ cp /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5_CMIP6anom/scripts/
+Calculate_CMIP6_Annual_cycle-CC_change-regrid_ERA5.py  outputInter.f90
+cmip6era5pgw.yml                                       outputInter.so
+constants.py                                           outputInter_soil.f90
+Create_CMIP6_AnnualCycleChange_ENSMEAN.py              outputInter_soil.so
+era5_grid                                              __pycache__/
+fortranfile.py                                         README.md
+Get_CMIP6_Monthly_PGW_NCI.py                           SearchCMIPData_NCI.py
+Get_CMIP6_Monthly_PGW_STORMSERVERS.sh                  SearchLocations_intersection_cmip6_mon.txt
+Get_ERA5_ECMWF_plevs.py                                Vtable.ERA5.LANDSEA
+Get_ERA5_ECMWF_sfc.py                                  Vtable.ERA5.SOIL1ststep
+Interpolate_CMIP6_Annual_cycle-CC_pinterp.py           wrf_variables.py
+module_initialize_real.F                               write_intermediate_ERA5_CMIP6anom.py
+module_initialize_real.F_modified                      write_intermediate_ERA5_CMIP6anom_SOILCLIM.py
+namelist_soilera5_cmip6_pgw.wps                        
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS/ungrib$ cp /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5_CMIP6anom/scripts/Vtable.ERA5.LANDSEA .
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS/ungrib$ ls
+g1print.exe  g2print.exe  Makefile  README_LIBS  src  ungrib.exe  Variable_Tables  Vtable.ERA5.LANDSEA
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS/ungrib$ mv Vtable.ERA5.LANDSEA Variable_Tables/
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS/ungrib$ cd ..
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ ls
+arch                  ERA5:2021-01-01_06.nc  LSERA5:2012-12-22_00             namelist.wps.global
+clean                 ERA5:2021-01-01_12     metgrid                          namelist.wps.nmm
+compile               ERA5:2021-01-01_18     metgrid.exe                      README
+compile.log           geo_em.d01.nc          metgrid.log                      ungrib
+configure             geogrid                namelist_EPICC.wps               ungrib.exe
+configure.wps         geogrid.exe            namelist_soilera5_cmip6_pgw.wps  ungrib.log
+configure.wps.backup  geogrid.log            namelist.wps                     util
+ERA5:2021-01-01_00    GRIBFILE.AAA           namelist.wps.all_options         Vtable
+ERA5:2021-01-01_06    link_grib.csh          namelist.wps.fire                Vtable.ERA5.SOIL1ststep
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ ls -ltrh
+total 3,3G
+-rw-r--r-- 1 dargueso models 562M dic 14 14:13 ERA5:2021-01-01_06.nc
+-rw-r--r-- 1 dargueso models 562M dic 14 14:13 ERA5:2021-01-01_00
+-rw-r--r-- 1 dargueso models 562M dic 14 14:13 ERA5:2021-01-01_06
+-rw-r--r-- 1 dargueso models 562M dic 14 14:13 ERA5:2021-01-01_12
+-rwxr-xr-x 1 dargueso models  705 dic 14 14:13 namelist.wps
+-rw-r--r-- 1 dargueso models 562M dic 14 14:13 ERA5:2021-01-01_18
+lrwxrwxrwx 1 dargueso models   35 dic 14 14:13 Vtable -> ungrib/Variable_Tables/Vtable.ECMWF
+lrwxrwxrwx 1 dargueso models   21 dic 14 14:13 ungrib.exe -> ungrib/src/ungrib.exe
+lrwxrwxrwx 1 dargueso models   23 dic 14 14:13 metgrid.exe -> metgrid/src/metgrid.exe
+lrwxrwxrwx 1 dargueso models   23 dic 14 14:13 geogrid.exe -> geogrid/src/geogrid.exe
+-rwxr-xr-x 1 dargueso models 2,8M dic 14 14:13 LSERA5:2012-12-22_00
+-rwxr-xr-x 1 dargueso models 1,4K dic 14 14:13 Vtable.ERA5.SOIL1ststep
+-rwxr-xr-x 1 dargueso models 6,2K dic 14 14:13 README
+-rwxr-xr-x 1 dargueso models 1,8K dic 14 14:13 clean
+-rwxr-xr-x 1 dargueso models 4,7K dic 14 14:13 compile
+-rwxr-xr-x 1 dargueso models 102K dic 14 14:13 compile.log
+-rwxr-xr-x 1 dargueso models 3,3K dic 14 14:13 configure.wps
+-rwxr-xr-x 1 dargueso models  13K dic 14 14:13 configure
+-rwxr-xr-x 1 dargueso models 3,3K dic 14 14:13 configure.wps.backup
+-rwxr-xr-x 1 dargueso models 1,3K dic 14 14:13 link_grib.csh
+-rwxr-xr-x 1 dargueso models  13K dic 14 14:13 geogrid.log
+-rwxr-xr-x 1 dargueso models 479M dic 14 14:13 geo_em.d01.nc
+-rwxr-xr-x 1 dargueso models 2,7K dic 14 14:13 namelist.wps.all_options
+-rwxr-xr-x 1 dargueso models 165K dic 14 14:13 metgrid.log
+-rwxr-xr-x 1 dargueso models  654 dic 14 14:13 namelist.wps.nmm
+-rwxr-xr-x 1 dargueso models 1,6K dic 14 14:13 namelist.wps.global
+-rwxr-xr-x 1 dargueso models 2,1K dic 14 14:13 namelist.wps.fire
+-rwxr-xr-x 1 dargueso models  94K dic 14 14:13 ungrib.log
+-rwxr-xr-x 1 dargueso models  720 dic 14 14:13 namelist_soilera5_cmip6_pgw.wps
+-rwxr-xr-x 1 dargueso models  727 dic 14 14:13 namelist_EPICC.wps
+drwxr-xr-x 2 dargueso models 4,0K dic 14 14:13 arch
+drwxr-xr-x 4 dargueso models 4,0K dic 14 14:13 geogrid
+drwxr-xr-x 3 dargueso models 4,0K dic 14 14:13 metgrid
+drwxr-xr-x 3 dargueso models 4,0K dic 14 14:13 util
+lrwxrwxrwx 1 dargueso models   60 dic 14 14:19 GRIBFILE.AAA -> /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/LSERA5_2012-12-22_00.grb
+drwxr-xr-x 4 dargueso models 4,0K dic 14 14:20 ungrib
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ rm Vtable
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ ln -sf ungrib/Variable_Tables/Vtable.
+Vtable.AFWAICE                Vtable.ECMWF                  Vtable.NAM                    Vtable.RUCb
+Vtable.AGRMETSNOW             Vtable.ECMWF_sigma            Vtable.NARR                   Vtable.RUCp
+Vtable.AGRMETSOIL             Vtable.ERA5.LANDSEA           Vtable.NavySST                Vtable.SREF
+Vtable.AGRMETSOIL2            Vtable.ERA-interim.ml         Vtable.NCEP2                  Vtable.SST
+Vtable.AGRWRF                 Vtable.ERA-interim.pl         Vtable.NNRP                   Vtable.TCRP
+Vtable.ARWp.UPP               Vtable.GFDL                   Vtable.NOGAPS                 Vtable.UKMO_ENDGame
+Vtable.ARW.UPP                Vtable.GFS                    Vtable.NOGAPS_needs_GFS_soil  Vtable.UKMO_LANDSEA
+Vtable.AVN0P5WRF              Vtable.GFSENS                 Vtable.raphrrr                Vtable.UKMO_no_heights
+Vtable.AWIP                   Vtable.GODAS                  Vtable.RAP.hybrid.ncep        
+Vtable.CFSR                   Vtable.GSM                    Vtable.RAP.pressure.ncep      
+Vtable.CFSR_mean              Vtable.JMAGSM                 Vtable.RAP.sigma.gsd          
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ ln -sf ungrib/Variable_Tables/Vtable.ERA5.LANDSEA Vtable
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ vi namelist.wps
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ ./ungrib.exe 
+ *** Starting program ungrib.exe ***
+Start_date =  2021-01-01_00:00:00 ,      End_date = 2021-01-01_18:00:00
+output format is WPS
+Path to intermediate files is ./
+
+###############################################################################
+
+Inventory for date = 2021-01-01 00:00:00
+
+PRES   LANDSEA 
+-------------------------------------------------------------------------------
+2001.0  X      
+-------------------------------------------------------------------------------
+ Name of source model =>ECMWF                           
+
+###############################################################################
+
+Inventory for date = 2021-01-01 00:00:00
+
+PRES   LANDSEA 
+-------------------------------------------------------------------------------
+2001.0  X      
+-------------------------------------------------------------------------------
+Subroutine DATINT: Interpolating 3-d files to fill in any missing data...
+Looking for data at time 2021-01-01_00
+Found file:      LSERA5:2021-01-01_00
+Looking for data at time 2021-01-01_06
+ERROR: Data not found: 2021-01-01_06:00:00.0000
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ vi namelist.wps
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ ./ungrib.exe 
+ *** Starting program ungrib.exe ***
+Start_date =  2021-01-01_00:00:00 ,      End_date = 2021-01-01_00:00:00
+output format is WPS
+Path to intermediate files is ./
+
+###############################################################################
+
+Inventory for date = 2021-01-01 00:00:00
+
+PRES   LANDSEA 
+-------------------------------------------------------------------------------
+2001.0  X      
+-------------------------------------------------------------------------------
+ Name of source model =>ECMWF                           
+
+###############################################################################
+
+Inventory for date = 2021-01-01 00:00:00
+
+PRES   LANDSEA 
+-------------------------------------------------------------------------------
+2001.0  X      
+-------------------------------------------------------------------------------
+Subroutine DATINT: Interpolating 3-d files to fill in any missing data...
+Looking for data at time 2021-01-01_00
+Found file:      LSERA5:2021-01-01_00
+End Subroutine DATINT.
+
+**********
+Deleting temporary files created by ungrib...
+**********
+
+Deleting file:  ./PFILE:2021-01-01_00
+
+**********
+Done deleting temporary files.
+**********
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!  Successful completion of ungrib.   !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ ls
+arch                  ERA5:2021-01-01_06     GRIBFILE.AAA          namelist_soilera5_cmip6_pgw.wps  ungrib.exe
+clean                 ERA5:2021-01-01_06.nc  link_grib.csh         namelist.wps                     ungrib.log
+compile               ERA5:2021-01-01_12     LSERA5:2012-12-22_00  namelist.wps.all_options         util
+compile.log           ERA5:2021-01-01_18     LSERA5:2021-01-01_00  namelist.wps.fire                Vtable
+configure             geo_em.d01.nc          metgrid               namelist.wps.global              Vtable.ERA5.SOIL1ststep
+configure.wps         geogrid                metgrid.exe           namelist.wps.nmm
+configure.wps.backup  geogrid.exe            metgrid.log           README
+ERA5:2021-01-01_00    geogrid.log            namelist_EPICC.wps    ungrib
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ cp /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/era5*grb .
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ history
+   56  ls -ltrh
+   57  ls -ltrh
+   58  cd ..
+   59  ls -ltrh
+   60  ls -ltrh
+   61  cd ptiles_tiles_50/
+   62  ls
+   63  ls -ltrh
+   64  ls UIB_*_RAIN_2013-2020_qtiles_all*.nc 
+   65  mv UIB_*_RAIN_2013-2020_qtiles_all*.nc 
+   66  mv UIB_*_RAIN_2013-2020_qtiles_all*.nc  ..
+   67  cd ..
+   68  ls
+   69  ls -ltrh
+   70  cd ../EPICC_2km_ERA5_HVC_GWD/
+   71  ls
+   72  cd ptiles_tiles_50/
+   73  mv UIB_*_RAIN_2013-2020_qtiles_all*.nc  ..
+   74  cd ..
+   75  ls -ltrh
+   76  cd ../EPICC_2km_ERA5_CMIP6anom_HVC_GWD/
+   77  ls
+   78  ls -ltrh
+   79  ls hist2d_IFD_tiles_50/
+   80  ls
+   81  ls -ltrh
+   82  cp -R hist2d_IFD_resample_time_2013-2020_0* hist2d_IFD_tiles_50/
+   83  ssh mc4
+   84  screen -r
+   85  screen -r 36
+   86  screen -r
+   87  screen -r 356
+   88  epicc
+   89  cd ~/Scripts/EPICC_scripts/Plotting/WRF_General/
+   90  ls -ltrh
+   91  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+   92  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+   93  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+   94  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+   95  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+   96  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+   97  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+   98  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+   99  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+  100  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+  101  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+  102  cd /vg6/dargueso-NO-BKUP/postprocessed/unified/EPICC/EPICC_2km_ERA5_CMIP6anom_HVC_GWD
+  103  ls -ltrh
+  104  cp -R hist2d_IFD_resample_time_2013-2020_0* hist2d_IFD_tiles_50/
+  105  cd hist2d_IFD_tiles_50/
+  106  ls -ltrh
+  107  cd ..
+  108  ls -ltrh
+  109  cd hist2d_IFD_tiles_50/
+  110  ls
+  111  ls -ltrh
+  112  ncview hist2d_IFD_resample_time_2013-2020_007y-023x.nc
+  113  ls
+  114  cd ../../EPICC_2km_ERA5_HVC_GWD/
+  115  ls
+  116  ls -ltrh
+  117  cd ../EPICC_2km_ERA5_CMIP6anom_HVC_GWD/
+  118  ls -ltrh
+  119  cd hist2d_IFD_tiles_50/
+  120  ls -ltrh
+  121  mv hist2d_IFD_resample_time_2013-2020.nc ../
+  122  cd ..
+  123  ls -ltrh
+  124  ls -ltrh
+  125  ls -ltrh
+  126  ncview hist2d_IFD_resample_time_2013-2020_land_sum.nc 
+  127  ls
+  128  ls -ltrh
+  129  epicc 
+  130  ncdump -h  hist2d_IFD_resample_time_2013-2020.nc
+  131  ncdump -v Ibins  hist2d_IFD_resample_time_2013-2020.nc
+  132  ls
+  133  ls -ltrh
+  134  cd ..
+  135  cd EPICC_2km_ERA5_HVC_GWD/
+  136  ls
+  137  ncdump -v Ibins  hist2d_IFD_resample_time_2013-2020.nc
+  138  cd hist2d_IFD_tiles_50/
+  139  ls
+  140  ls -ltrh
+  141  ncdump -h hist2d_IFD_resample_time_2013-2020_014y-024x.nc
+  142  ncdump -v Ibins hist2d_IFD_resample_time_2013-2020_014y-024x.nc
+  143  cd ~/Scripts/EPICC_scripts/Plotting/HrlExt/
+  144  epicc
+  145  jupyter notebook --no-browser --port=8080
+  146  ssh mc4
+  147  screen -r 365
+  148  screen -r 
+  149  screen -r
+  150  screen -d 353
+  151  screen -r 353
+  152  screen -r
+  153  screen -r
+  154  screen -r
+  155  screen -r
+  156  screen -r
+  157  epicc
+  158  cd ~/Scripts/EPICC_scripts/
+  159  ls
+  160  cd WRF_processing/
+  161  ls -ltrh
+  162  python load_and_merge_files_tiles_latlon.py 
+  163  python load_and_merge_files_tiles_latlon.py 
+  164  ls -ltrh
+  165  cd ../
+  166  cd Plotting/HrlExt/
+  167  ls
+  168  mv Plot_heatmap_Intensity-Frequency-Duration.py ../../WRF_processing/Calc_land_sum_files_IDF.py
+  169  cd ../../WRF_processing/
+  170  ls
+  171  python Calc_land_sum_files_IDF.py 
+  172  ssh mc4
+  173  screen -r
+  174  epicc
+  175  cd ~/Scripts/EPICC_scripts/Plotting/WRF_General/
+  176  ls
+  177  ls -ltrh
+  178  python plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py 
+  179    cd /vg6/dargueso-NO-BKUP/
+  180  ls
+  181  cd BDY_DATA/
+  182  ls
+  183  cd CMIP6_ANOMALY/
+  184  ls
+  185  cd /vg6/dargueso-NO-BKUP/
+  186  ls
+  187  cd WRF_OUT/
+  188  ls
+  189  cd EPICC/
+  190  ls
+  191  cd EPICC_2km_ERA5_HVC_GWD/
+  192  cd out/
+  193  ncview  wrfout_d01_2020-08-29_08\:00\:00 
+  194  ncview  wrf3hrly_d01_2020-08-29_09\:00\:00 
+  195  cd /vg6/dargueso-NO-BKUP/WRF_OUT/EPICC/EPICC_2km_ERA5_HVC_GWD/out/
+  196  ncview  wrf3hrly_d01_2020-08-29_09\:00\:00 
+  197  cd /vg6/dargueso-NO-BKUP/WRF_OUT/EPICC/EPICC_2km_ERA5_HVC_GWD/out/
+  198  ncview  wrf3hrly_d01_2020-08-29_09\:00\:00 
+  199  cd hourly_aemet/
+  200  ls
+  201  ls -ltrh
+  202  python plot_hourly_aemet_one_week.py -s 2021-08-30 -e 2021-09-05 -l tortosa
+  203  python plot_hourly_aemet_one_week.py -s 2021-08-30 -e 2021-09-05 -l palma
+  204  conda activate py385_std
+  205  python plot_hourly_aemet_one_week.py -s 2021-08-30 -e 2021-09-05 -l palma
+  206  python plot_hourly_aemet_one_week.py -s 2021-08-30 -e 2021-09-05 -l tortosa
+  207  python plot_hourly_aemet_one_week.py -s 2021-08-30 -e 2021-09-05 -l rasquera
+  208  cd /vg6/dargueso-NO-BKUP/
+  209  ls
+  210  cd BDY_DATA/
+  211  ls
+  212  cd ERA5
+  213  ls
+  214  cat Get_ERA5_ECMWF_testMcardell.py
+  215  ls
+  216  cp -r Get_ERA5_ECMWF_UV10m.py Get_ERA5_ECMWF_prec.py
+  217  pwd
+  218  mv Get_ERA5_ECMWF_prec.py Get_ERA5Land_ECMWF_prec.py
+  219  ls -ltrh
+  220  screen -r
+  221  e3
+  222  exit
+  223  l
+  224  ls
+  225  cd /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5
+  226  ls
+  227  python Get_ERA5Land_ECMWF_prec.py 
+  228  conda activate py385_std
+  229  python Get_ERA5Land_ECMWF_prec.py 
+  230  exit
+  231  screen
+  232  aenv
+  233  python Get_ERA5Land_ECMWF_prec.py 
+  234  cd /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5
+  235  ls
+  236  python Get_ERA5Land_ECMWF_prec.py 
+  237  exit
+  238  screen
+  239  screen -r
+  240  screen -r
+  241  ls
+  242  cd /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5
+  243  ls -ltrh
+  244  ls -ltrh
+  245  screen -r
+  246  ls
+  247  ncview era5land_daily_sfc_20200101.nc 
+  248  screen -r
+  249  cd /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5
+  250  ls
+  251  ls -ltrh
+  252  ncview era5land_daily_sfc_20200101.nc 
+  253  cd /vg6/dargueso-NO-BKUP/
+  254  cd postprocessed/unified/
+  255  ls
+  256  cd EPICC/
+  257  ls
+  258  cd EPICC_2km_ERA5_
+  259  ls
+  260  cd EPICC_2km_ERA5_HVC_GWD/
+  261  ls
+  262  cd ~/
+  263  cd ~/Scripts/
+  264  ls
+  265  cd EPICC_scripts/
+  266  ls
+  267  cd Plotting/
+  268  cd WRF_General/
+  269  ls
+  270  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 -r LEV
+  271  epicc
+  272  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 -r LEV
+  273  cd ..
+  274  ssh mc4
+  275  epicc
+  276  cd ~/Scripts/EPICC_scripts/Plotting/WRF_General/
+  277  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 -r LEV
+  278  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 
+  279  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 
+  280  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 
+  281  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 
+  282  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 -v RAIN -r LEV
+  283  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 -v RAIN -r LEV
+  284  python plot_map_period_pr_mean_max_rates_proplot.py -s 2012-09-27 -e 2012-10-01 -v RAIN -r LEV
+  285  python plot_map_period_pr_mean_max_rates_proplot.py -s 2012-09-27 -e 2012-10-01  -r LEV
+  286  python plot_map_period_pr_mean_max_rates_proplot.py -s 2012-09-27 -e 2012-10-01 -v RAIN -r LEV
+  287  python plot_map_period_pr_mean_max_rates_proplot.py -s 2012-09-27 -e 2012-10-01 -v RAIN -r LEV
+  288  python plot_map_period_pr_mean_max_rates_proplot.py -s 2012-09-27 -e 2012-10-01 -v RAIN -r LEV
+  289  python plot_map_period_pr_mean_max_rates_proplot.py -s 2012-09-27 -e 2012-10-01 -v RAIN -r LEV
+  290  python plot_map_period_pr_mean_max_rates_proplot.py -s 2012-09-28 -e 2012-09-29 -v RAIN -r LEV
+  291  ls /vg6/dargueso-NO-BKUP/postprocessed/unified/EPICC//EPICC_2km_ERA5_HVC_GWD/UIB_01H_RAIN_*.nc
+  292  ls /vg6/dargueso-NO-BKUP/postprocessed/unified/EPICC//EPICC_2km_ERA5_HVC_GWD/UIB_01H_RAIN_2012.nc
+  293  ls /vg6/dargueso-NO-BKUP/postprocessed/unified/EPICC//EPICC_2km_ERA5_HVC_GWD/UIB_01H_RAIN_2012*.nc
+  294  screen -r
+  295  cd /vg6/dargueso-NO-BKUP/
+  296  ls
+  297  cd BDY_DATA/ERA5
+  298  ls
+  299  ls -ltrh
+  300  screen -r
+  301  screen -r
+  302  cd ~/
+  303  ls
+  304  cd WRFV4.3_mc4/
+  305  ls
+  306  cd WPS
+  307  ls
+  308  cd ..
+  309  cd ..
+  310  ls
+  311  cd WRF_runs/
+  312  ls
+  313  cd EPICC_WRFV4.2.2/
+  314  LS
+  315  LS
+  316  ls
+  317  cd WPS
+  318  ls
+  319  cat Vtable
+  320  ls -ltrh
+  321  cat namelist.wps
+  322  ls
+  323  cat namelist_EPICC.wps 
+  324  ls
+  325  cat Vtable
+  326  ls
+  327  cd ungrib/
+  328  ls
+  329  ./g1print.exe /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/era5_daily_sfc_20210101.grb 
+  330  cd ../
+  331  ls
+  332  cd util/
+  333  ./rd_intermediate.exe /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/WRF-Intermediate/
+  334  ls /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/WRF-Intermediate/
+  335  cd ..
+  336  ls -ltrh
+  337  cd metgrid/
+  338  ls -ltrh
+  339  cat METGRID.TBL.ARW 
+  340  cat METGRID.TBL.ARW | grep SST
+  341  vi METGRID.TBL.ARW
+  342  ls
+  343  cd /vg6/dargueso-NO-BKUP/
+  344  ls
+  345  cd WRF_OUT/EPICC/EPICC_2km_ERA5_HVC_GWD/
+  346  cd out/
+  347  ncview wrfout_d01_2020-01-01_
+  348  ncview wrfout_d01_2020-01-01_00\:00\:00 
+  349  bg
+  350  ncview wrf3hrly_d01_2020-01-01_00\:00\:00 
+  351  conda env list
+  352  conda activate w2w
+  353  cd w
+  354  ls
+  355  cd ~/Scripts/
+  356  ls
+  357  cd w
+  358  cd w2w/
+  359  ls
+  360  git pull
+  361  git stash
+  362  git pull
+  363  ls
+  364  cat README.md 
+  365  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  366  ls
+  367  python w2w/w2w.py ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  368  ls
+  369  pip install .
+  370  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  371  pip update .
+  372  pip uninstall .
+  373  pip install .
+  374  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  375  python setup.py develop
+  376  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  377  pip uninstall w2w
+  378  python setup.py develop
+  379  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  380  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  381  python setup.py develop
+  382  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  383  pip uninstall w2w
+  384  python setup.py develop
+  385  pip uninstall w2w
+  386  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  387  pip uninstall w2w
+  388  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  389  pip install .
+  390  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  391  pip uninstall w2w
+  392  pip uninstall w2w
+  393  pip install .
+  394  pip uninstall w2w
+  395  pip install .
+  396  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  397  conda list
+  398  conda uninstall w2w
+  399  pip uninstall w2w
+  400  conda list
+  401  pip uninstall w2w
+  402  pip install .
+  403  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  404  pip install .
+  405  conda uninstall w2w
+  406  conda lis
+  407  conda list
+  408  conda upgrade w2w
+  409  pip uninstall w2w
+  410  conda deactivate
+  411  conda activate w2w
+  412  conda lsit
+  413  conda list
+  414  pip install .
+  415  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  416  pip uninstall w2w
+  417  cd Scripts/
+  418  ls
+  419  cd w2w/
+  420  ls
+  421  cd ..
+  422  rm -fr w2w/
+  423  ls
+  424  conda remove --name w2w --all 
+  425  ls
+  426  ls -ltrh
+  427  cat log_transf 
+  428  ls
+  429  rm log_transf 
+  430  ls -ltrh
+  431  ls -ltrh
+  432  cd Scripts/
+  433  ls
+  434  ls
+  435  ls -ltrh
+  436  cd EPICC_scripts/
+  437  ls
+  438  ls -ltrh
+  439  cd WRF_processing/
+  440  ls
+  441  ls -ltrh
+  442  ls -ltrh
+  443  cd ..
+  444  ls
+  445  e3
+  446  screen -r
+  447  ls -ltrh
+  448  cd /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5
+  449  ls -ltrh
+  450  screen -r
+  451  ipython
+  452  ls
+  453  cd /vg6/dargueso-NO-BKUP/
+  454  ls
+  455  cd BDY_DATA/ERA5
+  456  ls
+  457  ls -ltrh
+  458  ncview era5land_hourly_prec_201509.nc
+  459  conda activate py385
+  460  conda activate py385_std
+  461  ncdump -h era5land_hourly_prec_201509.nc
+  462  ncview era5land_hourly_prec_201509.nc
+  463  ls
+  464  screen -r
+  465  cd /vg6/dargueso-NO-BKUP/
+  466  ls
+  467  cd BDY_DATA/
+  468  ls
+  469  cd ERA5
+  470  ls
+  471  ls -ltrh
+  472  rm era5land_hourly_prec_20????.grb
+  473  ls -ltrh
+  474  ncview era5land_hourly_prec_201001.nc
+  475  ls
+  476  ls -ltrh
+  477  screen -r
+  478  ls
+  479  ls -ltrh
+  480  vi Get_ERA5Land_ECMWF_prec.py
+  481  vi Get_ERA5Land_ECMWF_prec.py
+  482  screen -r
+  483  ls
+  484  cd WRF_runs/
+  485  ls
+  486  cd REHIPRE/
+  487  ls
+  488  cd Oned_ERA5_HVC/
+  489  ls
+  490  cd WPS
+  491  ls
+  492  cd ..
+  493  cd ..
+  494  cd ..
+  495  cd EPICC_
+  496  cd EPICC_WRFV4.2.2/
+  497  ls
+  498  cd WPS
+  499  ls
+  500  exit
+  501  cd ~/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS/r
+  502  cd ~/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS/
+  503  ls
+  504  cd util/
+  505  ./int2nc.exe ../LSERA5\:2012-12-22_00
+  506  module avail
+  507  module load intel/19.1 netcdf-intel
+  508  ./int2nc.exe ../LSERA5\:2012-12-22_00
+  509  cd ..
+  510  ncview LSERA5\:2012-12-22_00.nc 
+  511  ls
+  512  cd ../
+  513  cd ..
+  514  cd EPICC_WRFV4.2.2/
+  515  ls
+  516  cd WPS
+  517  ls
+  518  cd ..
+  519  cd ..
+  520  cp -R EPICC_WRFV4.2.2 EPICC_WRFV4.2.2_LSERA5
+  521  cd EPICC_WRFV4.2.2
+  522  ls
+  523  cd WPS
+  524  ls
+  525  rm -fr ERA5\:2021-01-01_*
+  526  rm -fr GRIBFILE.AA
+  527  rm -fr LSERA5\:2012-12-22_00 
+  528  ls
+  529  cd ../../EPICC_WRFV4.2.2_LSERA5/WPS
+  530  ls
+  531  ./link_grib.csh /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/LSERA5_2012-12-22_00.grb 
+  532  ls
+  533  cd util/
+  534  ls
+  535  cd ..
+  536  cd ungrib/
+  537  ls
+  538  cd Variable_Tables/
+  539  ls
+  540  cd ..
+  541  cp /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5_CMIP6anom/scripts/Vtable.ERA5.LANDSEA .
+  542  ls
+  543  mv Vtable.ERA5.LANDSEA Variable_Tables/
+  544  cd ..
+  545  ls
+  546  ls -ltrh
+  547  rm Vtable
+  548  ln -sf ungrib/Variable_Tables/Vtable.ERA5.LANDSEA Vtable
+  549  vi namelist.wps
+  550  ./ungrib.exe 
+  551  vi namelist.wps
+  552  ./ungrib.exe 
+  553  ls
+  554  cp /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/era5*grb .
+  555  history
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ cat namelist.wps
+&share
+ wrf_core = 'ARW',
+ max_dom = 1,
+ start_date = '2021-01-01_00:00:00',
+ end_date   = '2021-01-01_00:00:00',
+ interval_seconds = 21600
+ io_form_geogrid = 2,
+/
+
+&geogrid
+ parent_id         =   1,
+ parent_grid_ratio =   1,
+ i_parent_start    =   1,
+ j_parent_start    =   1,
+ e_we              =  1250,
+ e_sn              =  750,
+
+ geog_data_res = 'default',
+ dx = 2000,
+ dy = 2000,
+ map_proj = 'lambert',
+ ref_lat   =  41.8,
+ ref_lon   =  4.2,
+ truelat1  =  60,
+ truelat2  =  30,
+ stand_lon = 4.2,
+ geog_data_path = '/home/dargueso/GEOG_DATA_4.1/WPS_GEOG/'
+/
+
+&ungrib
+ out_format = 'WPS',
+ prefix = 'LSERA5',
+/
+
+&metgrid
+ fg_name = 'ERA5'
+ io_form_metgrid = 2,
+ constants_name='LSERA5:2012-12-22_00',
+/
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ history
+   58  cd ..
+   59  ls -ltrh
+   60  ls -ltrh
+   61  cd ptiles_tiles_50/
+   62  ls
+   63  ls -ltrh
+   64  ls UIB_*_RAIN_2013-2020_qtiles_all*.nc 
+   65  mv UIB_*_RAIN_2013-2020_qtiles_all*.nc 
+   66  mv UIB_*_RAIN_2013-2020_qtiles_all*.nc  ..
+   67  cd ..
+   68  ls
+   69  ls -ltrh
+   70  cd ../EPICC_2km_ERA5_HVC_GWD/
+   71  ls
+   72  cd ptiles_tiles_50/
+   73  mv UIB_*_RAIN_2013-2020_qtiles_all*.nc  ..
+   74  cd ..
+   75  ls -ltrh
+   76  cd ../EPICC_2km_ERA5_CMIP6anom_HVC_GWD/
+   77  ls
+   78  ls -ltrh
+   79  ls hist2d_IFD_tiles_50/
+   80  ls
+   81  ls -ltrh
+   82  cp -R hist2d_IFD_resample_time_2013-2020_0* hist2d_IFD_tiles_50/
+   83  ssh mc4
+   84  screen -r
+   85  screen -r 36
+   86  screen -r
+   87  screen -r 356
+   88  epicc
+   89  cd ~/Scripts/EPICC_scripts/Plotting/WRF_General/
+   90  ls -ltrh
+   91  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+   92  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+   93  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+   94  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+   95  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+   96  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+   97  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+   98  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+   99  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+  100  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+  101  python  plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py
+  102  cd /vg6/dargueso-NO-BKUP/postprocessed/unified/EPICC/EPICC_2km_ERA5_CMIP6anom_HVC_GWD
+  103  ls -ltrh
+  104  cp -R hist2d_IFD_resample_time_2013-2020_0* hist2d_IFD_tiles_50/
+  105  cd hist2d_IFD_tiles_50/
+  106  ls -ltrh
+  107  cd ..
+  108  ls -ltrh
+  109  cd hist2d_IFD_tiles_50/
+  110  ls
+  111  ls -ltrh
+  112  ncview hist2d_IFD_resample_time_2013-2020_007y-023x.nc
+  113  ls
+  114  cd ../../EPICC_2km_ERA5_HVC_GWD/
+  115  ls
+  116  ls -ltrh
+  117  cd ../EPICC_2km_ERA5_CMIP6anom_HVC_GWD/
+  118  ls -ltrh
+  119  cd hist2d_IFD_tiles_50/
+  120  ls -ltrh
+  121  mv hist2d_IFD_resample_time_2013-2020.nc ../
+  122  cd ..
+  123  ls -ltrh
+  124  ls -ltrh
+  125  ls -ltrh
+  126  ncview hist2d_IFD_resample_time_2013-2020_land_sum.nc 
+  127  ls
+  128  ls -ltrh
+  129  epicc 
+  130  ncdump -h  hist2d_IFD_resample_time_2013-2020.nc
+  131  ncdump -v Ibins  hist2d_IFD_resample_time_2013-2020.nc
+  132  ls
+  133  ls -ltrh
+  134  cd ..
+  135  cd EPICC_2km_ERA5_HVC_GWD/
+  136  ls
+  137  ncdump -v Ibins  hist2d_IFD_resample_time_2013-2020.nc
+  138  cd hist2d_IFD_tiles_50/
+  139  ls
+  140  ls -ltrh
+  141  ncdump -h hist2d_IFD_resample_time_2013-2020_014y-024x.nc
+  142  ncdump -v Ibins hist2d_IFD_resample_time_2013-2020_014y-024x.nc
+  143  cd ~/Scripts/EPICC_scripts/Plotting/HrlExt/
+  144  epicc
+  145  jupyter notebook --no-browser --port=8080
+  146  ssh mc4
+  147  screen -r 365
+  148  screen -r 
+  149  screen -r
+  150  screen -d 353
+  151  screen -r 353
+  152  screen -r
+  153  screen -r
+  154  screen -r
+  155  screen -r
+  156  screen -r
+  157  epicc
+  158  cd ~/Scripts/EPICC_scripts/
+  159  ls
+  160  cd WRF_processing/
+  161  ls -ltrh
+  162  python load_and_merge_files_tiles_latlon.py 
+  163  python load_and_merge_files_tiles_latlon.py 
+  164  ls -ltrh
+  165  cd ../
+  166  cd Plotting/HrlExt/
+  167  ls
+  168  mv Plot_heatmap_Intensity-Frequency-Duration.py ../../WRF_processing/Calc_land_sum_files_IDF.py
+  169  cd ../../WRF_processing/
+  170  ls
+  171  python Calc_land_sum_files_IDF.py 
+  172  ssh mc4
+  173  screen -r
+  174  epicc
+  175  cd ~/Scripts/EPICC_scripts/Plotting/WRF_General/
+  176  ls
+  177  ls -ltrh
+  178  python plot_map_change_pr_mean_ptile_rates_proplot_seasonal.py 
+  179    cd /vg6/dargueso-NO-BKUP/
+  180  ls
+  181  cd BDY_DATA/
+  182  ls
+  183  cd CMIP6_ANOMALY/
+  184  ls
+  185  cd /vg6/dargueso-NO-BKUP/
+  186  ls
+  187  cd WRF_OUT/
+  188  ls
+  189  cd EPICC/
+  190  ls
+  191  cd EPICC_2km_ERA5_HVC_GWD/
+  192  cd out/
+  193  ncview  wrfout_d01_2020-08-29_08\:00\:00 
+  194  ncview  wrf3hrly_d01_2020-08-29_09\:00\:00 
+  195  cd /vg6/dargueso-NO-BKUP/WRF_OUT/EPICC/EPICC_2km_ERA5_HVC_GWD/out/
+  196  ncview  wrf3hrly_d01_2020-08-29_09\:00\:00 
+  197  cd /vg6/dargueso-NO-BKUP/WRF_OUT/EPICC/EPICC_2km_ERA5_HVC_GWD/out/
+  198  ncview  wrf3hrly_d01_2020-08-29_09\:00\:00 
+  199  cd hourly_aemet/
+  200  ls
+  201  ls -ltrh
+  202  python plot_hourly_aemet_one_week.py -s 2021-08-30 -e 2021-09-05 -l tortosa
+  203  python plot_hourly_aemet_one_week.py -s 2021-08-30 -e 2021-09-05 -l palma
+  204  conda activate py385_std
+  205  python plot_hourly_aemet_one_week.py -s 2021-08-30 -e 2021-09-05 -l palma
+  206  python plot_hourly_aemet_one_week.py -s 2021-08-30 -e 2021-09-05 -l tortosa
+  207  python plot_hourly_aemet_one_week.py -s 2021-08-30 -e 2021-09-05 -l rasquera
+  208  cd /vg6/dargueso-NO-BKUP/
+  209  ls
+  210  cd BDY_DATA/
+  211  ls
+  212  cd ERA5
+  213  ls
+  214  cat Get_ERA5_ECMWF_testMcardell.py
+  215  ls
+  216  cp -r Get_ERA5_ECMWF_UV10m.py Get_ERA5_ECMWF_prec.py
+  217  pwd
+  218  mv Get_ERA5_ECMWF_prec.py Get_ERA5Land_ECMWF_prec.py
+  219  ls -ltrh
+  220  screen -r
+  221  e3
+  222  exit
+  223  l
+  224  ls
+  225  cd /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5
+  226  ls
+  227  python Get_ERA5Land_ECMWF_prec.py 
+  228  conda activate py385_std
+  229  python Get_ERA5Land_ECMWF_prec.py 
+  230  exit
+  231  screen
+  232  aenv
+  233  python Get_ERA5Land_ECMWF_prec.py 
+  234  cd /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5
+  235  ls
+  236  python Get_ERA5Land_ECMWF_prec.py 
+  237  exit
+  238  screen
+  239  screen -r
+  240  screen -r
+  241  ls
+  242  cd /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5
+  243  ls -ltrh
+  244  ls -ltrh
+  245  screen -r
+  246  ls
+  247  ncview era5land_daily_sfc_20200101.nc 
+  248  screen -r
+  249  cd /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5
+  250  ls
+  251  ls -ltrh
+  252  ncview era5land_daily_sfc_20200101.nc 
+  253  cd /vg6/dargueso-NO-BKUP/
+  254  cd postprocessed/unified/
+  255  ls
+  256  cd EPICC/
+  257  ls
+  258  cd EPICC_2km_ERA5_
+  259  ls
+  260  cd EPICC_2km_ERA5_HVC_GWD/
+  261  ls
+  262  cd ~/
+  263  cd ~/Scripts/
+  264  ls
+  265  cd EPICC_scripts/
+  266  ls
+  267  cd Plotting/
+  268  cd WRF_General/
+  269  ls
+  270  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 -r LEV
+  271  epicc
+  272  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 -r LEV
+  273  cd ..
+  274  ssh mc4
+  275  epicc
+  276  cd ~/Scripts/EPICC_scripts/Plotting/WRF_General/
+  277  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 -r LEV
+  278  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 
+  279  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 
+  280  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 
+  281  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 
+  282  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 -v RAIN -r LEV
+  283  python plot_map_period_pr_mean_max_rates.py -s 2012-09-27 -e 2012-10-01 -v RAIN -r LEV
+  284  python plot_map_period_pr_mean_max_rates_proplot.py -s 2012-09-27 -e 2012-10-01 -v RAIN -r LEV
+  285  python plot_map_period_pr_mean_max_rates_proplot.py -s 2012-09-27 -e 2012-10-01  -r LEV
+  286  python plot_map_period_pr_mean_max_rates_proplot.py -s 2012-09-27 -e 2012-10-01 -v RAIN -r LEV
+  287  python plot_map_period_pr_mean_max_rates_proplot.py -s 2012-09-27 -e 2012-10-01 -v RAIN -r LEV
+  288  python plot_map_period_pr_mean_max_rates_proplot.py -s 2012-09-27 -e 2012-10-01 -v RAIN -r LEV
+  289  python plot_map_period_pr_mean_max_rates_proplot.py -s 2012-09-27 -e 2012-10-01 -v RAIN -r LEV
+  290  python plot_map_period_pr_mean_max_rates_proplot.py -s 2012-09-28 -e 2012-09-29 -v RAIN -r LEV
+  291  ls /vg6/dargueso-NO-BKUP/postprocessed/unified/EPICC//EPICC_2km_ERA5_HVC_GWD/UIB_01H_RAIN_*.nc
+  292  ls /vg6/dargueso-NO-BKUP/postprocessed/unified/EPICC//EPICC_2km_ERA5_HVC_GWD/UIB_01H_RAIN_2012.nc
+  293  ls /vg6/dargueso-NO-BKUP/postprocessed/unified/EPICC//EPICC_2km_ERA5_HVC_GWD/UIB_01H_RAIN_2012*.nc
+  294  screen -r
+  295  cd /vg6/dargueso-NO-BKUP/
+  296  ls
+  297  cd BDY_DATA/ERA5
+  298  ls
+  299  ls -ltrh
+  300  screen -r
+  301  screen -r
+  302  cd ~/
+  303  ls
+  304  cd WRFV4.3_mc4/
+  305  ls
+  306  cd WPS
+  307  ls
+  308  cd ..
+  309  cd ..
+  310  ls
+  311  cd WRF_runs/
+  312  ls
+  313  cd EPICC_WRFV4.2.2/
+  314  LS
+  315  LS
+  316  ls
+  317  cd WPS
+  318  ls
+  319  cat Vtable
+  320  ls -ltrh
+  321  cat namelist.wps
+  322  ls
+  323  cat namelist_EPICC.wps 
+  324  ls
+  325  cat Vtable
+  326  ls
+  327  cd ungrib/
+  328  ls
+  329  ./g1print.exe /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/era5_daily_sfc_20210101.grb 
+  330  cd ../
+  331  ls
+  332  cd util/
+  333  ./rd_intermediate.exe /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/WRF-Intermediate/
+  334  ls /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/WRF-Intermediate/
+  335  cd ..
+  336  ls -ltrh
+  337  cd metgrid/
+  338  ls -ltrh
+  339  cat METGRID.TBL.ARW 
+  340  cat METGRID.TBL.ARW | grep SST
+  341  vi METGRID.TBL.ARW
+  342  ls
+  343  cd /vg6/dargueso-NO-BKUP/
+  344  ls
+  345  cd WRF_OUT/EPICC/EPICC_2km_ERA5_HVC_GWD/
+  346  cd out/
+  347  ncview wrfout_d01_2020-01-01_
+  348  ncview wrfout_d01_2020-01-01_00\:00\:00 
+  349  bg
+  350  ncview wrf3hrly_d01_2020-01-01_00\:00\:00 
+  351  conda env list
+  352  conda activate w2w
+  353  cd w
+  354  ls
+  355  cd ~/Scripts/
+  356  ls
+  357  cd w
+  358  cd w2w/
+  359  ls
+  360  git pull
+  361  git stash
+  362  git pull
+  363  ls
+  364  cat README.md 
+  365  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  366  ls
+  367  python w2w/w2w.py ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  368  ls
+  369  pip install .
+  370  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  371  pip update .
+  372  pip uninstall .
+  373  pip install .
+  374  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  375  python setup.py develop
+  376  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  377  pip uninstall w2w
+  378  python setup.py develop
+  379  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  380  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  381  python setup.py develop
+  382  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  383  pip uninstall w2w
+  384  python setup.py develop
+  385  pip uninstall w2w
+  386  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  387  pip uninstall w2w
+  388  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  389  pip install .
+  390  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  391  pip uninstall w2w
+  392  pip uninstall w2w
+  393  pip install .
+  394  pip uninstall w2w
+  395  pip install .
+  396  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  397  conda list
+  398  conda uninstall w2w
+  399  pip uninstall w2w
+  400  conda list
+  401  pip uninstall w2w
+  402  pip install .
+  403  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  404  pip install .
+  405  conda uninstall w2w
+  406  conda lis
+  407  conda list
+  408  conda upgrade w2w
+  409  pip uninstall w2w
+  410  conda deactivate
+  411  conda activate w2w
+  412  conda lsit
+  413  conda list
+  414  pip install .
+  415  w2w ./sample_data lcz_zaragoza.tif geo_em.d04.nc
+  416  pip uninstall w2w
+  417  cd Scripts/
+  418  ls
+  419  cd w2w/
+  420  ls
+  421  cd ..
+  422  rm -fr w2w/
+  423  ls
+  424  conda remove --name w2w --all 
+  425  ls
+  426  ls -ltrh
+  427  cat log_transf 
+  428  ls
+  429  rm log_transf 
+  430  ls -ltrh
+  431  ls -ltrh
+  432  cd Scripts/
+  433  ls
+  434  ls
+  435  ls -ltrh
+  436  cd EPICC_scripts/
+  437  ls
+  438  ls -ltrh
+  439  cd WRF_processing/
+  440  ls
+  441  ls -ltrh
+  442  ls -ltrh
+  443  cd ..
+  444  ls
+  445  e3
+  446  screen -r
+  447  ls -ltrh
+  448  cd /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5
+  449  ls -ltrh
+  450  screen -r
+  451  ipython
+  452  ls
+  453  cd /vg6/dargueso-NO-BKUP/
+  454  ls
+  455  cd BDY_DATA/ERA5
+  456  ls
+  457  ls -ltrh
+  458  ncview era5land_hourly_prec_201509.nc
+  459  conda activate py385
+  460  conda activate py385_std
+  461  ncdump -h era5land_hourly_prec_201509.nc
+  462  ncview era5land_hourly_prec_201509.nc
+  463  ls
+  464  screen -r
+  465  cd /vg6/dargueso-NO-BKUP/
+  466  ls
+  467  cd BDY_DATA/
+  468  ls
+  469  cd ERA5
+  470  ls
+  471  ls -ltrh
+  472  rm era5land_hourly_prec_20????.grb
+  473  ls -ltrh
+  474  ncview era5land_hourly_prec_201001.nc
+  475  ls
+  476  ls -ltrh
+  477  screen -r
+  478  ls
+  479  ls -ltrh
+  480  vi Get_ERA5Land_ECMWF_prec.py
+  481  vi Get_ERA5Land_ECMWF_prec.py
+  482  screen -r
+  483  ls
+  484  cd WRF_runs/
+  485  ls
+  486  cd REHIPRE/
+  487  ls
+  488  cd Oned_ERA5_HVC/
+  489  ls
+  490  cd WPS
+  491  ls
+  492  cd ..
+  493  cd ..
+  494  cd ..
+  495  cd EPICC_
+  496  cd EPICC_WRFV4.2.2/
+  497  ls
+  498  cd WPS
+  499  ls
+  500  exit
+  501  cd ~/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS/r
+  502  cd ~/WRF_runs/EPICC_PGW_WRFV4.2.2/WPS/
+  503  ls
+  504  cd util/
+  505  ./int2nc.exe ../LSERA5\:2012-12-22_00
+  506  module avail
+  507  module load intel/19.1 netcdf-intel
+  508  ./int2nc.exe ../LSERA5\:2012-12-22_00
+  509  cd ..
+  510  ncview LSERA5\:2012-12-22_00.nc 
+  511  ls
+  512  cd ../
+  513  cd ..
+  514  cd EPICC_WRFV4.2.2/
+  515  ls
+  516  cd WPS
+  517  ls
+  518  cd ..
+  519  cd ..
+  520  cp -R EPICC_WRFV4.2.2 EPICC_WRFV4.2.2_LSERA5
+  521  cd EPICC_WRFV4.2.2
+  522  ls
+  523  cd WPS
+  524  ls
+  525  rm -fr ERA5\:2021-01-01_*
+  526  rm -fr GRIBFILE.AA
+  527  rm -fr LSERA5\:2012-12-22_00 
+  528  ls
+  529  cd ../../EPICC_WRFV4.2.2_LSERA5/WPS
+  530  ls
+  531  ./link_grib.csh /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/LSERA5_2012-12-22_00.grb 
+  532  ls
+  533  cd util/
+  534  ls
+  535  cd ..
+  536  cd ungrib/
+  537  ls
+  538  cd Variable_Tables/
+  539  ls
+  540  cd ..
+  541  cp /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5_CMIP6anom/scripts/Vtable.ERA5.LANDSEA .
+  542  ls
+  543  mv Vtable.ERA5.LANDSEA Variable_Tables/
+  544  cd ..
+  545  ls
+  546  ls -ltrh
+  547  rm Vtable
+  548  ln -sf ungrib/Variable_Tables/Vtable.ERA5.LANDSEA Vtable
+  549  vi namelist.wps
+  550  ./ungrib.exe 
+  551  vi namelist.wps
+  552  ./ungrib.exe 
+  553  ls
+  554  cp /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/era5*grb .
+  555  history
+  556  cat namelist.wps
+  557  history
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ cat namelist.wps
+&share
+ wrf_core = 'ARW',
+ max_dom = 1,
+ start_date = '2021-01-01_00:00:00',
+ end_date   = '2021-01-01_00:00:00',
+ interval_seconds = 21600
+ io_form_geogrid = 2,
+/
+
+&geogrid
+ parent_id         =   1,
+ parent_grid_ratio =   1,
+ i_parent_start    =   1,
+ j_parent_start    =   1,
+ e_we              =  1250,
+ e_sn              =  750,
+
+ geog_data_res = 'default',
+ dx = 2000,
+ dy = 2000,
+ map_proj = 'lambert',
+ ref_lat   =  41.8,
+ ref_lon   =  4.2,
+ truelat1  =  60,
+ truelat2  =  30,
+ stand_lon = 4.2,
+ geog_data_path = '/home/dargueso/GEOG_DATA_4.1/WPS_GEOG/'
+/
+
+&ungrib
+ out_format = 'WPS',
+ prefix = 'LSERA5',
+/
+
+&metgrid
+ fg_name = 'ERA5'
+ io_form_metgrid = 2,
+ constants_name='LSERA5:2012-12-22_00',
+/
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ ls
+arch                   ERA5:2021-01-01_12           LSERA5:2012-12-22_00             namelist.wps.global
+clean                  ERA5:2021-01-01_18           LSERA5:2021-01-01_00             namelist.wps.nmm
+compile                era5_daily_pl_20210101.grb   metgrid                          README
+compile.log            era5_daily_sfc_20210101.grb  metgrid.exe                      ungrib
+configure              geo_em.d01.nc                metgrid.log                      ungrib.exe
+configure.wps          geogrid                      namelist_EPICC.wps               ungrib.log
+configure.wps.backup   geogrid.exe                  namelist_soilera5_cmip6_pgw.wps  util
+ERA5:2021-01-01_00     geogrid.log                  namelist.wps                     Vtable
+ERA5:2021-01-01_06     GRIBFILE.AAA                 namelist.wps.all_options         Vtable.ERA5.SOIL1ststep
+ERA5:2021-01-01_06.nc  link_grib.csh                namelist.wps.fire
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ ls -ltrh
+total 4,4G
+-rw-r--r-- 1 dargueso models  562M dic 14 14:13 ERA5:2021-01-01_06.nc
+-rw-r--r-- 1 dargueso models  562M dic 14 14:13 ERA5:2021-01-01_00
+-rw-r--r-- 1 dargueso models  562M dic 14 14:13 ERA5:2021-01-01_06
+-rw-r--r-- 1 dargueso models  562M dic 14 14:13 ERA5:2021-01-01_12
+-rw-r--r-- 1 dargueso models  562M dic 14 14:13 ERA5:2021-01-01_18
+lrwxrwxrwx 1 dargueso models    21 dic 14 14:13 ungrib.exe -> ungrib/src/ungrib.exe
+lrwxrwxrwx 1 dargueso models    23 dic 14 14:13 metgrid.exe -> metgrid/src/metgrid.exe
+lrwxrwxrwx 1 dargueso models    23 dic 14 14:13 geogrid.exe -> geogrid/src/geogrid.exe
+-rwxr-xr-x 1 dargueso models  2,8M dic 14 14:13 LSERA5:2012-12-22_00
+-rwxr-xr-x 1 dargueso models  1,4K dic 14 14:13 Vtable.ERA5.SOIL1ststep
+-rwxr-xr-x 1 dargueso models  6,2K dic 14 14:13 README
+-rwxr-xr-x 1 dargueso models  1,8K dic 14 14:13 clean
+-rwxr-xr-x 1 dargueso models  4,7K dic 14 14:13 compile
+-rwxr-xr-x 1 dargueso models  102K dic 14 14:13 compile.log
+-rwxr-xr-x 1 dargueso models  3,3K dic 14 14:13 configure.wps
+-rwxr-xr-x 1 dargueso models   13K dic 14 14:13 configure
+-rwxr-xr-x 1 dargueso models  3,3K dic 14 14:13 configure.wps.backup
+-rwxr-xr-x 1 dargueso models  1,3K dic 14 14:13 link_grib.csh
+-rwxr-xr-x 1 dargueso models   13K dic 14 14:13 geogrid.log
+-rwxr-xr-x 1 dargueso models  479M dic 14 14:13 geo_em.d01.nc
+-rwxr-xr-x 1 dargueso models  2,7K dic 14 14:13 namelist.wps.all_options
+-rwxr-xr-x 1 dargueso models  165K dic 14 14:13 metgrid.log
+-rwxr-xr-x 1 dargueso models   654 dic 14 14:13 namelist.wps.nmm
+-rwxr-xr-x 1 dargueso models  1,6K dic 14 14:13 namelist.wps.global
+-rwxr-xr-x 1 dargueso models  2,1K dic 14 14:13 namelist.wps.fire
+-rwxr-xr-x 1 dargueso models   720 dic 14 14:13 namelist_soilera5_cmip6_pgw.wps
+-rwxr-xr-x 1 dargueso models   727 dic 14 14:13 namelist_EPICC.wps
+drwxr-xr-x 2 dargueso models  4,0K dic 14 14:13 arch
+drwxr-xr-x 4 dargueso models  4,0K dic 14 14:13 geogrid
+drwxr-xr-x 3 dargueso models  4,0K dic 14 14:13 metgrid
+drwxr-xr-x 3 dargueso models  4,0K dic 14 14:13 util
+lrwxrwxrwx 1 dargueso models    60 dic 14 14:19 GRIBFILE.AAA -> /vg6/dargueso-NO-BKUP/BDY_DATA/ERA5/LSERA5_2012-12-22_00.grb
+drwxr-xr-x 4 dargueso models  4,0K dic 14 14:20 ungrib
+lrwxrwxrwx 1 dargueso models    42 dic 14 14:20 Vtable -> ungrib/Variable_Tables/Vtable.ERA5.LANDSEA
+-rwxr-xr-x 1 dargueso models   707 dic 14 14:21 namelist.wps
+-rw-r--r-- 1 dargueso models  2,8M dic 14 14:21 LSERA5:2021-01-01_00
+-rwxr-xr-x 1 dargueso models  2,0K dic 14 14:21 ungrib.log
+-rwxr-xr-x 1 dargueso models 1019M dic 14 15:10 era5_daily_pl_20210101.grb
+-rwxr-xr-x 1 dargueso models  108M dic 14 15:10 era5_daily_sfc_20210101.grb
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ util/rd_intermediate.exe LSERA5\:2021-01-01_00 
+================================================
+FIELD = LANDSEA
+UNITS = 0/1 Flag DESCRIPTION = Land/Sea flag
+DATE = 2021-01-01_00:00:00 FCST = 0.000000
+SOURCE = ECMWF
+LEVEL = 200100.000000
+I,J DIMS = 1200, 601
+IPROJ = 0  PROJECTION = LAT LON
+  REF_X, REF_Y = 1.000000, 1.000000
+  REF_LAT, REF_LON = 90.000008, 0.000000
+  DLAT, DLON = -0.300000, 0.300000
+  EARTH_RADIUS = 6367.470215
+DATA(1,1)=0.000000
+
+ SUCCESSFUL COMPLETION OF PROGRAM RD_INTERMEDIATE
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ vi namelist.wps
+dargueso@mc4:~/WRF_runs/EPICC_WRFV4.2.2_LSERA5/WPS$ vi namelist.wps
+
+&share
+ wrf_core = 'ARW',
+ max_dom = 1,
+ start_date = '2021-01-01_00:00:00',
+ end_date   = '2021-01-01_00:00:00',
+ interval_seconds = 21600
+ io_form_geogrid = 2,
+/
+
+&geogrid
+ parent_id         =   1,
+ parent_grid_ratio =   1,
+ i_parent_start    =   1,
+ j_parent_start    =   1,
+ e_we              =  1250,
+ e_sn              =  750,
+
+ geog_data_res = 'default',
+ dx = 2000,
+ dy = 2000,
+ map_proj = 'lambert',
+ ref_lat   =  41.8,
+ ref_lon   =  4.2,
+ truelat1  =  60,
+ truelat2  =  30,
+ stand_lon = 4.2,
+ geog_data_path = '/home/dargueso/GEOG_DATA_4.1/WPS_GEOG/'
+/
+
+&ungrib
+ out_format = 'WPS',
+ prefix = 'ERA5',
+/
+
+&metgrid
+ fg_name = 'ERA5'
+ io_form_metgrid = 2,
+ constants_name='LSERA5:2021-01-01_00',
+/
