@@ -33,7 +33,7 @@ end_second                          = 00,
 interval_seconds                    = 21600,
 input_from_file                     = .true.,
 history_interval                    =  60,
-frames_per_outfile                  =  24,
+frames_per_outfile                  =  1,
 restart                             = %isrestart%,
 restart_interval                    = %resint%,
 override_restart_timers             = .true.,
@@ -43,17 +43,13 @@ io_form_restart                     = 2
 io_form_input                       = 2
 io_form_boundary                    = 2
 debug_level                         = 0
-auxhist3_outname                    ='wrfxtrm_d<domain>_<date>',
-io_form_auxhist3                    = 2,
-auxhist3_interval                   = 60,
-frames_per_auxhist3                 = 24,
 auxhist7_outname                    = "wrfprec_d<domain>_<date>"
 auxhist7_interval                   = 10,
 frames_per_auxhist7                 = 144,
 io_form_auxhist7                    = 2
 auxhist8_outname                    = "wrf3hrly_d<domain>_<date>"
 auxhist8_interval                   = 180,
-frames_per_auxhist8                 = 8,
+frames_per_auxhist8                 = 1,
 io_form_auxhist8                    = 2,
 auxinput4_inname                    = "wrflowinp_d<domain>"
 auxinput4_interval                  = 360,
@@ -64,12 +60,15 @@ ignore_iofields_warning             = .true.,
 
 
 &domains
-time_step                           = 12,
+time_step                           = 10,
 time_step_fract_num                 = 0,
 time_step_fract_den                 = 1,
 max_dom                             = 1,
+s_we                                = 1,
 e_we                                = 1250,
+s_sn                                = 1,
 e_sn                                = 750,
+s_vert                              = 1,
 e_vert                              = 50,
 p_top_requested                     = 5000,
 num_metgrid_levels                  = 38
@@ -97,19 +96,17 @@ radt                                = 10,
 sf_sfclay_physics                   = 1,
 sf_surface_physics                  = 2,
 bl_pbl_physics                      = 1,
-sf_urban_physics                    = 0,
-sf_lake_physics                     = 0,
 bldt                                = 0,
 topo_wind                           = 1,
 cu_physics                          = 0,
 cudt                                = 0,
 shcu_physics                        = 0,
 isfflx                              = 1,
-ifsnow                              = 0,
 icloud                              = 1,
 surface_input_source                = 1,
 num_soil_layers                     = 4,
 num_land_cat                        = 21,
+sf_urban_physics                    = 0,
 sst_update                          = 1,
 tmn_update                          = 1,
 lagday                              = 150,
@@ -169,7 +166,6 @@ nested                              = .false.,
 nio_tasks_per_group = 24,
 nio_groups = 2,
 /
-
 EOF_namelist
 
 #Create SLURM task (script)
@@ -177,6 +173,7 @@ EOF_namelist
 cat << EOF_WRF > ./E2%syear%%smonth%%sday%.slurm
 #!/bin/bash
 #SBATCH --job-name=E2%syear%%smonth%%sday%
+#SBATCH --workdir=.
 #SBATCH --output=WRF%syear%%smonth%%sday%-%j.out
 #SBATCH --error=WRF%syear%%smonth%%sday%-%j.err
 #SBATCH --time=16:00:00
@@ -213,13 +210,9 @@ tempdir=wrftemp%syear%%smonth%%sday%
 mkdir ${tempdir}
 
 rm ./wrfprec_d01_%eyear%-%emonth%-%eday%*
-rm ./wrfout_d01_%eyear%-%emonth%-%eday%*
-rm ./wrf3hrly_d01_%eyear%-%emonth%-%eday%*
-rm ./wrfxtrm_d01_%eyear%-%emonth%-%eday%*
 mv ./wrfout* $tempdir
 mv ./wrfprec* $tempdir
 mv ./wrf3hrly* $tempdir
-mv ./wrfxtrm* $tempdir
 mv $tempdir/* %OUTdir%/
 
 
