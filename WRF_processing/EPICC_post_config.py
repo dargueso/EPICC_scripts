@@ -8,10 +8,10 @@ path_geo = "/home/dargueso/share/geo_em_files/EPICC/"
 file_geo = "geo_em.d01.EPICC_2km_ERA5_HVC_GWD.nc"
 file_ref = "/home/dargueso/WRF_OUT/EPICC_2km_ERA5//out/wrfout_d01_2013-01-01_00:00:00"
 institution = "UIB"
-wruns = ["EPICC_2km_ERA5"]
+wruns = ["EPICC_2km_ERA5","EPICC_2km_ERA5_CMIP6anom"]
 
 
-patt = "wrf3hrly"
+patt = "wrfout"
 dom = "d01"
 
 syear = 2011
@@ -22,7 +22,7 @@ acc_dt = 10
 nproc_x = 12
 nproc_y = 48
 
-variables = ["PSL"]
+variables = ["TD2"]
 
 #### Requested output variables (DO NOT CHANGE THIS LINE) ####
 

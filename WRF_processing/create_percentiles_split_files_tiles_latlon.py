@@ -25,9 +25,9 @@ from glob import glob
 from itertools import product
 from joblib import Parallel, delayed
 
-wrf_runs = ['EPICC_2km_ERA5','EPICC_2km_ERA5_CMIP6anom']
+wrf_runs = ['EPICC_2km_ERA5_HVC_GWD','EPICC_2km_ERA5_CMIP6anom_HVC_GWD']
 qtiles = np.asarray(cfg.qtiles)
-mode = 'wetonly'
+mode = 'all'
 wet_value = cfg.wet_value
 tile_size = 50
 ###########################################################

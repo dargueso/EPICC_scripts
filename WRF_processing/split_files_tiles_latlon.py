@@ -30,7 +30,7 @@ from joblib import Parallel, delayed
 
 wrun = cfg.wrf_runs[0]
 tile_size = 50
-freq = '10MIN'
+freq = '01H'
 ###########################################################
 ###########################################################
 
@@ -44,9 +44,8 @@ def main():
     nlons = files_ref.sizes['x']
     files_ref.close()
 
-    Parallel(n_jobs=20)(delayed(split_files)(fin,nlons,nlats,tile_size) for fin in filesin)
+    Parallel(n_jobs=20)(delayed(iotiles.split_files)(fin,nlons,nlats,tile_size) for fin in filesin)
 
-    #split_files(f'{cfg.path_in}/{wrun}/UIB_LANDMASK.nc',nlons,nlats,tile_size)
 
     #Then concatenate using:
     # for ny in $(seq -s " " -f %03g 0 10); do for nx in $(seq -s " " -f %03g 0 10); do ncrcat UIB_10MIN_RAIN_*_${ny}y-${nx}x.nc UIB_10MIN_RAIN_2011-2020_${ny}y-${nx}x.nc ;done done
