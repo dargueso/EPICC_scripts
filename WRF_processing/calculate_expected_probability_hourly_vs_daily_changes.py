@@ -2,7 +2,6 @@ import xarray as xr
 import numpy as np
 import pandas as pd
 
-
 import xarray as xr
 import scipy.stats as stats    # SciPy ≥ 1.9 plays well with dask-arrays
 
@@ -86,6 +85,154 @@ def gini_coefficient(arr, axis):
     numerator = np.sum((2 * r - n_broadcasted - 1) * arr_sorted, axis=axis)
     gini = numerator / (n * sum_vals)
     return gini
+
+def generate_hourly_distribution(
+    R_day: float,
+    wet_hour_probs: np.ndarray,         # shape (24,), sum = 1
+    intensity_probabilities: np.ndarray,  # shape (n_bins,), sum = 1
+    hourly_bins: np.ndarray             # shape (n_bins + 1,), bin edges
+) -> np.ndarray:
+    """
+    Generate a stochastic 24-hour rainfall distribution for a given daily total.
+
+    Parameters
+    ----------
+    R_day : float
+        Total daily rainfall (mm).
+    wet_hour_probs : np.ndarray
+        Probabilities for number of wet hours (1 to 24), shape (24,).
+    intensity_probabilities : np.ndarray
+        Probabilities for hourly rainfall intensities (e.g., 0.1–50 mm/h), shape (n_bins,).
+    hourly_bins : np.ndarray
+        Bin edges corresponding to intensity_probabilities, shape (n_bins + 1,).
+
+    Returns
+    -------
+    hourly_rain : np.ndarray
+        24-element array with hourly rainfall values summing to R_day.
+    """
+    # 1. Sample number of wet hours: N in [1, 24]
+    N_wet = np.random.choice(np.arange(1, 25), p=wet_hour_probs)
+
+    # 2. Sample N_wet intensity values from the histogram bins
+    bin_choices = np.random.choice(len(intensity_probabilities), size=N_wet, p=intensity_probabilities)
+    # For each bin, sample uniformly within the bin range
+    intensities = np.array([
+        np.random.uniform(low=hourly_bins[b], high=hourly_bins[b+1]) for b in bin_choices
+    ])
+
+    # 3. Normalize intensities and scale to R_day
+    fractions = intensities / intensities.sum()
+    wet_values = fractions * R_day
+
+    # 4. Randomly assign wet_values to 24-hour slots
+    hourly_rain = np.zeros(24)
+    wet_slots = np.random.choice(24, size=N_wet, replace=False)
+    hourly_rain[wet_slots] = wet_values
+
+    return hourly_rain
+
+import numpy as np
+import xarray as xr
+
+def generate_hourly_ensemble(
+    rain_daily: xr.DataArray,
+    wet_hour_distribution_bin: np.ndarray,     # (n_daily_bins, 24)
+    hourly_distribution_bin: np.ndarray,       # (n_daily_bins, n_hourly_bins)
+    hourly_bins: np.ndarray,                   # (n_hourly_bins + 1,)
+    daily_bin_edges: np.ndarray,               # (n_daily_bins + 1,)
+    n_samples: int
+) -> xr.DataArray:
+    """
+    Generate an ensemble of stochastic hourly rainfall distributions per daily rainfall event.
+
+    Parameters
+    ----------
+    rain_daily : xr.DataArray
+        Daily precipitation (time,) or (time, y, x), with NaNs on dry days.
+    wet_hour_distribution_bin : np.ndarray
+        Probabilities for number of wet hours per daily bin (n_daily_bins, 24).
+    hourly_distribution_bin : np.ndarray
+        Hourly intensity probabilities per daily bin (n_daily_bins, n_hourly_bins).
+    hourly_bins : np.ndarray
+        Edges of intensity bins (n_hourly_bins + 1).
+    daily_bin_edges : np.ndarray
+        Edges of daily rainfall bins (n_daily_bins + 1).
+    n_samples : int
+        Number of synthetic realizations to generate per day.
+
+    Returns
+    -------
+    xr.DataArray
+        Hourly rainfall (sample, time, hour) or (sample, time, hour, y, x).
+    """
+    shape = rain_daily.shape
+    dims = rain_daily.dims
+    coords = rain_daily.coords
+    is_3d = len(shape) == 3
+    # Flatten for easier processing
+    # Flatten for easier processing
+    if is_3d:
+        rain_flat = rain_daily.stack(sample_dim=dims[1:]).values  # (time, n_points)
+    else:
+        rain_flat = rain_daily.values[:, np.newaxis]              # (time, 1)
+
+    n_time, n_points = rain_flat.shape
+    hourly_output = np.zeros((n_samples, n_time, 24, n_points), dtype=np.float32)
+
+    # Digitize daily rainfall to bins
+    bin_indices = np.digitize(rain_flat, daily_bin_edges) - 1  # shape (time, n_points)
+    # Iterate through each sample
+    for s in range(n_samples):
+        for t in range(n_time):
+            for p in range(n_points):
+                R = rain_flat[t, p]
+                if np.isnan(R) or R <= 0:
+                    continue
+
+                b = bin_indices[t, p]
+                if b < 0 or b >= wet_hour_distribution_bin.shape[0]:
+                    continue
+
+                # 1. Sample number of wet hours
+                Nh = np.random.choice(np.arange(1, 25), p=wet_hour_distribution_bin[b])
+
+                # 2. Sample Nh intensity values from hourly PDF
+                intensity_probs = hourly_distribution_bin[b]
+                idx_bins = np.random.choice(len(intensity_probs), size=Nh, p=intensity_probs)
+                if np.any(idx_bins >= len(hourly_bins) - 1):
+                    import pdb; pdb.set_trace()  # fmt: skip
+                intensities = np.random.uniform(low=hourly_bins[idx_bins],high=hourly_bins[idx_bins + 1])
+
+                # 3. Normalize & scale
+                fractions = intensities / np.sum(intensities)
+                values = R * fractions
+
+                # 4. Assign to random hours
+                hours = np.zeros(24, dtype=np.float32)
+                slots = np.random.choice(24, size=Nh, replace=False)
+                hours[slots] = values
+
+                hourly_output[s, t, :, p] = hours
+
+    # Unstack back if needed
+    if is_3d:
+        coords_new = {
+            "sample": np.arange(n_samples),
+            "time": rain_daily.coords["time"],
+            "hour": np.arange(24),
+            **{dim: coords[dim] for dim in dims[1:]}
+        }
+        hourly_output = hourly_output.reshape((n_samples, n_time, 24, *shape[1:]))
+        return xr.DataArray(hourly_output, dims=("sample", "time", "hour", *dims[1:]), coords=coords_new)
+    else:
+        coords_new = {
+            "sample": np.arange(n_samples),
+            "time": rain_daily.coords["time"],
+            "hour": np.arange(24)
+        }
+        return xr.DataArray(hourly_output[:, :, :, 0], dims=("sample", "time", "hour"), coords=coords_new)
+
 
 ## Define constants
 
@@ -283,4 +430,63 @@ print(f"Present: {np.nanmean(gini_daily_reg,axis=(1,2,3))[0]:.3f} \u00B1 {np.nan
 print(f"Future: {np.nanmean(gini_daily_reg,axis=(1,2,3))[1]:.3f} \u00B1 {np.nanstd(gini_daily_reg,axis=(1,2,3))[1]:.3f} ")
 
 
+combqtiles = np.arange(0,101,1) / 100.0  # Combine quantiles for the analysis
+rainfall_bins = np.arange(0, 55, 5)
+hourly_rainfall_bins = np.arange(0, 105, 5)  # Bins for hourly rainfall
+bin_gini_mean = np.zeros((len(rainfall_bins), 2))  # Two experiments: Present and Future
+wet_hours_fraction = np.zeros((len(rainfall_bins), 2))  # Two experiments: Present and Future
+hourly_mean = np.zeros((len(rainfall_bins), 2))  # Two experiments: Present and Future
+samples_per_bin = np.zeros((len(rainfall_bins), 2))  # Two experiments: Present and Future
+quantiles_bin = np.zeros((len(rainfall_bins), len(combqtiles), 2))  # Two experiments: Present and Future
+hourly_distribution_bin = np.zeros((len(rainfall_bins),len(hourly_rainfall_bins)-1,2))  # Two experiments: Present and Future
+wet_hours_distribution_bin = np.zeros((len(rainfall_bins), 24, 2))  # Two experiments: Present and Future
+
+for ibin in range(len(rainfall_bins)):
+
+    if ibin == len(rainfall_bins)-1:
+        upper_bound = np.inf
+    else:
+        lower_bound = rainfall_bins[ibin]
+        upper_bound = rainfall_bins[ibin + 1]
+
+    bin_days = (ds_d >= lower_bound) & (ds_d < upper_bound)  
+    bin_days_hourly = bin_days.reindex(time=ds_h.time, method='ffill')
+    bin_ds_h_masked = ds_h.where(bin_days_hourly)
+
+    hourly_mean[ibin,:] = bin_ds_h_masked.mean(dim=['time','x','y'])
+    wet_hours = bin_ds_h_masked.where(bin_ds_h_masked > 0).count(dim=['time','x','y'])
+    wet_hours_fraction[ibin,:] = wet_hours / bin_days_hourly.sum(dim=['time','x','y'])
+
+    bin_gini = gini_daily.copy()
+    bin_gini[~bin_days.values] = np.nan  # Mask out the days that are not in the bi
+    bin_gini_mean[ibin,:] = np.nanmean(bin_gini, axis=(1, 2, 3))
+
+    samples_per_bin[ibin, :] = np.sum(bin_days.values, axis=(1, 2, 3))  # Count of days in the Present experiment
+    quantiles_bin [ibin, :, :] = bin_ds_h_masked.where(bin_ds_h_masked > 0).quantile(q=combqtiles, dim=['time', 'x', 'y']).values
+    for iexp in range(2):  # Two experiments: Present and Future
+        if np.sum(bin_days.values[iexp, :, :, :]) > 0:
+            hourly_distribution_bin[ibin, :, iexp] = np.histogram(bin_ds_h_masked.where(bin_ds_h_masked > 0).isel(exp=iexp),bins=hourly_rainfall_bins,density=1)[0]*np.diff(hourly_rainfall_bins)
+            wet_hours_distribution_bin [ibin, :, iexp] = np.histogram(wet_hour_fraction.where(bin_days).isel(exp=iexp)*24., bins= np.arange(1, 26, 1),density=True)[0]
+
+
+# Rd = 17.5
+# bin_index = np.digitize(Rd, rainfall_bins)-1
+# wet_hours_prob = wet_hours_distribution_bin[bin_index, :, 0]
+# hour_intensity_prob = hourly_distribution_bin[bin_index, :, 0]  # Present experiment
+# future_synthetic = generate_hourly_distribution(Rd, wet_hours_prob, hour_intensity_prob, hourly_rainfall_bins)
+
+
+#test = ds_d.isel(exp=0,x=25,y=25,time=slice(0,3))
+#future_synthetic_ensemble = generate_hourly_ensemble(test, wet_hours_distribution_bin[:, :, 0].squeeze(), hourly_distribution_bin[:, :, 0].squeeze(), hourly_rainfall_bins, rainfall_bins,1)  # Reshape to (1, 24) for consistency
+future_synthetic_ensemble = generate_hourly_ensemble(ds_d.sel(exp='Future'), wet_hours_distribution_bin[:, :, 0].squeeze(), hourly_distribution_bin[:, :, 0].squeeze(), hourly_rainfall_bins, rainfall_bins,10) # Reshape to (1, 24) for consistency
 import pdb; pdb.set_trace()  # fmt: skip
+
+
+
+
+
+    
+
+    
+
+
