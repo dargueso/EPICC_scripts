@@ -4,6 +4,11 @@ import pandas as pd
 
 import xarray as xr
 import scipy.stats as stats    # SciPy ≥ 1.9 plays well with dask-arrays
+from copulas.bivariate import Clayton, Gumbel
+
+from scipy.stats import rankdata,norm,spearmanr
+
+
 
 def moments_above_quantiles(data: xr.DataArray,
                             qtiles: xr.DataArray,
@@ -132,8 +137,6 @@ def generate_hourly_distribution(
 
     return hourly_rain
 
-import numpy as np
-import xarray as xr
 
 def generate_hourly_ensemble(
     rain_daily: xr.DataArray,
@@ -233,6 +236,8 @@ def generate_hourly_ensemble(
         }
         return xr.DataArray(hourly_output[:, :, :, 0], dims=("sample", "time", "hour"), coords=coords_new)
 
+def empirical_cdf(x):
+    return rankdata(x, method='average') / (len(x) + 1)
 
 ## Define constants
 
@@ -479,13 +484,70 @@ for ibin in range(len(rainfall_bins)):
 #test = ds_d.isel(exp=0,x=25,y=25,time=slice(0,3))
 #future_synthetic_ensemble = generate_hourly_ensemble(test, wet_hours_distribution_bin[:, :, 0].squeeze(), hourly_distribution_bin[:, :, 0].squeeze(), hourly_rainfall_bins, rainfall_bins,1)  # Reshape to (1, 24) for consistency
 future_synthetic_ensemble = generate_hourly_ensemble(ds_d.sel(exp='Future'), wet_hours_distribution_bin[:, :, 0].squeeze(), hourly_distribution_bin[:, :, 0].squeeze(), hourly_rainfall_bins, rainfall_bins,10) # Reshape to (1, 24) for consistency
+
+
+#####################################################################
+#####################################################################
+
+# Calculating Copulas statistics
+
+D_xy = ds_d.sel(exp='Present', y=25, x=25).values
+H_xy = ds_h_masked_max.sel(exp='Present', y=25, x=25).values
+
+D_xy = D_xy[~np.isnan(D_xy)]
+H_xy = H_xy[~np.isnan(H_xy)]
+
+u = empirical_cdf(D_xy)
+v = empirical_cdf(H_xy)
+
+# Estimate copula parameter (Gaussian copula → correlation in normal space)
+# Use Spearman's rho as a rank-based proxy, then convert to Pearson
+rho_s, _ = spearmanr(u, v)
+rho = 2 * np.sin(np.pi * rho_s / 6)
+
+z_u = norm.ppf(u)
+z_v = norm.ppf(v)
+
+D_xy_future = ds_d.sel(exp='Future', y=25, x=25).values
+H_xy_future = ds_h_masked_max.sel(exp='Future', y=25, x=25).values
+
+D_xy_future = D_xy_future[~np.isnan(D_xy_future)]
+H_xy_future = H_xy_future[~np.isnan(H_xy_future)]
+
+uf = empirical_cdf(D_xy_future)
+vf = empirical_cdf(H_xy_future)
+
+z_uf = norm.ppf(uf)
+z_vf = norm.ppf(vf)
+
+mu_cond = rho * z_uf
+std_cond = np.sqrt(1 - rho**2)
+z_diff = (z_vf - mu_cond) / std_cond
+
+p_exceed = 1 - norm.cdf(z_diff)  # shape: (n_time,)
+
 import pdb; pdb.set_trace()  # fmt: skip
 
 
+# # Estimate expected v for future P_D values
+# D_xy_future = ds_d.sel(exp='Future', y=5, x=5).values
+# H_xy_future = ds_h_masked_max.sel(exp='Future', y=5, x=5).values
 
+# D_xy_future = D_xy_future[~np.isnan(D_xy_future)]
+# H_xy_future = H_xy_future[~np.isnan(H_xy_future)]
 
+# u_future = np.searchsorted(np.sort(D_xy), D_xy_future) / (len(D_xy) + 1)
+# v_future = np.searchsorted(np.sort(H_xy), H_xy_future) / (len(H_xy) + 1)
+# expected_v = []
 
-    
+# tolerance = 0.005
+
+# for uf in u_future:
+#     idx = np.where(np.abs(u - uf) < tolerance)[0]    # Tolerance of 0.02
+#     if len(idx) > 0:
+#         expected_v.append(np.mean(v[idx]))
+#     else:
+#         expected_v.append(np.nan)
 
     
 
