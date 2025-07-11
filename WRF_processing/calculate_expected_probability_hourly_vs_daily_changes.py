@@ -1,10 +1,15 @@
 import xarray as xr
 import numpy as np
 import pandas as pd
-
+import dask.array as da
 import xarray as xr
 import scipy.stats as stats    # SciPy ≥ 1.9 plays well with dask-arrays
-from copulas.bivariate import Clayton, Gumbel
+from dask import delayed
+from tqdm.auto import trange 
+import matplotlib.pyplot as plt
+
+
+#from copulas.bivariate import Clayton, Gumbel
 
 from scipy.stats import rankdata,norm,spearmanr
 
@@ -239,6 +244,26 @@ def generate_hourly_ensemble(
 def empirical_cdf(x):
     return rankdata(x, method='average') / (len(x) + 1)
 
+
+def calculate_ratio_simultaneous_extremes(ds_h_dmax,ds_d):
+    """
+    Calculate the percentage of times that both the hourly daily max 
+    and daily rainfall exceed their respective quantiles the same day
+    """
+
+    tot_h = ds_h_dmax.count(dim='time')  # Total number of days with hourly max above quantile
+    tot_d = ds_d.count(dim='time')  # Total number of days with daily rainfall above quantile
+
+    both = (ds_h_dmax > 0) & (ds_d > 0)  # Both exceed the quantile
+    both_tot = both.sum(dim='time')  # Total number of days where both exceed the quantile
+
+    ratio = both_tot / (tot_h)  # Percentage of days where both exceed the quantile
+
+    if np.all(tot_h != tot_d):
+        raise ValueError("Total number of days with hourly max and daily rainfall above quantile do not match.")
+    
+    return ratio
+
 ## Define constants
 
 DAILY_WET_THRESHOLD = 0.1  # mm
@@ -267,6 +292,105 @@ ds_h = ds.copy()
 ds_d = ds_h.resample(time='1D').sum()
 ds_d = ds_d.where(ds_d > DAILY_WET_THRESHOLD)
 
+#####################################################################
+#####################################################################
+
+## STEP 5 
+
+qs = xr.DataArray([0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99, 0.999], dims='q', name='quantile')
+
+P_d_CTRL = ds_d.sel(exp='Present').where(ds_d.sel(exp='Present') > DAILY_WET_THRESHOLD)  # Mask present daily data
+P_d_PGW  = ds_d.sel(exp='Future').where(ds_d.sel(exp='Future') > DAILY_WET_THRESHOLD)  # Mask future daily data
+P_h_CTRL = ds_h.sel(exp='Present').where(ds_h.sel(exp='Present') > HOURLY_WET_THRESHOLD)  # Mask present hourly data
+P_h_PGW  = ds_h.sel(exp='Future').where(ds_h.sel(exp='Future') > HOURLY_WET_THRESHOLD)  # Mask future hourly data
+
+Qd_CTRL = P_d_CTRL.quantile(qs, dim='time')      # (q, y, x) or area-mean
+Qd_PGW  = P_d_PGW .quantile(qs, dim='time')
+Qh_CTRL = P_h_CTRL.quantile(qs, dim='time')
+Qh_PGW  = P_h_PGW .quantile(qs, dim='time')
+
+Cd = Qd_PGW / Qd_CTRL      # daily change factors
+Ch = Qh_PGW / Qh_CTRL      # hourly change factors
+
+
+NBOOT = 750            # 500–1000 is typical
+rng   = np.random.default_rng(seed=404)
+
+def _sample(da):
+    """Resample with replacement along the first dim (time/day)."""
+    n = da.sizes['time']
+    idx = xr.DataArray(rng.integers(0, n, n), dims='time')
+    return da.isel(time=idx)
+
+# # pre-allocate arrays: (boot, q)
+# ny, nx = P_d_CTRL.sizes['y'], P_d_CTRL.sizes['x']
+
+# Cd_boot = np.empty((NBOOT, qs.size, ny, nx), np.float32)
+# Ch_boot = np.empty_like(Cd_boot)
+
+# for b in range(NBOOT):
+#     Cd_boot[b] = (
+#         _sample(P_d_PGW ).quantile(qs, dim='time') /
+#         _sample(P_d_CTRL).quantile(qs, dim='time')
+#     ).values                                 # shape (8, ny, nx)
+
+#     Ch_boot[b] = (
+#         _sample(P_h_PGW ).quantile(qs, dim='time') /
+#         _sample(P_h_CTRL).quantile(qs, dim='time')
+#     ).values
+
+Cd_boot = np.empty((NBOOT, qs.size), np.float32)
+Ch_boot = np.empty_like(Cd_boot)
+
+for b in trange(NBOOT, desc="Bootstrap draws", unit="draw"):
+    Cd_boot[b] = (
+        _sample(P_d_PGW ).quantile(qs, dim='time') /
+        _sample(P_d_CTRL).quantile(qs, dim='time')
+    ).mean(dim=('y', 'x')).values         # ← spatial mean here
+
+    Ch_boot[b] = (
+        _sample(P_h_PGW ).quantile(qs, dim='time') /
+        _sample(P_h_CTRL).quantile(qs, dim='time')
+    ).mean(dim=('y', 'x')).values
+
+
+# convert to xarray for convenience
+Cd_boot = xr.DataArray(Cd_boot, dims=('boot','q'), coords={'q':qs})
+Ch_boot = xr.DataArray(Ch_boot, dims=('boot','q'), coords={'q':qs})
+
+
+# 95 % envelopes
+Cd_lo, Cd_hi = Cd_boot.quantile([.025,.975], dim='boot')
+Ch_lo, Ch_hi = Ch_boot.quantile([.025,.975], dim='boot')
+
+
+fig, ax = plt.subplots(figsize=(6, 4))
+
+# ribbons first so lines sit on top
+ax.fill_between(qs, Cd_lo, Cd_hi, alpha=.3, label='Daily 95 % CI')
+ax.fill_between(qs, Ch_lo, Ch_hi, alpha=.3, label='Hourly 95 % CI')
+
+ax.plot(qs, Cd, marker='o',  lw=2, label='Daily change factor')
+ax.plot(qs, Ch, marker='s',  lw=2, label='Hourly change factor')
+
+ax.set_xlabel('Quantile q')
+ax.set_ylabel('PGW / CTRL')
+ax.set_xscale('linear')          # or 'log' if you prefer
+ax.grid(True, ls=':')
+ax.legend(frameon=False, fontsize=9)
+ax.set_title('Quantile-Scaling Quick Check')
+
+plt.tight_layout()
+plt.show()
+
+
+
+
+# Calculate ratio of daily total rainfall in hourly data
+
+daily_expanded = ds_d.reindex_like(ds_h, method='ffill')
+rainfall_ratios = ds_h / daily_expanded  
+#rainfall_ratios = rainfall_ratios.fillna(0) 
 
 # Create a mask for wet days in the daily dataset
 # and reindex it to match the hourly dataset
@@ -288,6 +412,10 @@ ds_h_masked_qtiles = ds_h_masked.where(ds_h_masked>0).quantile(q=np.array(qtiles
 ds_h_masked_mean_qtiles = ds_h_masked_mean.quantile(q=np.array(qtiles) / 100.0, dim='time')
 ds_d_masked_qtiles = ds_d.quantile(q=np.array(qtiles) / 100.0, dim='time')
 
+sameday_ext_ratio = calculate_ratio_simultaneous_extremes(ds_h_masked_max.where(ds_h_masked_max > ds_h_masked_max_qtiles.sel(quantile =0.95)),ds_d.where(ds_d > ds_d_masked_qtiles.sel(quantile=0.95)))
+
+print(sameday_ext_ratio.values)
+print(sameday_ext_ratio.median(dim=['y','x']).values)
 
 # mom_h_max = moments_above_quantiles(
 #     ds_h_masked_max, ds_h_masked_max_qtiles,
@@ -526,7 +654,7 @@ z_diff = (z_vf - mu_cond) / std_cond
 
 p_exceed = 1 - norm.cdf(z_diff)  # shape: (n_time,)
 
-import pdb; pdb.set_trace()  # fmt: skip
+# import pdb; pdb.set_trace()  # fmt: skip
 
 
 # # Estimate expected v for future P_D values
@@ -550,5 +678,148 @@ import pdb; pdb.set_trace()  # fmt: skip
 #         expected_v.append(np.nan)
 
     
+#####################################################################
+#####################################################################
+
+# Build a null model for PGW hours
+
+'''
+Under the null hypothesis “sub-daily structure is unchanged”, an expected PGW hourly series can be generated by resampling CTRL hourly-fraction vectors and “pouring” each future day’s rain into them:
+
+for each wet PGW day k:
+    draw with replacement q* from {q(j)}CTRL
+    P̂_h_i (k) = q*_i · P_d_PGW(k)   for i = 1,…,24
+Do that N ≈ 500–1000 times to obtain a bootstrap ensemble of “CTRL-informed but PGW-scaled” hourly data.
+
+This captures:
+
+CTRL sub-daily variability
+PGW daily totals (mean shift, variance change, seasonality)
+Nothing else.'''
+
+#####################################################################
+#####################################################################
+
+# ---------------------------------------------------------------------
+# 0.  Handy aliases (adapt to your real names) -------------------------
+# ---------------------------------------------------------------------
+q_ctrl = rainfall_ratios.sel(exp='Present').stack(time_flat=('time',))
+q_ctrl = q_ctrl.assign_coords(
+    day=('time_flat', pd.to_datetime(rainfall_ratios.time.values).date),
+    hour=('time_flat', pd.to_datetime(rainfall_ratios.time.values).hour)
+)
+q_ctrl = q_ctrl.set_index(time_flat=['day', 'hour']).unstack('time_flat').transpose('day', 'hour', 'y', 'x')  
+                                                                        # (day, hour, y, x)  float32
+daily_pgw = ds_d.sel(exp='Future').rename({'time': 'day'})              # (day, y, x) masked ≤0.1 mm
+
+daily_pgw_hour = daily_pgw.broadcast_like(q_ctrl)   # (day,h,y,x)
+r_ctrl         = ds_h_masked_max                    # (day,y,x)    CTRL r
+h_pgw          = ds_h.sel(exp='Future')             # (time,y,x)
+r_pgw          = (h_pgw.groupby('time.day')
+                       .max()                       # daily max hour total
+                 / ds_d.sel(exp='Future'))          # / daily total
+
+NBOOT   = 500
+SUBSAMP = 50_000            # for KS/AD
+rng     = np.random.default_rng(123)
+nday = min(q_ctrl.sizes['day'], daily_pgw.sizes['day'])
+
+# ---------------------------------------------------------------------
+# 1.  Reference samples that never change -----------------------------
+# ---------------------------------------------------------------------
+h_pgw_all = h_pgw.stack(t=('time','y','x')).dropna('t')
+idx_ref   = rng.choice(h_pgw_all.sizes['t'], size=SUBSAMP, replace=False)
+sample_ref = h_pgw_all.isel(t=idx_ref).values.astype('float32')
+
+# ---------------------------------------------------------------------
+# 2.  Containers for bootstrap statistics -----------------------------
+# ---------------------------------------------------------------------
+boot_q99        = []
+boot_q999       = []
+boot_wetfreq    = []
+boot_r_median   = []
+boot_r_q95      = []
+boot_ks         = []
+boot_ad         = []
+
+# ---------------------------------------------------------------------
+# 3.  Bootstrap loop ---------------------------------------------------
+# ---------------------------------------------------------------------
+for b in range(NBOOT):
+    # (i)  resample CTRL days
+    day_idx = rng.integers(0, nday, size=nday)
+    q_samp = (q_ctrl.isel(day=day_idx).assign_coords(day=('day', np.arange(nday))))
+    pgw_samp = (daily_pgw_hour.assign_coords(day=q_samp.day))
+
+    # (ii) expected hourly PGW field
+    p_exp_h = q_samp * pgw_samp                      # lazy
+
+    # (iii) METRIC 1 – extreme quantiles ------------------
+    boot_q99 .append(p_exp_h.quantile(0.99 , dim=('day','hour')))
+    boot_q999.append(p_exp_h.quantile(0.999, dim=('day','hour')))
+
+    # (iv)  METRIC 2 – wet-hour frequency -----------------
+    nhours_wet = p_exp_h.notnull().sum(dim=('day','hour'))
+    nhours_all = xr.full_like(nhours_wet, p_exp_h.sizes['day']*24)
+    boot_wetfreq.append( (nhours_wet / nhours_all).astype('float32') )
+    # (v)   METRIC 3 – peak-hour ratio stats --------------
+    r_boot = (p_exp_h.max('hour') / daily_pgw_hour.assign_coords(day=q_samp.day)).astype('float32')
+    boot_r_median.append( r_boot.median(dim='day') )
+    boot_r_q95.append( r_boot.quantile(0.95 , dim='day') )
+
+    # (vi)  METRIC 4 – whole-CDF KS / AD ------------------
+    flat   = p_exp_h.stack(t=('day','hour','y','x')).dropna('t')
+    idx    = rng.choice(flat.sizes['t'], size=SUBSAMP, replace=False)
+    sample = flat.isel(t=idx).values.astype('float32')
+    ks_D, _  = stats.ks_2samp(sample_ref, sample)
+    ad_stat  = stats.anderson_ksamp([sample_ref, sample]).statistic
+    boot_ks.append(ks_D)
+    boot_ad.append(ad_stat)
+
+# ---------------------------------------------------------------------
+# 4.  Convert lists → xarray / numpy for easy maths -------------------
+# ---------------------------------------------------------------------
+boot_q99     = xr.concat(boot_q99    , dim='boot')
+boot_q999    = xr.concat(boot_q999   , dim='boot')
+boot_wetfreq = xr.concat(boot_wetfreq, dim='boot')
+boot_r_med   = xr.concat(boot_r_median, dim='boot')
+boot_r_q95   = xr.concat(boot_r_q95  , dim='boot')
+boot_ks      = np.asarray(boot_ks)
+boot_ad      = np.asarray(boot_ad)
+
+
+# Hourly quantiles
+q99_pgw  = h_pgw.quantile(0.99 , dim='time')
+q999_pgw = h_pgw.quantile(0.999, dim='time')
+
+# Wet-hour frequency
+wetfreq_pgw = h_pgw.notnull().sum(dim='time') / h_pgw.sizes['time']
+
+# Peak-hour ratio stats
+r_med_pgw = r_pgw.median(dim='day')
+r_q95_pgw = r_pgw.quantile(0.95 , dim='day')
+
+# Whole-CDF metrics were done in loop: ks_real, ad_real
+ks_real = boot_ks[-1]     # by construction: last slot = PGW itself
+ad_real = boot_ad[-1]
+boot_ks = boot_ks[:-1]    # drop the PGW entry for envelope calc
+boot_ad = boot_ad[:-1]
+
+lo = boot_q99.quantile(0.025, dim='boot')
+hi = boot_q99.quantile(0.975, dim='boot')
+sig_q99 = (q99_pgw < lo) | (q99_pgw > hi)          # boolean (y,x)
+
+#Do the same for q999, wetfreq, r_med, r_q95.
+
+p_ks = (np.sum(boot_ks >= ks_real) + 1) / (NBOOT + 1)
+p_ad = (np.sum(boot_ad >= ad_real) + 1) / (NBOOT + 1)
+
+
+
+print(f"KS statistic = {ks_real:.4f}  "
+      f"(95 % envelope {lo:.4f}–{hi:.4f})  "
+      f"=> {'COMPATIBLE' if compatible else 'NOT compatible'}")
+
+import pdb; pdb.set_trace()  # fmt: skip
 
 
