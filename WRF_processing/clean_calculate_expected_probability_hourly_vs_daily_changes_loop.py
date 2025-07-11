@@ -15,19 +15,16 @@
 import xarray as xr
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 import pickle
 import time
-from numba import njit, prange
-from scipy.ndimage import uniform_filter        # fast moving-window sum
-from tqdm.auto import tqdm                      # nice, notebook-friendly bar
 
 WET_VALUE = 0.1  # mm
 
 y_idx=258; x_idx=559 #1.01 km away from Palma University station 
 
 qs = xr.DataArray([0.50, 0.75, 0.90, 0.95, 0.99, 0.999], dims='q', name='quantile')
-
 
 # ###############################################################################
 # ##### FUNCTIONS
@@ -178,160 +175,98 @@ def calculate_wet_hour_intensity_distribution(ds_h_wet_days,
         wet_hours_distribution_bin [:, ibin, :, :, :] = hist_wethours.transpose("exp", "bin", "y", "x").data
 
     return hourly_distribution_bin, wet_hours_distribution_bin,samples_per_bin
-# ------------------------------------------------------------------
-# Fast square-window sum (reflective borders) → used to merge the
-# controls of the surrounding cells defined by `buffer`
-def _window_sum(arr, radius):
+
+def generate_hourly_synthetic(rain_daily: xr.DataArray,
+                              wet_hour_distribution_bin: np.ndarray,    # (n_daily_bins, 24, ny, nx)
+                              hourly_distribution_bin: np.ndarray,      # (n_daily_bins, n_hourly_bins, ny, nx)
+                              samples_per_bin: np.ndarray,               # (n_daily_bins, ny, nx)
+                              hrain_bins: np.ndarray,                   # (n_hourly_bins + 1,)
+                              drain_bins: np.ndarray,                   # (n_daily_bins + 1,)
+                              buffer: int = 1,                          
+                              n_samples: int = 10,
+                    ) -> xr.DataArray:
     """
-    Sliding-window *sum* over the last two spatial axes (ny, nx).
-    Works for both 3-D and 4-D arrays by building the size tuple at run-time.
+    Generate synthetic future hourly data based on CTRL data (relationship between hourly and daily rainfall).
+    Parameters:
+    - rain_daily: Daily rainfall data for the future period.
+    - wet_hour_distribution_bin: Distribution of wet hours for each daily bin.
+    - hourly_distribution_bin: Distribution of hourly rainfall for each daily bin.
+    - hrain_bins: Bins for hourly rainfall distribution.
+    - drain_bins: Bins for daily rainfall distribution.
+    - buffer: Buffer around the grid point to increase sample
+    - n_samples: Number of synthetic samples to generate.
+    Returns:
+    - Synthetic future hourly dataset.
     """
-    k = 2 * radius + 1
-    size = [1] * (arr.ndim - 2) + [k, k]   # e.g. (1,1,k,k) or (1,k,k)
-    return uniform_filter(arr, size=size, mode="nearest") * (k * k)
-
-# ------------------------------------------------------------------
-# ------------------------------------------------------------------
-@njit(parallel=True, fastmath=True)
-def _fill_hourly_sample(out_hourly,
-                        rain, bin_idx,
-                        wet_cdf, hour_cdf,
-                        hrain_edges,
-                        rng_state,          # one Generator
-                        iy0, iy1, ix0, ix1):
-
-    n_t, ny, nx = rain.shape
-
-    for iy in prange(iy0, iy1):
-        for ix in prange(ix0, ix1):
-
-            for t in range(n_t):
-                R = rain[t, iy, ix]
-                if R <= 0 or not np.isfinite(R):
-                    continue
-
-                b = bin_idx[t, iy, ix]
-                if b < 0:                  # no training data
-                    continue
-
-                # ---- 1. wet-hour count ------------------------------------------
-                cdf_wet = wet_cdf[b, :, iy, ix]        # 1-D (24,)
-                Nh = np.searchsorted(cdf_wet, rng_state.random()) + 1  # 1–24
-
-                # ---- 2. choose hourly-intensity bins ----------------------------
-                cdf_hr  = hour_cdf[b, :, iy, ix]       # 1-D (n_hourly_bins,)
-                idx_bins = np.empty(Nh, np.int64)
-                for k in range(Nh):
-                    idx_bins[k] = np.searchsorted(cdf_hr, rng_state.random())
-
-                # ---- 3. draw intensities inside each bin ------------------------
-                intens = np.empty(Nh, np.float32)
-                for k in range(Nh):
-                    lo  = hrain_edges[idx_bins[k]]
-                    hi  = hrain_edges[idx_bins[k] + 1]
-                    intens[k] = lo + (hi - lo) * rng_state.random()
-
-                s_int = intens.sum()
-                if s_int == 0.0:
-                    continue
-                values = R * intens / s_int
-
-                # ---- 4. scatter into the 24-h vector -------------------------------
-                # sample `Nh` unique hours without replacement (reservoir sampling)
-                sel = np.empty(Nh, np.int64)
-                filled = 0
-                for hour in range(24):
-                    remaining = 24 - hour
-                    needed    = Nh - filled
-                    if needed == 0:
-                        break
-                    # probability that we take this `hour`
-                    if rng_state.random() < needed / remaining:
-                        sel[filled] = hour
-                        filled += 1
-
-                tgt = out_hourly[t, iy, ix]          # view (24,)
-                tgt[:] = 0.0
-                for k in range(Nh):
-                    tgt[sel[k]] = values[k]
-
-
-
-
-# ------------------------------------------------------------------
-def generate_hourly_synthetic(
-        rain_daily: xr.DataArray,
-        wet_hour_distribution_bin: np.ndarray,
-        hourly_distribution_bin  : np.ndarray,
-        samples_per_bin          : np.ndarray,
-        hrain_bins               : np.ndarray,
-        drain_bins               : np.ndarray,
-        buffer: int = 1,
-        n_samples: int = 100,
-        seed: int | None = None,
-) -> xr.DataArray:
-    """
-    Fast (Numba-accelerated) replacement – progress bar shows samples × points.
-    """
-    # ---------- 1.  training data → compound distributions ----------
+    # --- flatten spatial dims for simple looping ---------------------------------
+    
     wet_hour_distribution_bin = np.nan_to_num(wet_hour_distribution_bin, nan=0.0)
-    hourly_distribution_bin   = np.nan_to_num(hourly_distribution_bin , nan=0.0)
+    hourly_distribution_bin = np.nan_to_num(hourly_distribution_bin, nan=0.0)
+    
+    weighted_wet_hour_distribution_bin = wet_hour_distribution_bin * samples_per_bin[:, np.newaxis, :, :]  # (n_daily_bins, 24, ny, nx)
+    weighted_hourly_distribution_bin = hourly_distribution_bin * samples_per_bin[:, np.newaxis, :, :]  # (n_daily_bins, n_hourly_bins, ny, nx)
+    
+    ntime = rain_daily.sizes["time"]
+    nx = rain_daily.sizes["x"]
+    ny = rain_daily.sizes["y"] 
+    hourly = np.zeros((n_samples, ntime, 24, ny, nx), dtype=np.float32)
 
-    weighted_wet_hour_distribution_bin = wet_hour_distribution_bin * samples_per_bin[:, np.newaxis, :, :]
-    weighted_hourly_distribution_bin   = hourly_distribution_bin   * samples_per_bin[:, np.newaxis, :, :]
+    for ix in range(0+buffer, rain_daily.sizes["x"]-buffer):
+        for iy in range(0+buffer, rain_daily.sizes["y"]-buffer):
+            
+            
+            compound_samples_per_bin = samples_per_bin[:, ix-buffer:ix+buffer+1, iy-buffer:iy+buffer+1].sum(axis=(1,2))
+            compound_wet_hour_distribution_bin = weighted_wet_hour_distribution_bin[:,:,ix-buffer:ix+buffer+1, iy-buffer:iy+buffer+1].sum(axis=(2,3))/compound_samples_per_bin[:,np.newaxis]
+            compound_hourly_distribution_bin = weighted_hourly_distribution_bin[:,:,ix-buffer:ix+buffer+1, iy-buffer:iy+buffer+1].sum(axis=(2,3))/compound_samples_per_bin[:,np.newaxis]
+            
+            rain = rain_daily.isel(y=iy, x=ix).values.squeeze()
+            bin_idx = np.digitize(rain, drain_bins) - 1
+            rng = np.random.default_rng()                           
 
-    comp_samp = _window_sum(samples_per_bin,          buffer)
-    comp_wWet = _window_sum(weighted_wet_hour_distribution_bin, buffer)
-    comp_wHr  = _window_sum(weighted_hourly_distribution_bin , buffer)
+            for s in tqdm(range(n_samples)):
+                for t in range(ntime):
+                    R = rain[t]
+                    if not np.isfinite(R) or R <= 0:
+                        continue
+                    
+                    b = bin_idx[t]
+                    if b < 0 or b >= compound_wet_hour_distribution_bin.shape[0]:
+                        continue
 
-    comp_wWet /= comp_samp[:, None]
-    comp_wHr  /= comp_samp[:, None]
+                    # 1. how many wet hours?
+                    Nh = rng.choice(np.arange(1, 25),
+                                    p=compound_wet_hour_distribution_bin[b])
+                    # 2. pick intensities
+                    idx_bins = rng.choice(len(hrain_bins) - 1,
+                                      size=Nh,
+                                      p=compound_hourly_distribution_bin[b])
+                    intensities = rng.uniform(hrain_bins[idx_bins],
+                                          hrain_bins[idx_bins + 1])                   
+                    # 3. rescale to the daily total
+                    values = R * intensities / intensities.sum()
 
-    wet_cdf  = np.cumsum(comp_wWet , axis=1).astype(np.float32, order="C")
-    hour_cdf = np.cumsum(comp_wHr  , axis=1).astype(np.float32, order="C")
+                    # 4. scatter into 24-hour vector
+                    hours = np.zeros(24, dtype=np.float32)
+                    hours[rng.choice(24, size=Nh, replace=False)] = values
+                    hourly[s, t, :, iy, ix] = hours
 
-    # ---------- 2.  drivers ----------
-    rain_arr = rain_daily.data.astype(np.float32, order="C")
-    bin_idx  = (np.digitize(rain_arr, drain_bins) - 1).astype(np.int16, order="C")
 
-    n_time, ny, nx = rain_arr.shape
-    hourly = np.zeros((n_samples, n_time, ny, nx, 24), dtype=np.float32)
+    # --- reshape and return ------------------------------------------------------ 
 
-    # inside-window bounds (skip the edge band defined by `buffer`)
-    ix0, ix1 = buffer, nx - buffer
-    iy0, iy1 = buffer, ny - buffer
-    n_pts = (ix1 - ix0) * (iy1 - iy0)
+    coords_out = {
+        "sample": np.arange(n_samples),
+        "time":   rain_daily["time"],
+        "hour":   np.arange(24),
+        "y":      rain_daily["y"],
+        "x":      rain_daily["x"],
+    }
 
-    # thread-safe RNGs
-    base_rng = np.random.default_rng(seed)
-    rng_pool = [np.random.Generator(np.random.PCG64(base_rng.integers(2**32)))
-                for _ in range(n_samples)]
+    return xr.DataArray(hourly,
+                        dims=("sample", "time", "hour", "y", "x"),
+                        coords=coords_out)
 
-    # ---------- 3.  main loop over samples with one tqdm -----------
-    with tqdm(total=n_samples * n_pts, desc="samples × points") as bar:
-        for s in range(n_samples):
-            _fill_hourly_sample(hourly[s],
-                                rain_arr, bin_idx,
-                                wet_cdf[..., iy0:iy1, ix0:ix1],
-                                hour_cdf[..., iy0:iy1, ix0:ix1],
-                                hrain_bins.astype(np.float32),
-                                rng_pool[s],
-                                iy0, iy1, ix0, ix1)
-            bar.update(n_pts)
-
-    # ---------- 4.  wrap back into xarray --------------------------
-    hourly = hourly.transpose(0, 1, 4, 2, 3)   # (sample, time, hour, y, x)
-    return xr.DataArray(
-        hourly,
-        dims=("sample", "time", "hour", "y", "x"),
-        coords=dict(
-            sample=np.arange(n_samples),
-            time=rain_daily.time,
-            hour=np.arange(24),
-            y=rain_daily.y,
-            x=rain_daily.x,
-        ),
-    )
+    
+    
 
 
 
@@ -505,9 +440,9 @@ gini_coeff_extreme = calculate_gini_coefficient(qt_ds_h_masked)
 print(f"Present: {np.nanmean(gini_coeff_extreme,axis=(1,2,3))[0]:.3f} \u00B1 {np.nanstd(gini_coeff_extreme,axis=(1,2,3))[0]:.3f} ")
 print(f"Future: {np.nanmean(gini_coeff_extreme,axis=(1,2,3))[1]:.3f} \u00B1 {np.nanstd(gini_coeff_extreme,axis=(1,2,3))[1]:.3f} ")
 
-###############################################################################
-##### STEP 2: Generate future synthetic future hourly data
-###############################################################################
+# ###############################################################################
+# ##### STEP 2: Generate future synthetic future hourly data
+# ###############################################################################
 
 
 # 2.1 Calculate the wet hour intensity distribution and other statistics for hourly rainfall
@@ -532,11 +467,8 @@ future_synthetic_ensemble = generate_hourly_synthetic(ds_d.sel(exp='Future'),
                                                         
 
 rainfall_probability = save_probability_data(hourly_distribution_bin, wet_hours_distribution_bin, samples_per_bin, drain_bins, hrain_bins)
-
-future_synthetic_ensemble = future_synthetic_ensemble.where(future_synthetic_ensemble>WET_VALUE).quantile(q=qs, dim='time', keep_attrs=True)
-future_synthetic_ensemble.to_netcdf("synthetic_future_hourly_rainfall_new.nc")
-end_time = time.time()
-print(f'======> DONE in {(end_time-start_time):.2f} seconds \n')
+import pdb; pdb.set_trace()  # fmt: skip
+future_synthetic_ensemble.to_netcdf("synthetic_future_hourly_rainfall_old.nc")
 # ###############################################################################
 # ##### STEP 3: Build a null model for PGW hours
 # ###############################################################################
@@ -567,9 +499,10 @@ q_ctrl = q_ctrl.assign_coords(
 
 q_ctrl = q_ctrl.set_index(time_flat=['day', 'hour']).unstack('time_flat').transpose('day', 'hour', 'y', 'x')
 
-
 end_time = time.time()
 print(f'======> DONE in {(end_time-start_time):.2f} seconds \n')
+
+
 
 
 # def main():
