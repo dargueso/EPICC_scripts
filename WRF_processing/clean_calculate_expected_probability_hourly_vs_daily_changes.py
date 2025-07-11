@@ -18,6 +18,7 @@ import pandas as pd
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import pickle
+import time
 
 WET_VALUE = 0.1  # mm
 
@@ -373,6 +374,8 @@ def save_probability_data(hourly_distribution_bin,
 # ##### STEP 0: Load and prepare data
 # ###############################################################################
 
+start_time = time.time()
+
 finp = xr.open_dataset(f'UIB_01H_RAIN_{y_idx}y-{x_idx}x_Present_large.nc')
 finf = xr.open_dataset(f'UIB_01H_RAIN_{y_idx}y-{x_idx}x_Future_large.nc')
 
@@ -460,11 +463,12 @@ future_synthetic_ensemble = generate_hourly_synthetic(ds_d.sel(exp='Future'),
                                                       hrain_bins = hrain_bins,
                                                       drain_bins = drain_bins,
                                                       buffer = 5,  # mm
-                                                      n_samples=5)
+                                                      n_samples=100)
                                                         
 
 rainfall_probability = save_probability_data(hourly_distribution_bin, wet_hours_distribution_bin, samples_per_bin, drain_bins, hrain_bins)
 
+future_synthetic_ensemble.to_netcdf("synthetic_future_hourly_rainfall_old.nc")
 # ###############################################################################
 # ##### STEP 3: Build a null model for PGW hours
 # ###############################################################################
@@ -494,6 +498,9 @@ q_ctrl = q_ctrl.assign_coords(
 )
 
 q_ctrl = q_ctrl.set_index(time_flat=['day', 'hour']).unstack('time_flat').transpose('day', 'hour', 'y', 'x')
+
+end_time = time.time()
+print(f'======> DONE in {(end_time-start_time):.2f} seconds \n')
 
 
 
