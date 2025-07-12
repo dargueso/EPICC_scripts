@@ -467,8 +467,12 @@ future_synthetic_ensemble = generate_hourly_synthetic(ds_d.sel(exp='Future'),
                                                         
 
 rainfall_probability = save_probability_data(hourly_distribution_bin, wet_hours_distribution_bin, samples_per_bin, drain_bins, hrain_bins)
-import pdb; pdb.set_trace()  # fmt: skip
+
+future_synthetic_ensemble = future_synthetic_ensemble.where(future_synthetic_ensemble>WET_VALUE).quantile(q=qs, dim='time', keep_attrs=True)
 future_synthetic_ensemble.to_netcdf("synthetic_future_hourly_rainfall_old.nc")
+
+end_time = time.time()
+print(f'======> DONE in {(end_time-start_time):.2f} seconds \n')
 # ###############################################################################
 # ##### STEP 3: Build a null model for PGW hours
 # ###############################################################################
