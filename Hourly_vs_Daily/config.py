@@ -3,11 +3,12 @@ import numpy as np
 
 y_idx = 258
 x_idx = 559
-WET_VALUE = 0.1  # mm
-drain_bins = np.arange(0, 105, 5)
+WET_VALUE_H = 0.1  # mm
+WET_VALUE_D = 1.0 # mm
+drain_bins = np.concatenate((np.arange(1, 10, 1), np.arange(10, 105, 5)))
 hrain_bins = np.concatenate((np.arange(0, 10, 1), np.arange(10, 105, 5)))
 buffer = 20
-n_samples = 1000
+n_samples = 10
 
 # Define quantiles for the analysis
 qs = np.array([0.50, 0.75, 0.90, 0.95, 0.99, 0.999], dtype=np.float32)

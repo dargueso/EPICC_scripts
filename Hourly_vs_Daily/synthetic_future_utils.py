@@ -1,6 +1,5 @@
 import xarray as xr
 import numpy as np
-from numba import njit, float32, prange 
 from scipy.ndimage import uniform_filter        # fast moving-window sum
 from tqdm.auto import tqdm    
 import config as cfg
@@ -186,7 +185,7 @@ def save_probability_data(hourly_distribution_bin,
     ds.to_netcdf(fout)
     return (ds)
 
-def _window_sum(arr, radius):
+def window_sum(arr, radius):
     """
     Sliding-window *sum* over the last two spatial axes (ny, nx).
     Works for both 3-D and 4-D arrays by building the size tuple at run-time.
@@ -195,190 +194,95 @@ def _window_sum(arr, radius):
     size = [1] * (arr.ndim - 2) + [k, k]   # e.g. (1,1,k,k) or (1,k,k)
     return uniform_filter(arr, size=size, mode="nearest") * (k * k)
 
+
 #####################################################################
-# NEW FUNCTIONS FOR TIME-BASED QUANTILES
 #####################################################################
 
-@njit(cache=True)
-def _arr_append(buf, val):
-    buf.append(val)          # buf is array('f')
 
-@njit(parallel=True, fastmath=True)
-def _sample_timestep_to_buffers(rain, bin_idx,
-                                wet_cdf, hour_cdf, hr_edges,
-                                thresh,
-                                buffers,             # typed-list
-                                iy0, iy1, ix0, ix1,
-                                rng_state):
+def generate_consistent_synthetic_data(rain_arr, wet_cdf, hour_cdf, bin_idx, 
+                                     hr_edges, iy0, iy1, ix0, ix1, n_time,
+                                     thresh=0.1, seed=None):
     """
-    Sample hourly values for each timestep and store in buffers.
-    Each buffer will contain a time series of maximum hourly values.
-    """
-    n_t = rain.shape[0]
-    width = ix1 - ix0
-    ncel = (iy1 - iy0) * width
-
-    for cid in prange(ncel):                 # flat prange
-        iy = iy0 + cid // width              # decode cell id
-        ix = ix0 + cid % width
-        buf = buffers[cid]                   # unique → no races
-
-        for t in range(n_t):
-            R = rain[t, iy, ix]
-            if R <= 0 or not np.isfinite(R):
-                continue
-            b = bin_idx[t, iy, ix]
-            if b < 0:
-                continue
-
-            # 1 ─ wet-hour count
-            Nh = np.searchsorted(wet_cdf[b, :, iy, ix],
-                                 rng_state.random()) + 1
-
-            # 2 ─ hourly-intensity bins
-            cdf_hr = hour_cdf[b, :, iy, ix]
-            idx_bins = np.empty(Nh, np.int64)
-            for k in range(Nh):
-                idx_bins[k] = np.searchsorted(cdf_hr, rng_state.random())
-
-            # 3 ─ intensities inside bins
-            intens = np.empty(Nh, np.float32)
-            for k in range(Nh):
-                lo = hr_edges[idx_bins[k]]
-                hi = hr_edges[idx_bins[k] + 1]
-                intens[k] = lo + (hi - lo) * rng_state.random()
-
-            s_int = intens.sum()
-            if s_int == 0.0:
-                continue
-            values = R * intens / s_int
-
-            # 4 ─ choose hours & store maximum value above threshold
-            sel = np.empty(Nh, np.int64)
-            filled = 0
-            for hour in range(24):
-                need = Nh - filled
-                if need == 0:
-                    break
-                if rng_state.random() < need / (24 - hour):
-                    sel[filled] = hour
-                    filled += 1
-
-            # Store the maximum hourly value for this timestep
-            max_val = float32(0.0)
-            for k in range(Nh):
-                v = values[k]
-                if v > thresh and v > max_val:
-                    max_val = v
-            
-            if max_val > thresh:
-                buf.append(max_val)
-
-def generate_hourly_values_per_timestep(
-        rain_arr,            # (time, ny, nx)  float32
-        wet_cdf, hour_cdf,   # cum-sums (ready)
-        bin_idx,             # (time, ny, nx)  int16
-        hr_edges,            # (n_hour_bins+1,)
-        buffers,             # list[array('f')]
-        iy0, iy1, ix0, ix1,
-        thresh=0.1,
-        seed=None):
-    """
-    Generate hourly values for each timestep and store time series in buffers.
-    Each buffer will contain the maximum hourly value for each day.
+    Generate synthetic hourly data consistently for both full data and quantiles.
+    Returns a list of arrays, one per cell, with values for each timestep.
     """
     rng = np.random.Generator(np.random.PCG64(seed))
-    
-    _sample_timestep_to_buffers(rain_arr, bin_idx,
-                               wet_cdf, hour_cdf, hr_edges,
-                               thresh,
-                               buffers,
-                               iy0, iy1, ix0, ix1,
-                               rng)
-
-# Keep the original function for backward compatibility
-def generate_hourly_quantiles_exact(
-        rain_arr,            # (time, ny, nx)  float32
-        wet_cdf, hour_cdf,   # cum-sums (ready)
-        bin_idx,             # (time, ny, nx)  int16
-        hr_edges,            # (n_hour_bins+1,)
-        buffers,             # list[array('f')]
-        iy0, iy1, ix0, ix1,
-        n_samples=100,
-        thresh=0.1,
-        seed=None):
-
-    base_rng = np.random.default_rng(seed)
-    for s in tqdm(range(n_samples), desc="samples"):
-        rng = np.random.Generator(
-            np.random.PCG64(base_rng.integers(2**32))
-        )
-        _sample_to_buffers_par(rain_arr, bin_idx,
-                               wet_cdf, hour_cdf, hrain_bins.astype(np.float32),
-                               thresh,
-                               buffers,
-                               iy0, iy1, ix0, ix1,
-                               rng)
-
-@njit(parallel=True, fastmath=True)
-def _sample_to_buffers_par(rain, bin_idx,
-                           wet_cdf, hour_cdf, hr_edges,
-                           thresh,
-                           buffers,             # typed-list
-                           iy0, iy1, ix0, ix1,
-                           rng_state):
-
-    n_t   = rain.shape[0]
+    n_t = rain_arr.shape[0]
     width = ix1 - ix0
-    ncel  = (iy1 - iy0) * width
+    n_cells = (iy1 - iy0) * width
+    
+    # Initialize data structure: one array per cell with n_time values
+    cell_data = []
+    for _ in range(n_cells):
+        cell_data.append(np.zeros(n_time, dtype=np.float32))
+    
+    # Generate data for each timestep
+    for t in range(n_t):
+        c = 0
+        for iy in range(iy0, iy1):
+            for ix in range(ix0, ix1):
+                R = rain_arr[t, iy, ix]
+                if R <= 0 or not np.isfinite(R):
+                    c += 1
+                    continue
+                    
+                b = bin_idx[t, iy, ix]
+                if b < 0:
+                    c += 1
+                    continue
 
-    for cid in prange(ncel):                 # flat prange
-        iy = iy0 + cid // width              # decode cell id
-        ix = ix0 + cid %  width
-        buf = buffers[cid]                   # unique → no races
+                # 1 - wet-hour count
+                Nh = np.searchsorted(wet_cdf[b, :, iy, ix], rng.random()) + 1
+                
+                # 2 - hourly-intensity bins
+                cdf_hr = hour_cdf[b, :, iy, ix]
+                idx_bins = np.empty(Nh, dtype=np.int64)
+                for k in range(Nh):
+                    idx_bins[k] = np.searchsorted(cdf_hr, rng.random())
 
-        for t in range(n_t):
-            R = rain[t, iy, ix]
-            if R <= 0 or not np.isfinite(R):
-                continue
-            b = bin_idx[t, iy, ix]
-            if b < 0:
-                continue
+                # 3 - intensities inside bins
+                intens = np.empty(Nh, dtype=np.float32)
+                for k in range(Nh):
+                    lo = hr_edges[idx_bins[k]]
+                    hi = hr_edges[idx_bins[k] + 1]
+                    intens[k] = lo + (hi - lo) * rng.random()
 
-            # 1 ─ wet-hour count
-            Nh = np.searchsorted(wet_cdf[b, :, iy, ix],
-                                 rng_state.random()) + 1
+                s_int = intens.sum()
+                if s_int == 0.0:
+                    c += 1
+                    continue
+                    
+                values = R * intens / s_int
+                
+                if np.any(values < thresh):
+                    values = values[values >= thresh]
+                    values *= R / values.sum()
+                    Nh = len(values)
+                    
 
-            # 2 ─ hourly-intensity bins
-            cdf_hr = hour_cdf[b, :, iy, ix]
-            idx_bins = np.empty(Nh, np.int64)
-            for k in range(Nh):
-                idx_bins[k] = np.searchsorted(cdf_hr, rng_state.random())
+                # 4 - choose hours & find maximum value above threshold
+                sel = np.empty(Nh, dtype=np.int64)
+                filled = 0
+                for hour in range(24):
+                    need = Nh - filled
+                    if need == 0:
+                        break
+                    if rng.random() < need / (24 - hour):
+                        sel[filled] = hour
+                        filled += 1
+                
 
-            # 3 ─ intensities inside bins
-            intens = np.empty(Nh, np.float32)
-            for k in range(Nh):
-                lo = hr_edges[idx_bins[k]]
-                hi = hr_edges[idx_bins[k] + 1]
-                intens[k] = lo + (hi - lo) * rng_state.random()
 
-            s_int = intens.sum()
-            if s_int == 0.0:
-                continue
-            values = R * intens / s_int
+                # Store the maximum hourly value for this timestep
+                max_val = np.max(values)
+                if max_val <= thresh:
+                    raise ValueError(f"Maximum value {max_val} below threshold {thresh} at timestep {t}, cell ({iy},{ix})")
+                
 
-            # 4 ─ choose hours & store > thresh
-            sel = np.empty(Nh, np.int64)
-            filled = 0
-            for hour in range(24):
-                need = Nh - filled
-                if need == 0:
-                    break
-                if rng_state.random() < need / (24 - hour):
-                    sel[filled] = hour
-                    filled += 1
+                # Store in cell data (0 if no wet value above threshold)
+                cell_data[c][t] = max_val if max_val > thresh else 0.0
+                
 
-            for k in range(Nh):
-                v = values[k]
-                if v > thresh:
-                    buf.append(float32(v))
+                c += 1
+    
+    return cell_data
