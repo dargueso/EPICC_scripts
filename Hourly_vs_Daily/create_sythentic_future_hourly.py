@@ -16,7 +16,7 @@ import config as cfg
 
 y_idx=cfg.y_idx
 x_idx=cfg.x_idx
-WET_VALUE_H = cfg.WET_VALUE  # mm
+WET_VALUE_H = cfg.WET_VALUE_H  # mm
 WET_VALUE_D = cfg.WET_VALUE_D  # mm
 qs = cfg.qs
 drain_bins = cfg.drain_bins
@@ -64,7 +64,8 @@ def main():
     
     # Get time dimension info
     n_time = rain_arr.shape[0]
-    time_coords = rain_daily_future.time
+    n_hours = n_time * 24
+    time_coords = pd.date_range(start=rain_daily_future.time[0].values, periods=n_hours, freq='H')
 
     # convert daily total to its bin index once so the kernel re-uses it fast
     bin_idx = (np.digitize(rain_arr, drain_bins) - 1).astype(np.int16)                                                                                    
@@ -98,7 +99,7 @@ def main():
     # ============================================================================
     
     # Full synthetic data array: (n_samples, n_time, ny, nx)
-    full_synthetic_data = np.zeros((n_samples, n_time, ny, nx), dtype=np.float32)
+    full_synthetic_data = np.zeros((n_samples, n_hours, ny, nx), dtype=np.float32)
     
     # Quantiles setup
     qs_values = np.array([0.50, 0.75, 0.90, 0.95, 0.99, 0.999], dtype=np.float32)
@@ -117,7 +118,6 @@ def main():
             rain_arr, wet_cdf, hour_cdf, bin_idx, 
             hrain_bins.astype(np.float32),
             iy0, iy1, ix0, ix1,
-            n_time,
             thresh=WET_VALUE_H,
             seed=123 + sample)
         
@@ -127,18 +127,11 @@ def main():
             for ix in range(ix0, ix1):
                 # Get all values for this cell across all timesteps
                 all_values = []
-
                 for t in range(n_time):
-                    value = timestep_data[c][t]
-                    if value > WET_VALUE_D:
-                        full_synthetic_data[sample, t, iy, ix] = value
-                        all_values.append(value)
-                
-                # Calculate quantiles from the same values used in full data
-                if len(all_values) > 0:
-                    result_quantiles[sample, :, iy, ix] = np.quantile(
-                        all_values, qs_values, method="linear")
-                
+
+                    value = timestep_data[c][t*24:(t+1)*24]
+                    if np.any(value) > WET_VALUE_H:
+                        full_synthetic_data[sample, t*24:(t+1)*24, iy, ix] = value
                 c += 1
 
     # ============================================================================
@@ -164,6 +157,9 @@ def main():
         }
     )
     
+
+    result_quantiles = future_synthetic_full.where(future_synthetic_full>WET_VALUE_H).quantile(q=qs, dim='time', keep_attrs=True).data
+    result_quantiles =  result_quantiles.transpose(1, 0, 2, 3)  # Reorder to (sample, quantile, y, x)
     # Quantiles
     future_synthetic_quant = xr.DataArray(
         result_quantiles,
@@ -190,7 +186,6 @@ def main():
     print("Saving quantiles...")
     future_synthetic_quant.to_netcdf('future_synthetic_quant_per_sample.nc')
     
-    import pdb; pdb.set_trace()  # fmt: skip
 
     # ============================================================================
     # Consistency check

@@ -6,7 +6,7 @@ import config as cfg
 
 y_idx=cfg.y_idx
 x_idx=cfg.x_idx
-WET_VALUE = cfg.WET_VALUE  # mm
+WET_VALUE = cfg.WET_VALUE_H  # mm
 drain_bins = cfg.drain_bins
 hrain_bins = cfg.hrain_bins
 buffer = cfg.buffer
@@ -200,7 +200,7 @@ def window_sum(arr, radius):
 
 
 def generate_consistent_synthetic_data(rain_arr, wet_cdf, hour_cdf, bin_idx, 
-                                     hr_edges, iy0, iy1, ix0, ix1, n_time,
+                                     hr_edges, iy0, iy1, ix0, ix1,
                                      thresh=0.1, seed=None):
     """
     Generate synthetic hourly data consistently for both full data and quantiles.
@@ -208,13 +208,14 @@ def generate_consistent_synthetic_data(rain_arr, wet_cdf, hour_cdf, bin_idx,
     """
     rng = np.random.Generator(np.random.PCG64(seed))
     n_t = rain_arr.shape[0]
+    n_hours = n_t * 24
     width = ix1 - ix0
     n_cells = (iy1 - iy0) * width
     
     # Initialize data structure: one array per cell with n_time values
     cell_data = []
     for _ in range(n_cells):
-        cell_data.append(np.zeros(n_time, dtype=np.float32))
+        cell_data.append(np.zeros(n_hours, dtype=np.float32))
     
     # Generate data for each timestep
     for t in range(n_t):
@@ -253,7 +254,8 @@ def generate_consistent_synthetic_data(rain_arr, wet_cdf, hour_cdf, bin_idx,
                     continue
                     
                 values = R * intens / s_int
-                
+                # if t == 20 and iy == 25 and ix == 25:
+                #     import pdb; pdb.set_trace()  # fmt: skip
                 if np.any(values < thresh):
                     values = values[values >= thresh]
                     values *= R / values.sum()
@@ -280,7 +282,9 @@ def generate_consistent_synthetic_data(rain_arr, wet_cdf, hour_cdf, bin_idx,
                 
 
                 # Store in cell data (0 if no wet value above threshold)
-                cell_data[c][t] = max_val if max_val > thresh else 0.0
+                values = np.pad(values, (0, 24 - len(values)), mode='constant')
+                cell_data[c][t*24:(t+1)*24] = values
+                #cell_data[c][t] = max_val if max_val > thresh else 0.0
                 
 
                 c += 1
