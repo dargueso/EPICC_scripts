@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 '''
-Modified version to calculate both full synthetic data and quantiles from the same generation
-This ensures consistency between the two outputs.
-Result shapes: 
-- Full data: (n_samples, time, y, x) 
-- Quantiles: (n_samples, quantile, y, x)
+Modified version to calculate quantiles along time dimension for each sample
+Result shape: (n_samples, quantile, y, x)
 '''
 
 import xarray as xr
@@ -12,6 +9,8 @@ import numpy as np
 import synthetic_future_utils as sf
 import time
 import pandas as pd
+from numba import njit, float32, prange 
+from numba.typed import List
 import config as cfg
 
 y_idx=cfg.y_idx
@@ -74,6 +73,15 @@ def main():
     iy0, iy1 = buffer, ny - buffer
     n_cells = (iy1 - iy0) * (ix1 - ix0)
 
+    # Modified: Create buffers for each sample, storing time series per cell
+    # Shape: [n_samples][n_cells][time_values]
+    sample_buffers = []
+    for sample in range(n_samples):
+        buffers = List()
+        for _ in range(n_cells):
+            buffers.append(List.empty_list(float32))
+        sample_buffers.append(buffers)
+
     wet_hour_dist_present = wet_hour_dist[0,:].squeeze()
     hourly_intensity_dist_present = hourly_intensity_dist[0,:].squeeze() 
     samples_per_bin_present = samples_per_bin[0,:].squeeze()
@@ -84,87 +92,54 @@ def main():
     whdp_weighted = wet_hour_dist_present * samples_per_bin_present[:, np.newaxis, :, :]
     hidp_weighted = hourly_intensity_dist_present * samples_per_bin_present[:, np.newaxis, :, :]
 
-    comp_samp = sf.window_sum(samples_per_bin_present, buffer)
-    comp_wWet = sf.window_sum(whdp_weighted, buffer)
-    comp_wHr = sf.window_sum(hidp_weighted, buffer)
+    comp_samp = sf._window_sum(samples_per_bin_present, buffer)
+    comp_wWet = sf._window_sum(whdp_weighted, buffer)
+    comp_wHr = sf._window_sum(hidp_weighted, buffer)
     comp_wWet /= comp_samp[:, None]
     comp_wHr /= comp_samp[:, None]
 
     wet_cdf = np.cumsum(comp_wWet, axis=1).astype(np.float32, order="C")
     hour_cdf = np.cumsum(comp_wHr, axis=1).astype(np.float32, order="C")
 
-    # ============================================================================
-    # Initialize arrays for both full data and quantiles
-    # ============================================================================
-    
-    # Full synthetic data array: (n_samples, n_time, ny, nx)
-    full_synthetic_data = np.zeros((n_samples, n_time, ny, nx), dtype=np.float32)
-    
-    # Quantiles setup
-    qs_values = np.array([0.50, 0.75, 0.90, 0.95, 0.99, 0.999], dtype=np.float32)
-    n_quantiles = len(qs_values)
-    result_quantiles = np.full((n_samples, n_quantiles, ny, nx), np.nan, dtype=np.float32)
-
-    # ============================================================================
-    # Generate synthetic data ONCE and populate both arrays
-    # ============================================================================
-    
+    # Generate synthetic data for each sample
     for sample in range(n_samples):
         print(f"Processing sample {sample + 1}/{n_samples}")
-        
-        # Generate data with full timestep tracking
-        timestep_data = sf.generate_consistent_synthetic_data(
+        sf.generate_dmax_hourly_values_per_timestep(
             rain_arr, wet_cdf, hour_cdf, bin_idx, 
             hrain_bins.astype(np.float32),
+            sample_buffers[sample],
             iy0, iy1, ix0, ix1,
-            n_time,
             thresh=WET_VALUE_H,
             seed=123 + sample)
-        
-        # Fill full data array and collect values for quantiles
+
+    # Calculate quantiles along time dimension for each sample and cell
+    qs_values = np.array([0.50, 0.75, 0.90, 0.95, 0.99, 0.999], dtype=np.float32)
+    n_quantiles = len(qs_values)
+    
+    # Result array: (n_samples, n_quantiles, ny, nx)
+    result_quantiles = np.full((n_samples, n_quantiles, ny, nx), np.nan, dtype=np.float32)
+    full_output = np.zeros((n_samples, n_time, ny, nx), dtype=np.float32)
+
+    for sample in range(n_samples):
+        print(f"Calculating quantiles for sample {sample + 1}/{n_samples}")
         c = 0
         for iy in range(iy0, iy1):
             for ix in range(ix0, ix1):
-                # Get all values for this cell across all timesteps
-                all_values = []
-
-                for t in range(n_time):
-                    value = timestep_data[c][t]
-                    if value > WET_VALUE_H:
-                        full_synthetic_data[sample, t, iy, ix] = value
-                        all_values.append(value)
+                # Get time series for this cell and sample
+                time_series = np.array(sample_buffers[sample][c], dtype=np.float32)
                 
-                # Calculate quantiles from the same values used in full data
-                if len(all_values) > 0:
-                    result_quantiles[sample, :, iy, ix] = np.quantile(
-                        all_values, qs_values, method="linear")
-                
+                # Only calculate quantiles if we have wet values
+                if len(time_series) > 0:
+                    # Filter values above WET_VALUE (should already be filtered, but double-check)
+                    wet_values = time_series[time_series > WET_VALUE_H]
+                    import pdb; pdb.set_trace()  # fmt: skip
+                    #full_output[sample,:,iy,ix] = time_series
+                    if len(wet_values) > 0:
+                        result_quantiles[sample, :, iy, ix] = np.quantile(
+                            wet_values, qs_values, method="linear")
                 c += 1
 
-    # ============================================================================
-    # Create xarray DataArrays and save results
-    # ============================================================================
-    
-    # Full synthetic data
-    future_synthetic_full = xr.DataArray(
-        full_synthetic_data,
-        dims=("sample", "time", "y", "x"),
-        coords=dict(
-            sample=np.arange(n_samples),
-            time=time_coords,
-            y=ds_d.y,
-            x=ds_d.x,
-        ),
-        attrs={
-            'description': 'Full synthetic future hourly rainfall data',
-            'units': 'mm/hour',
-            'wet_threshold_daily': WET_VALUE_D,
-            'wet_threshold_hourly': WET_VALUE_H,
-            'note': 'Daily maximum hourly values for each timestep'
-        }
-    )
-    
-    # Quantiles
+    # Create xarray DataArray with proper coordinates
     future_synthetic_quant = xr.DataArray(
         result_quantiles,
         dims=("sample", "quantile", "y", "x"),
@@ -179,55 +154,41 @@ def main():
             'units': 'mm/hour',
             'wet_threshold_daily': WET_VALUE_D,
             'wet_threshold_hourly': WET_VALUE_H,
-            'note': 'Quantiles calculated from the same data as full synthetic dataset'
+            'note': 'Quantiles calculated along time dimension for each sample, only for values > wet_threshold'
+        }
+    )
+
+    future_synthetic_dmax = xr.DataArray(
+        full_output,
+        dims=("sample", "time", "y", "x"),
+        coords=dict(
+            sample=np.arange(n_samples),
+            time=ds_d.time,
+            y=ds_d.y,
+            x=ds_d.x,
+        ),
+        attrs={
+            'description': 'Synthetic future daily maximum of hourly rainfall',
+            'units': 'mm/hour',
+            'wet_threshold_daily': WET_VALUE_D,
+            'wet_threshold_hourly': WET_VALUE_H,
+            'note': 'Daily maximum hourly values for each timestep, only for values > wet_threshold'
         }
     )
     
     # Save results
-    print("Saving full synthetic data...")
-    future_synthetic_full.to_netcdf('future_synthetic_full_data.nc')
-    
-    print("Saving quantiles...")
+    future_synthetic_dmax.to_netcdf('future_synthetic_dmax.nc')
     future_synthetic_quant.to_netcdf('future_synthetic_quant_per_sample.nc')
-    
+    future_synthetic_quant = future_synthetic_quant.rename({'quantile': 'qs_time'})    
+    future_synthetic_quant_confidence = future_synthetic_quant.quantile(q=[0.025, 0.975], dim='sample')
+    future_synthetic_quant_confidence.to_netcdf('future_synthetic_quant_confidence.nc')
 
-
-    # ============================================================================
-    # Consistency check
-    # ============================================================================
-    print("\n=== CONSISTENCY CHECK ===")
-    
-    # Check that quantiles match between the two datasets
-    for sample in range(min(3, n_samples)):  # Check first 3 samples
-        for iy in range(iy0, min(iy0+3, iy1)):  # Check first 3 cells
-            for ix in range(ix0, min(ix0+3, ix1)):
-                # Extract wet values from full data
-                full_wet_values = full_synthetic_data[sample, :, iy, ix]
-                full_wet_values = full_wet_values[full_wet_values > WET_VALUE_H]
-                
-                if len(full_wet_values) > 0:
-                    # Calculate quantiles from full data
-                    full_quantiles = np.quantile(full_wet_values, qs_values, method="linear")
-                    stored_quantiles = result_quantiles[sample, :, iy, ix]
-                    
-                    # Check if they match (within floating point precision)
-                    if np.allclose(full_quantiles, stored_quantiles, rtol=1e-6):
-                        print(f"✓ Sample {sample}, cell ({iy},{ix}): Quantiles match")
-                    else:
-                        print(f"✗ Sample {sample}, cell ({iy},{ix}): Quantiles MISMATCH!")
-                        print(f"  Full data quantiles: {full_quantiles}")
-                        print(f"  Stored quantiles: {stored_quantiles}")
-    
-    print(f"\nFull data shape: {future_synthetic_full.shape}")
-    print(f"Quantiles shape: {future_synthetic_quant.shape}")
-    print(f"Full data dimensions: {future_synthetic_full.dims}")
-    print(f"Quantiles dimensions: {future_synthetic_quant.dims}")
+    print(f"Result shape: {future_synthetic_quant.shape}")
+    print(f"Dimensions: {future_synthetic_quant.dims}")
     print(f"Quantiles: {qs_values}")
     
     end_time = time.time()
-    print(f'\n======> DONE in {(end_time-start_time):.2f} seconds')
-
-
+    print(f'======> DONE in {(end_time-start_time):.2f} seconds \n')
 
 if __name__ == "__main__":
     main()
