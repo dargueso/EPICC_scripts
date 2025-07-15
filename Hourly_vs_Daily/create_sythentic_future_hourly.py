@@ -25,40 +25,13 @@ n_samples = cfg.n_samples
 
 def main():
 
-    calc_distributions = True
     start_time = time.time()
-    finp = xr.open_dataset(f'UIB_01H_RAIN_{y_idx}y-{x_idx}x_Present_large.nc')
-    finf = xr.open_dataset(f'UIB_01H_RAIN_{y_idx}y-{x_idx}x_Future_large.nc')
+    finf = xr.open_dataset(f'UIB_DAY_RAIN_{y_idx}y-{x_idx}x_Future_large.nc')
 
-    finp = finp.RAIN.where(finp.RAIN > WET_VALUE_H, 0.0)  
-    finf = finf.RAIN.where(finf.RAIN > WET_VALUE_H, 0.0)
-
-    ds_h = xr.concat([finp, finf], dim=pd.Index(['Present', 'Future'], name='exp'))
-
-    ds_d = ds_h.resample(time='1D').sum()
-    ds_d = ds_d.where(ds_d > WET_VALUE_D)
-
-    wet_days = ds_d > WET_VALUE_D
-    wet_days_hourly = wet_days.reindex(time=ds_h.time, method='ffill')
-    ds_h_wet_days = ds_h.where(wet_days_hourly)
-    ds_hx_wet_days = ds_h_wet_days.resample(time='1D').max()
-
-    if calc_distributions:
-        wet_hour_fraction = ds_h_wet_days.where(ds_h_wet_days>0).resample(time='1D').count() / 24.0
-        wet_hour_fraction = wet_hour_fraction.where(wet_hour_fraction > 0.0)
-
-        hourly_intensity_dist, wet_hour_dist, samples_per_bin = sf.calculate_wet_hour_intensity_distribution(
-            ds_h_wet_days, ds_d, wet_hour_fraction,
-            drain_bins=drain_bins, hrain_bins=hrain_bins)
-        
-        rainfall_probability = sf.save_probability_data(
-            hourly_intensity_dist, wet_hour_dist, samples_per_bin, 
-            drain_bins, hrain_bins, fout='rainfall_probability_hourly_vs_daily.nc')                                                                                                                                
-    else:
-        rainfall_probability = xr.open_dataset('rainfall_probability_hourly_vs_daily.nc')                                                                                                                  
+    rainfall_probability = xr.open_dataset('rainfall_probability_hourly_vs_daily.nc')                                                                                                                  
     
     ## Calculation of synthetic future hourly data
-    rain_daily_future = ds_d.sel(exp='Future')       
+    rain_daily_future = finf.RAIN.where(finf.RAIN > WET_VALUE_D)
     rain_arr = rain_daily_future.data.astype(np.float32, order='C')
     
     # Get time dimension info
@@ -72,7 +45,6 @@ def main():
     ix0, ix1 = buffer, nx - buffer
     iy0, iy1 = buffer, ny - buffer
     n_cells = (iy1 - iy0) * (ix1 - ix0)
-
     # Modified: Create buffers for each sample, storing time series per cell
     # Shape: [n_samples][n_cells][time_values]
     sample_buffers = []
@@ -82,9 +54,9 @@ def main():
             buffers.append(List.empty_list(float32))
         sample_buffers.append(buffers)
 
-    wet_hour_dist_present = wet_hour_dist[0,:].squeeze()
-    hourly_intensity_dist_present = hourly_intensity_dist[0,:].squeeze() 
-    samples_per_bin_present = samples_per_bin[0,:].squeeze()
+    wet_hour_dist_present = rainfall_probability.wet_hours_distribution.data[0,:].squeeze()
+    hourly_intensity_dist_present = rainfall_probability.hourly_distribution.data[0,:].squeeze() 
+    samples_per_bin_present = rainfall_probability.samples_per_bin.data[0,:].squeeze()
 
     wet_hour_dist_present = np.nan_to_num(wet_hour_dist_present, nan=0.0)
     hourly_intensity_dist_present = np.nan_to_num(hourly_intensity_dist_present, nan=0.0)
@@ -132,8 +104,7 @@ def main():
                 if len(time_series) > 0:
                     # Filter values above WET_VALUE (should already be filtered, but double-check)
                     wet_values = time_series[time_series > WET_VALUE_H]
-                    import pdb; pdb.set_trace()  # fmt: skip
-                    #full_output[sample,:,iy,ix] = time_series
+                    full_output[sample,:,iy,ix] = time_series
                     if len(wet_values) > 0:
                         result_quantiles[sample, :, iy, ix] = np.quantile(
                             wet_values, qs_values, method="linear")
@@ -146,8 +117,8 @@ def main():
         coords=dict(
             sample=np.arange(n_samples),
             quantile=qs_values,
-            y=ds_d.y,
-            x=ds_d.x,
+            y=rain_daily_future.y,
+            x=rain_daily_future.x,
         ),
         attrs={
             'description': 'Synthetic future hourly rainfall quantiles per sample',
@@ -163,9 +134,9 @@ def main():
         dims=("sample", "time", "y", "x"),
         coords=dict(
             sample=np.arange(n_samples),
-            time=ds_d.time,
-            y=ds_d.y,
-            x=ds_d.x,
+            time=time_coords,
+            y=rain_daily_future.y,
+            x=rain_daily_future.x,
         ),
         attrs={
             'description': 'Synthetic future daily maximum of hourly rainfall',

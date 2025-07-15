@@ -198,7 +198,6 @@ def _window_sum(arr, radius):
 @njit(cache=True)
 def _arr_append(buf, val):
     buf.append(val)          # buf is array('f')
-
 @njit(parallel=True, fastmath=True)
 def _sample_timestep_to_buffers(rain, bin_idx,
                                 wet_cdf, hour_cdf, hr_edges,
@@ -209,6 +208,7 @@ def _sample_timestep_to_buffers(rain, bin_idx,
     """
     Sample hourly values for each timestep and store in buffers.
     Each buffer will contain a time series of maximum hourly values.
+    Now also records zeros so that every timestep is represented.
     """
     n_t = rain.shape[0]
     width = ix1 - ix0
@@ -222,9 +222,11 @@ def _sample_timestep_to_buffers(rain, bin_idx,
         for t in range(n_t):
             R = rain[t, iy, ix]
             if R <= 0 or not np.isfinite(R):
+                buf.append(0.0)              # ↲ store zero instead of skipping
                 continue
             b = bin_idx[t, iy, ix]
             if b < 0:
+                buf.append(0.0)              # ↲ store zero instead of skipping
                 continue
 
             # 1 ─ wet-hour count
@@ -246,6 +248,7 @@ def _sample_timestep_to_buffers(rain, bin_idx,
 
             s_int = intens.sum()
             if s_int == 0.0:
+                buf.append(0.0)              # ↲ store zero instead of skipping
                 continue
             values = R * intens / s_int
 
@@ -267,13 +270,8 @@ def _sample_timestep_to_buffers(rain, bin_idx,
 
             # Store the maximum hourly value for this timestep
             max_val = np.max(values)
-            # for k in range(Nh):
-            #     v = values[k]
-            #     if v > thresh and v > max_val:
-            #         max_val = v
-            
-            if max_val > thresh:
-                buf.append(max_val)
+            buf.append(max_val if max_val > thresh else 0.0)  # ↲ always write
+
 
 def generate_dmax_hourly_values_per_timestep(
         rain_arr,            # (time, ny, nx)  float32
