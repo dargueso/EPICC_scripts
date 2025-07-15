@@ -130,7 +130,7 @@ def main():
 
                 for t in range(n_time):
                     value = timestep_data[c][t]
-                    if value > WET_VALUE_D:
+                    if value > WET_VALUE_H:
                         full_synthetic_data[sample, t, iy, ix] = value
                         all_values.append(value)
                 

@@ -215,7 +215,7 @@ def generate_consistent_synthetic_data(rain_arr, wet_cdf, hour_cdf, bin_idx,
     # Initialize data structure: one array per cell with n_time values
     cell_data = []
     for _ in range(n_cells):
-        cell_data.append(np.zeros(n_time, dtype=np.float32))
+        cell_data.append(np.zeros(n_t, dtype=np.float32))
     
     # Generate data for each timestep
     for t in range(n_t):
