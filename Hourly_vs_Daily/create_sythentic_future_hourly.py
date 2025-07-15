@@ -16,7 +16,7 @@ import config as cfg
 
 y_idx=cfg.y_idx
 x_idx=cfg.x_idx
-WET_VALUE_H = cfg.WET_VALUE  # mm
+WET_VALUE_H = cfg.WET_VALUE_H  # mm
 WET_VALUE_D = cfg.WET_VALUE_D  # mm
 qs = cfg.qs
 drain_bins = cfg.drain_bins
