@@ -10,9 +10,9 @@ import synthetic_future_utils as sf
 import time
 import pandas as pd
 import config as cfg
+from glob import glob
 
-y_idx=cfg.y_idx
-x_idx=cfg.x_idx
+path_in = cfg.path_in
 WET_VALUE_H = cfg.WET_VALUE_H  # mm
 WET_VALUE_D = cfg.WET_VALUE_D  # mm
 qs = cfg.qs
@@ -21,13 +21,29 @@ hrain_bins = cfg.hrain_bins
 
 def main():
     start_time = time.time()
-    finp = xr.open_dataset(f'UIB_01H_RAIN_{y_idx}y-{x_idx}x_Present_large.nc')
-    finf = xr.open_dataset(f'UIB_01H_RAIN_{y_idx}y-{x_idx}x_Future_large.nc')
+    filesinp = sorted(glob(f'{cfg.path_in}/EPICC_2km_ERA5/UIB_01H_RAIN_????-??.nc'))
+    # filesinf = sorted(glob(f'{cfg.path_in}/EPICC_2km_ERA5_CMIP6anom/UIB_01H_RAIN_????-??.nc'))
+                      
+                      
+    # Open all files as a single dataset
+    finp = xr.open_mfdataset(
+        filesinp,
+        combine='by_coords',  # Assumes time coordinates align or continue across files
+        parallel=True,        # Enables Dask parallel reads (good for large datasets)
+        chunks={'time': 24}   # Optional: use chunking if you want to enable lazy loading
+    )
 
-    finp = finp.RAIN.where(finp.RAIN > WET_VALUE_H, 0.0)  
-    finf = finf.RAIN.where(finf.RAIN > WET_VALUE_H, 0.0)
+    # finf = xr.open_mfdataset(
+    #     filesinf,
+    #     combine='by_coords',  # Assumes time coordinates align or continue across files
+    #     parallel=True,        # Enables Dask parallel reads (good for large datasets)
+    #     chunks={'time': 24}   # Optional: use chunking if you want to enable lazy loading
+    # )
 
-    ds_h = xr.concat([finp, finf], dim=pd.Index(['Present', 'Future'], name='exp'))
+    ds_h = finp.RAIN.where(finp.RAIN > WET_VALUE_H, 0.0)  
+    # finf = finf.RAIN.where(finf.RAIN > WET_VALUE_H, 0.0)
+
+    # ds_h = xr.concat([finp, finf], dim=pd.Index(['Present', 'Future'], name='exp'))
 
     ds_d = ds_h.resample(time='1D').sum()
     ds_d = ds_d.where(ds_d > WET_VALUE_D)

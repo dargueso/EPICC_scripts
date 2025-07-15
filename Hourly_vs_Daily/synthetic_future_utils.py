@@ -5,8 +5,7 @@ from scipy.ndimage import uniform_filter        # fast moving-window sum
 from tqdm.auto import tqdm    
 import config as cfg
 
-y_idx=cfg.y_idx
-x_idx=cfg.x_idx
+
 drain_bins = cfg.drain_bins
 hrain_bins = cfg.hrain_bins
 buffer = cfg.buffer
@@ -27,18 +26,17 @@ def calculate_wet_hour_intensity_distribution(ds_h_wet_days,
     """
     Calculate the wet hour intensity distribution and other statistics for hourly rainfall.
     """
-    nexp = ds_h_wet_days.sizes['exp']
     ny = ds_h_wet_days.sizes['y']
     nx = ds_h_wet_days.sizes['x']
     nhbins = len(hrain_bins) - 1
     ndbins = len(drain_bins)
 
-    wet_hours_fraction = np.zeros((2,ndbins, ny, nx))
-    samples_per_bin = np.zeros((2,ndbins, ny, nx))
-    hourly_distribution_bin = np.zeros((nexp, ndbins, nhbins, ny, nx))
-    wet_hours_distribution_bin = np.zeros((nexp, ndbins, 24, ny, nx))
+    wet_hours_fraction = np.zeros((ndbins, ny, nx))
+    samples_per_bin = np.zeros((ndbins, ny, nx))
+    hourly_distribution_bin = np.zeros((ndbins, nhbins, ny, nx))
+    wet_hours_distribution_bin = np.zeros((ndbins, 24, ny, nx))
 
-    for ibin in range(ndbins):
+    for ibin in tqdm(range(ndbins), desc="Processing rainfall bins"):
         if ibin == ndbins-1:
             upper_bound = np.inf
         else:
@@ -50,8 +48,8 @@ def calculate_wet_hour_intensity_distribution(ds_h_wet_days,
         bin_ds_h_masked = ds_h_wet_days.where(bin_days_hourly)
 
         wet_hours = bin_ds_h_masked.where(bin_ds_h_masked > 0).count(dim=['time'])
-        wet_hours_fraction[:,ibin,:,:] = wet_hours / bin_days_hourly.sum(dim=['time'])
-        samples_per_bin[:,ibin,:,:] = np.sum(bin_days.values, axis=(1))
+        wet_hours_fraction[ibin,:,:] = wet_hours / bin_days_hourly.sum(dim=['time'])
+        samples_per_bin[ibin,:,:] = np.sum(bin_days.values, axis=(1))
         
         masked = bin_ds_h_masked.where(bin_ds_h_masked > 0)
 
@@ -65,7 +63,7 @@ def calculate_wet_hour_intensity_distribution(ds_h_wet_days,
             dask="parallelized" if isinstance(masked.data, xr.core.dataarray.DataArray) and hasattr(masked.data, 'chunks') else False,
             output_dtypes=[float],
         )
-        hourly_distribution_bin[:, ibin, :, :, :] = hist_hourint.transpose("exp", "bin", "y", "x").data
+        hourly_distribution_bin[ibin, :, :, :] = hist_hourint.transpose("bin", "y", "x").data
 
         masked_wethour = wet_hour_fraction.where(bin_days)* 24.0  # Convert to hours
 
@@ -80,7 +78,7 @@ def calculate_wet_hour_intensity_distribution(ds_h_wet_days,
             output_dtypes=[float],
         )
 
-        wet_hours_distribution_bin [:, ibin, :, :, :] = hist_wethours.transpose("exp", "bin", "y", "x").data
+        wet_hours_distribution_bin [ibin, :, :, :] = hist_wethours.transpose("bin", "y", "x").data
 
     return hourly_distribution_bin, wet_hours_distribution_bin, samples_per_bin
 
@@ -99,7 +97,6 @@ def save_probability_data(hourly_distribution_bin,
     drain_bin_edges = drain_bins                       # 11 edges, 0 … 50 mm
     hrain_bin_edges = hrain_bins                       # 21 edges, 0 … 100 mm
     hour_vec        = np.arange(1,25)                  # 1 … 24
-    exp_vec         = ['Present', 'Future']            # ['Present', 'Future']
     ny = hourly_distribution_bin.shape[3]  # number of y grid points
     nx = hourly_distribution_bin.shape[4]  # number of x grid points
 
@@ -112,9 +109,8 @@ def save_probability_data(hourly_distribution_bin,
     # ------------------------------------------------------------------
     hourly_da = xr.DataArray(
         data   = hourly_distribution_bin,              # shape (11, 20, 2)
-        dims   = ('experiment', 'drain_bin', 'hrain_bin','y', 'x'),
+        dims   = ('drain_bin', 'hrain_bin','y', 'x'),
         coords = {
-            'experiment': exp_vec,
             'drain_bin' : drain_bin_edges,             # mm
             'hrain_bin' : hrain_bin_mid,               # mm h⁻¹ (bin centres)
             'y': np.arange(ny),                # y grid points
@@ -126,9 +122,8 @@ def save_probability_data(hourly_distribution_bin,
 
     wet_hours_da = xr.DataArray(
         data   = wet_hours_distribution_bin,           # shape (11, 24, 2)
-        dims   = ('experiment','drain_bin', 'hour','y', 'x'),
+        dims   = ('drain_bin', 'hour','y', 'x'),
         coords = {
-            'experiment': exp_vec,
             'drain_bin' : drain_bin_edges,
             'hour'      : hour_vec,                    # 1 … 24 (local hour)
             'y': np.arange(ny),                # y grid points
@@ -140,10 +135,9 @@ def save_probability_data(hourly_distribution_bin,
 
     samples_da = xr.DataArray(
         data   = samples_per_bin,                      # shape (11, 2)
-        dims   = ('experiment', 'drain_bin', 'y', 'x'),
+        dims   = ( 'drain_bin', 'y', 'x'),
         coords = {
             'drain_bin' : drain_bin_edges,
-            'experiment': exp_vec,
             'y': np.arange(ny),                # y grid points
             'x': np.arange(nx)                 # x grid points
         },
@@ -161,7 +155,6 @@ def save_probability_data(hourly_distribution_bin,
             'samples_per_bin'       : samples_da
         },
         coords = {
-            'experiment': ('experiment', exp_vec),
             'drain_bin' : ('drain_bin', drain_bin_edges, {'units': 'mm'}),
             'hrain_bin' : ('hrain_bin', hrain_bin_mid,   {'units': 'mm h-1'}),
             'hour'      : ('hour', hour_vec),

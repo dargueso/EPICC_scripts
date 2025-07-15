@@ -1,8 +1,7 @@
 import xarray as xr
 import numpy as np
 
-y_idx = 258
-x_idx = 559
+path_in = '/home/dargueso/postprocessed/EPICC/'
 WET_VALUE_H = 0.1  # mm
 WET_VALUE_D = 1.0 # mm
 drain_bins = np.concatenate((np.arange(1, 10, 1), np.arange(10, 105, 5)))
