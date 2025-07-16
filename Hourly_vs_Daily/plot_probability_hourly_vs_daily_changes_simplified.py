@@ -18,7 +18,7 @@ import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
-
+import synthetic_future_utils as sf
 # ─── User settings ──────────────────────────────────────────────────────
 SCALE       = "linear"        # "linear" | "log"
 MASK_ZERO   = True             # mask exact‑zero cells
@@ -30,15 +30,48 @@ DATAFILE    = "rainfall_probability_hourly_vs_daily.nc"
 
 # ─── Load & pre‑process data ────────────────────────────────────────────
 ds          = xr.open_dataset(DATAFILE)
-wet_prob    = ds.wet_hours_distribution * 100.0       # probability in %
-int_prob   = ds.hourly_distribution * 100.0                  # probability in % 
+buffer= 25
+wet_hour_dist_present = ds.wet_hours_distribution.data
+hourly_intensity_dist_present = ds.hourly_distribution.data
+samples_per_bin_present = ds.samples_per_bin.data
+
+wet_hour_dist_present = np.nan_to_num(wet_hour_dist_present, nan=0.0)
+hourly_intensity_dist_present = np.nan_to_num(hourly_intensity_dist_present, nan=0.0)
+
+whdp_weighted = wet_hour_dist_present * samples_per_bin_present[:, :, np.newaxis, :, :]
+hidp_weighted = hourly_intensity_dist_present * samples_per_bin_present[:, :, np.newaxis, :, :]
+
+comp_samp = sf._window_sum(samples_per_bin_present, buffer)
+comp_wWet = sf._window_sum(whdp_weighted, buffer)
+comp_wHr = sf._window_sum(hidp_weighted, buffer)
+
+comp_wWet /= comp_samp[:, :, np.newaxis, :, :]
+comp_wHr /= comp_samp[:, :, np.newaxis, :, :]
+
+
 drain_edges = ds.drain_bin.values                     # 0, 5, 10 … mm
 hrain_edges = ds.hrain_bin.values                  # 0, 5, 10 … mm
 hour_vals   = ds.hour.values                          # 0 … 23
 bin_labels  = [f"{lo}–{lo+5}" for lo in drain_edges]
 hbin_centers = (hrain_edges[:-1] + hrain_edges[1:]) / 2.0
 
-import pdb; pdb.set_trace()  # fmt: skip
+
+wet_prob = xr.DataArray(
+    comp_wWet[:, :, :, 25, 25] * 100.0,
+    coords={"experiment":["Present", "Future"],"drain_bin": drain_edges, "hour": hour_vals},
+    dims=["experiment","drain_bin", "hour"],
+    name="wet_prob"
+)
+
+int_prob = xr.DataArray(
+    comp_wHr[:, :, :, 25, 25] * 100.0,
+    coords={"experiment":["Present", "Future"],"drain_bin": drain_edges, "hrain_bin": hrain_edges},
+    dims=["experiment","drain_bin", "hrain_bin"],
+    name="int_prob"
+)
+
+
+
 n_exp       = 2                                       # Present, Future
 n_panels    = n_exp + int(SHOW_DELTA)                 # +1 for Δ
 fig_width   = 21 if SHOW_DELTA else 14
