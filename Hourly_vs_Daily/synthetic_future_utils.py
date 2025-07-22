@@ -49,10 +49,17 @@ def calculate_wet_hour_intensity_distribution(ds_h_wet_days,
 
         wet_hours = bin_ds_h_masked.where(bin_ds_h_masked > 0).count(dim=['time'])
         wet_hours_fraction[ibin,:,:] = wet_hours / bin_days_hourly.sum(dim=['time'])
-        samples_per_bin[ibin,:,:] = np.sum(bin_days.values, axis=(1))
+        samples_per_bin[ibin,:,:] = np.sum(bin_days.values, axis=(0))
         
         masked = bin_ds_h_masked.where(bin_ds_h_masked > 0)
 
+        # Fix: Check if masked has chunks to determine if it's a dask array
+        use_dask = hasattr(masked.data, 'chunks') and masked.data.chunks is not None
+        
+        # If using dask, ensure time dimension is in a single chunk
+        if use_dask:
+            masked = masked.chunk(dict(time=-1))
+        
         hist_hourint = xr.apply_ufunc(
             compute_histogram,
             masked,
@@ -60,12 +67,22 @@ def calculate_wet_hour_intensity_distribution(ds_h_wet_days,
             output_core_dims=[["bin"]],
             kwargs={"bins": hrain_bins},
             vectorize=True,
-            dask="parallelized" if isinstance(masked.data, xr.core.dataarray.DataArray) and hasattr(masked.data, 'chunks') else False,
+            dask="parallelized" if use_dask else "forbidden",
             output_dtypes=[float],
+            dask_gufunc_kwargs={
+            "output_sizes": {"bin": len(hrain_bins) - 1}
+            } if use_dask else {},
         )
         hourly_distribution_bin[ibin, :, :, :] = hist_hourint.transpose("bin", "y", "x").data
 
         masked_wethour = wet_hour_fraction.where(bin_days)* 24.0  # Convert to hours
+
+        # Fix: Check if masked_wethour has chunks to determine if it's a dask array
+        use_dask_wethour = hasattr(masked_wethour.data, 'chunks') and masked_wethour.data.chunks is not None
+
+        # If using dask, ensure time dimension is in a single chunk
+        if use_dask_wethour:
+            masked_wethour = masked_wethour.chunk(dict(time=-1))
 
         hist_wethours = xr.apply_ufunc(
             compute_histogram,
@@ -74,8 +91,11 @@ def calculate_wet_hour_intensity_distribution(ds_h_wet_days,
             output_core_dims=[["bin"]],
             kwargs={"bins": np.arange(1, 26, 1)},
             vectorize=True,
-            dask="parallelized" if isinstance(masked_wethour.data, xr.core.dataarray.DataArray) and hasattr(masked_wethour.data, 'chunks') else False,
+            dask="parallelized" if use_dask_wethour else "forbidden",
             output_dtypes=[float],
+            dask_gufunc_kwargs={
+            "output_sizes": {"bin": 24}
+            } if use_dask_wethour else {},
         )
 
         wet_hours_distribution_bin [ibin, :, :, :] = hist_wethours.transpose("bin", "y", "x").data
@@ -97,8 +117,8 @@ def save_probability_data(hourly_distribution_bin,
     drain_bin_edges = drain_bins                       # 11 edges, 0 … 50 mm
     hrain_bin_edges = hrain_bins                       # 21 edges, 0 … 100 mm
     hour_vec        = np.arange(1,25)                  # 1 … 24
-    ny = hourly_distribution_bin.shape[3]  # number of y grid points
-    nx = hourly_distribution_bin.shape[4]  # number of x grid points
+    ny = hourly_distribution_bin.shape[2]  # Fix: changed from shape[3] to shape[2]
+    nx = hourly_distribution_bin.shape[3]  # Fix: changed from shape[4] to shape[3]
 
     # For the hourly-rain axis we usually want *bin centres*
     # rather than edges, so take the midpoint between each pair:
@@ -287,4 +307,3 @@ def generate_dmax_hourly_values_per_timestep(
                                buffers,
                                iy0, iy1, ix0, ix1,
                                rng)
-
