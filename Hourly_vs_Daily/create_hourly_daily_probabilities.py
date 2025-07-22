@@ -21,7 +21,8 @@ hrain_bins = cfg.hrain_bins
 
 def main():
     start_time = time.time()
-    filesinp = sorted(glob(f'{cfg.path_in}/EPICC_2km_ERA5/UIB_01H_RAIN_????-??.nc'))
+    filesinp = sorted(glob(f'{path_in}/EPICC_2km_ERA5/split_files_tiles_50_025buffer/UIB_01H_RAIN_20??-??_000y-000x_*.nc'))
+    #filesinp = sorted(glob(f'{cfg.path_in}/EPICC_2km_ERA5/UIB_01H_RAIN_????-??.nc'))
     # filesinf = sorted(glob(f'{cfg.path_in}/EPICC_2km_ERA5_CMIP6anom/UIB_01H_RAIN_????-??.nc'))
                       
                       
