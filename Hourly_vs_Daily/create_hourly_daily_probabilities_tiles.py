@@ -16,6 +16,7 @@ import xarray as xr
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
+from glob import glob
 
 import config as cfg
 import synthetic_future_utils as sf
@@ -24,65 +25,27 @@ import synthetic_future_utils as sf
 # User-configurable section
 # ---------------------------------------------------------------------
 # Pattern of your pre-split tile files  (edit if the path changes)
-pattern_tiles = (
-    "{path}/{wrun}/split_files_tiles_{tsize}_025buffer/"
-    "UIB_01H_RAIN_20??-??_{ytile}y-{xtile}x_025buffer.nc"
-)
+
 tile_size   = 50          # number of native gridpoints per tile
 buffer_lab  = "025buffer" # used only for output filenames
-N_JOBS      = 1         # parallel workers (set 1 to run serially)
+N_JOBS      = 20         # parallel workers (set 1 to run serially)
 
 # ---------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------
-def discover_tiles(path_template, wrun):
-    """
-    Scan disk for all available y/x tile IDs for a given experiment.
-    Returns a sorted list of (ytile, xtile) strings, e.g. ('000', '001').
-    """
-    # grab one month so we don’t list 120× the same tile names
-    sample_glob = (
-        f"{cfg.path_in}/{wrun}/split_files_tiles_{tile_size}_{buffer_lab}"
-        "/UIB_01H_RAIN_20??-01_*y-*x_*.nc"
-    )
-    tiles = set()
-    for fp in Path(cfg.path_in).glob(
-        f"{wrun}/split_files_tiles_{tile_size}_{buffer_lab}/UIB_01H_RAIN_20??-01_*y-*x_*.nc"
-    ):
-        m = re.search(r"_(\d{3})y-(\d{3})x_", fp.name)
-        if m:
-            tiles.add((m.group(1), m.group(2)))
-    return sorted(tiles)
 
 
-def build_file_list(wrun, ytile, xtile):
-    """Return the list of monthly NetCDFs belonging to one tile."""
-    pattern = pattern_tiles.format(
-        path=cfg.path_in,
-        wrun=wrun,
-        tsize=tile_size,
-        ytile=ytile,
-        xtile=xtile,
-    )
-    files = sorted(glob.glob(pattern))
-    print(f"[{wrun}] Found {len(files)} files for tile {ytile}y-{xtile}x")
-    return files
-
-
-def process_tile(wrun, ytile, xtile):
+def process_tile(filespath,ny, nx, wrun):
     """Worker function executed in parallel."""
-    files = build_file_list(wrun, ytile, xtile)
-    if not files:
-        print(f"[{wrun}] – no files found for tile {ytile}y-{xtile}x, skipping.")
-        return
+
+    filesin = sorted(glob(f'{filespath}_{ny}y-{nx}x.nc'))
+    print (f'Analyzing tile y: {ny} x: {nx}')
+    ds = xr.open_mfdataset(
+        filesin,
+        combine="by_coords"
+    )
 
     t0 = time.time()
-    ds = xr.open_mfdataset(
-        files,
-        combine="by_coords",
-        parallel=True,
-        chunks={"time": 24},  # keep memory small
-    )
 
     # ---------------- statistical core (unchanged) ------------------
     ds_h = ds.RAIN.where(ds.RAIN > cfg.WET_VALUE_H, 0.0)
@@ -125,16 +88,20 @@ def main():
     wrf_runs = ["EPICC_2km_ERA5", "EPICC_2km_ERA5_CMIP6anom"]
 
     for wrun in wrf_runs:
-        tiles = discover_tiles(pattern_tiles, wrun)
-        if not tiles:
-            raise RuntimeError(f"No tiles found for run {wrun}")
 
-        print(
-            f"[{wrun}] Found {len(tiles)} tiles – launching with {N_JOBS} jobs\n"
-        )
-        Parallel(n_jobs=N_JOBS)(
-            delayed(process_tile)(wrun, y, x) for y, x in tiles
-        )
+        filesin = sorted(glob(f'{cfg.path_in}/{wrun}/UIB_01H_RAIN_20??-??.nc'))
+        files_ref = xr.open_dataset(filesin[0])
+        nlats = files_ref.sizes['y']
+        nlons = files_ref.sizes['x']
+        lonsteps = [f'{nn:03d}' for nn in range(nlons//tile_size+1)]
+        latsteps = [f'{nn:03d}' for nn in range(nlats//tile_size+1)]
+
+        xytiles=list(product(latsteps, lonsteps))
+        filespath = f'{cfg.path_in}/{wrun}/split_files_tiles_50/UIB_01H_RAIN_20??-??'
+        print(f'Ej: {filespath}_000y-000x.nc')
+
+        Parallel(n_jobs=N_JOBS)(delayed(process_tile)(filespath,xytile[0],xytile[1],wrun) for xytile in xytiles)
+        
 
 
 if __name__ == "__main__":
