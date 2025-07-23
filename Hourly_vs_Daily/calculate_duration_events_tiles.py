@@ -27,7 +27,7 @@ from itertools import product
 # Pattern of your pre-split tile files  (edit if the path changes)
 
 tile_size   = 50          # number of native gridpoints per tile
-N_JOBS      = 1         # parallel workers (set 1 to run serially)
+N_JOBS      = 20         # parallel workers (set 1 to run serially)
 
 
 # ---------------------------------------------------------------------
