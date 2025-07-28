@@ -39,6 +39,7 @@ def process_tile(filespath,ny, nx, wrun):
     """Worker function executed in parallel."""
 
     filesin = sorted(glob(f'{filespath}_{ny}y-{nx}x.nc'))
+    print (f'Analyzing tile y: {ny} x: {nx}')
     finp = xr.open_mfdataset(
         filesin,
         combine="by_coords"
@@ -49,20 +50,60 @@ def process_tile(filespath,ny, nx, wrun):
   
     n_events, mean_duration, mean_intensity, srun = decompose_precipitation(finp.RAIN, cfg.WET_VALUE_H)
     totpr = finp.RAIN.where(finp.RAIN > cfg.WET_VALUE_H, 0.0).sum(dim='time') 
-  
+
+    peak_at_start = xr.apply_ufunc(
+    event_max_1d,
+    finp.RAIN,     # (time, y, x)
+    srun,              # (time, y, x)
+    input_core_dims=[['time'], ['time']],
+    output_core_dims=[['time']],
+    vectorize=True,        # loop in compiled NumPy, not Python
+    dask='parallelized',   # work on each dask block independently
+    output_dtypes=[finp.RAIN.dtype],
+    dask_gufunc_kwargs={'allow_rechunk': True}
+    ).transpose(*finp.RAIN.dims)
+
     #Build xarray dataset with results
     ds_results = xr.Dataset({
         'n_events': (['y','x'],n_events.data.squeeze()),
         'mean_duration': (['y','x'],mean_duration.data.squeeze()),
         'mean_intensity': (['y','x'],mean_intensity.data.squeeze()),
         'total_precipitation': (['y','x'],totpr.data.squeeze()),
-        #'srun': (['time','y','x'],  srun.data.squeeze().astype(bool)),
+        'srun': (['time','y','x'],  srun.data.squeeze().astype(bool)),
+        'peak_at_start': (['time','y','x'], peak_at_start.data.squeeze()),
         'lat':(['y','x'],lat),
         'lon':(['y','x'],lon),
         })
     
     fout = f"{cfg.path_out}/{wrun}/split_files_tiles_{tile_size}/Hourly_decomposition_NDI_{ny}y-{nx}x.nc"
     ds_results.to_netcdf(fout, mode='w', format='NETCDF4')
+
+
+    for seas in ['DJF','MAM','JJA','SON']:
+
+        fin_seas = finp.sel(time=finp.time.dt.season == seas)
+        n_events, mean_duration, mean_intensity, srun = decompose_precipitation(fin_seas.RAIN, cfg.WET_VALUE_H)
+        totpr = fin_seas.RAIN.where(fin_seas.RAIN > cfg.WET_VALUE_H, 0.0).sum(dim='time')
+
+        peak_at_start_seas = peak_at_start.sel(time=finp.time.dt.season == seas).mean(dim='time')
+
+
+        #Build xarray dataset with results
+        # Note: 'srun' is not calculated for seasonal data, as it is not needed
+
+        ds_seas = xr.Dataset({
+            'n_events': (['y','x'], n_events.data.squeeze()),
+            'mean_duration': (['y','x'], mean_duration.data.squeeze()),
+            'mean_intensity': (['y','x'], mean_intensity.data.squeeze()),
+            'total_precipitation': (['y','x'], totpr.data.squeeze()),
+            #'srun': (['time','y','x'], srun.data.squeeze().astype(bool)),
+            'peak_at_start': (['y','x'], peak_at_start_seas.data.squeeze()),
+            'lat':(['y','x'], lat),
+            'lon':(['y','x'], lon),
+        })
+        fout_seas = f"{cfg.path_out}/{wrun}/split_files_tiles_{tile_size}/Hourly_decomposition_NDI_{seas}_{ny}y-{nx}x.nc"
+        ds_seas.to_netcdf(fout_seas, mode='w', format='NETCDF4')
+         
     
 def decompose_precipitation(precipitation, wet_value):
 
@@ -72,8 +113,23 @@ def decompose_precipitation(precipitation, wet_value):
     mean_duration = srun.where(srun > 0).mean(dim='time')
     mean_intensity = precipitation.where(wet_hours).mean(dim='time')
 
-
     return n_events, mean_duration, mean_intensity, srun
+
+def event_max_1d(p, srun):
+    """
+    p   : precip  (time,)
+    srun : srun    (time,)  -- 0 except at event start where it holds length
+    returns a 1‑D array the same length as `time` whose non‑NaNs are
+    the max precip of the event and sit on the first hour of that event.
+    """
+    out = np.full_like(p, np.nan, dtype=float)
+
+    starts = np.where(srun > 0)[0]         # event beginnings
+    for i in starts:
+        L = int(srun[i])                   # duration in hours
+        if L:                             # be safe if srun contains zeros
+            out[i] = np.nanmax(p[i : i + L])
+    return out
 
 def simple_spell_duration(bool_array):
     """
@@ -107,11 +163,12 @@ def simple_spell_duration(bool_array):
         dask='parallelized',
         output_dtypes=[int],
         dask_gufunc_kwargs={'allow_rechunk': True}
-    ).transpose(*bool_array.dims)  
+    ).transpose(*bool_array.dims)    
+
 
 def main():
 
-    wrf_runs = ["EPICC_2km_ERA5"]#, "EPICC_2km_ERA5_CMIP6anom"]
+    wrf_runs = ["EPICC_2km_ERA5", "EPICC_2km_ERA5_CMIP6anom"]
 
     for wrun in wrf_runs:
 
