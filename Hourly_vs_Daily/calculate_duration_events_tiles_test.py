@@ -266,6 +266,52 @@ def process_tile(filespath,ny, nx, wrun):
     fout = f"{cfg.path_out}/{wrun}/split_files_tiles_{tile_size}/Hourly_decomposition_NDI_{ny}y-{nx}x.nc"
     ds_results.to_netcdf(fout, mode='w', format='NETCDF4')  
 
+    for seas in ['DJF','MAM','JJA','SON']:
+        # Calculate seasonal statistics
+        fin_seas = finp.sel(time=finp.time.dt.season == seas)
+        precipitation = fin_seas.RAIN.where(fin_seas.RAIN>cfg.WET_VALUE_H, 0.0)
+        wet_hours = precipitation > cfg.WET_VALUE_H
+        srun_seas = srun.sel(time=fin_seas.time)
+        n_events_seas = srun_seas.where(srun_seas > 0).count(dim='time')
+        mean_duration_seas = srun_seas.where(srun_seas > 0).mean(dim='time')
+        mean_intensity_seas = precipitation.where(wet_hours).mean(dim='time')
+        totpr_seas = precipitation.where(wet_hours, 0.0).sum(dim='time')
+        peak_at_start, cumul_at_start = max_cumul_at_start(precipitation, srun_seas)
+        peak_at_start = peak_at_start.transpose(*precipitation.dims)
+        cumul_at_start = cumul_at_start.transpose(*precipitation.dims)
+        top_vals_peak, top_idx_peak, top_times_peak = top_k_precip(peak_at_start, k=100)
+        top_vals_cumul, top_idx_cumul, top_times_cumul = top_k_precip(cumul_at_start, k=100)
+
+        top_duration_cumul = srun_seas.isel(time=top_idx_cumul)
+        top_duration_peak = srun_seas.isel(time=top_idx_peak)
+
+        ds_stats = xr.Dataset({
+            'cumul': (['event','y','x'], top_vals_cumul.data.squeeze()),
+            'cumul_duration': (['event','y','x'], top_duration_cumul.data.squeeze()),
+            'cumul_time': (['event','y','x'], top_times_cumul.data.squeeze()),
+            'peak': (['event','y','x'], top_vals_peak.data.squeeze()),
+            'peak_duration': (['event','y','x'], top_duration_peak.data.squeeze()),
+            'peak_time': (['event','y','x'], top_times_peak.data.squeeze()),
+            'lat':(['y','x'],lat),
+            'lon':(['y','x'],lon),
+        })
+
+
+        fout = f"{cfg.path_out}/{wrun}/split_files_tiles_{tile_size}/Hourly_decomposition_top100_NDI_{seas}_{ny}y-{nx}x.nc"
+        ds_stats.to_netcdf(fout, mode='w', format='NETCDF4')
+
+        ds_results = xr.Dataset({
+            'n_events': (['y','x'],n_events_seas.data.squeeze()),
+            'mean_duration': (['y','x'],mean_duration_seas.data.squeeze()),
+            'mean_intensity': (['y','x'],mean_intensity_seas.data.squeeze()),
+            'total_precipitation': (['y','x'],totpr_seas.data.squeeze()),
+            'peak_at_start': (['y','x'], peak_at_start.mean(dim='time').data.squeeze()),
+            'lat':(['y','x'],lat),
+            'lon':(['y','x'],lon),
+            })
+        
+        fout = f"{cfg.path_out}/{wrun}/split_files_tiles_{tile_size}/Hourly_decomposition_NDI_{seas}_{ny}y-{nx}x.nc"
+        ds_results.to_netcdf(fout, mode='w', format='NETCDF4')  
 
 
 def main():
