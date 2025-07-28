@@ -27,12 +27,181 @@ from itertools import product
 # Pattern of your pre-split tile files  (edit if the path changes)
 
 tile_size   = 50          # number of native gridpoints per tile
-N_JOBS      = 20         # parallel workers (set 1 to run serially)
+N_JOBS      = 10         # parallel workers (set 1 to run serially)
+
 
 
 # ---------------------------------------------------------------------
-# Internal helpers
+# Calculation of spell lengths
 # ---------------------------------------------------------------------
+
+
+# ────────────────────────────────────────────────────────────────────
+# Optional: Numba for C‑speed.  We fall back gracefully if it’s absent.
+# ────────────────────────────────────────────────────────────────────
+try:
+    from numba import njit
+except ImportError:                # keep the exact call signature
+    def njit(*args, **kwargs):
+        def wrapper(func):         # noqa: D401
+            return func            # no‑op decorator
+        return wrapper
+
+
+@njit
+def _spells_1d(a):
+    """
+    Inner kernel: for a 1‑D boolean array *a*, return an int32 array
+    with spell lengths at the start of each True run, zeros elsewhere.
+    """
+    n = a.size
+    out = np.zeros(n, dtype=np.int32)
+    i = 0
+    while i < n:
+        if a[i]:
+            j = i + 1
+            while j < n and a[j]:
+                j += 1
+            out[i] = j - i         # inclusive length
+            i = j                  # skip to end of run
+        else:
+            i += 1
+    return out
+
+
+def spells_at_start(da: xr.DataArray, *, dim: str = "time") -> xr.DataArray:
+    """
+    Compute spell lengths along *dim* of a 3‑D boolean DataArray.
+
+    Parameters
+    ----------
+    da  : xr.DataArray
+        Boolean DataArray shaped (time, y, x) (name of *dim* can vary).
+    dim : str, default "time"
+        Dimension along which to measure spells.
+
+    Returns
+    -------
+    xr.DataArray
+        Same shape/dtype=int32: spell length at spell start, 0 elsewhere.
+
+    Notes
+    -----
+    * Works with dask‑backed arrays—the kernel is applied
+      chunk‑wise and then reassembled.
+    * If Numba is installed the inner loop runs close to C speed.
+    """
+    if da.dtype != bool:
+        da = da.astype(bool)
+
+    return xr.apply_ufunc(
+        _spells_1d,
+        da,
+        input_core_dims=[[dim]],
+        output_core_dims=[[dim]],
+        vectorize=True,           # broadcasts over the (y, x) plane
+        dask="parallelized",      # keep lazy when da is dask‑backed
+        output_dtypes=[np.int32],
+        dask_gufunc_kwargs={'allow_rechunk': True}
+    ).transpose(*da.dims)
+
+def event_max_cumul_1d(p, srun):
+    """
+    p   : precip  (time,)
+    srun : srun    (time,)  -- 0 except at event start where it holds length
+    returns a 1‑D array the same length as `time` whose non‑NaNs are
+    the max precip of the event and sit on the first hour of that event.
+    """
+    out_max = np.full_like(p, np.nan, dtype=float)
+    out_cumul = np.full_like(p, np.nan, dtype=float)
+
+    starts = np.where(srun > 0)[0]         # event beginnings
+    for i in starts:
+        L = int(srun[i])                   # duration in hours
+        if L:                             # be safe if srun contains zeros
+            out_max[i] = np.nanmax(p[i : i + L])
+            out_cumul[i] = np.nansum(p[i : i + L])
+    return out_max, out_cumul
+
+def max_cumul_at_start(precipitation, srun):
+
+    return xr.apply_ufunc(
+        event_max_cumul_1d,
+        precipitation,
+        srun,
+        input_core_dims=[['time'], ['time']],
+        output_core_dims=[['time'], ['time']],
+        vectorize=True,
+        dask='parallelized',
+        output_dtypes=[precipitation.dtype, precipitation.dtype],
+        dask_gufunc_kwargs={'allow_rechunk': True}
+    )
+
+# -----------------------------------------------------------------------
+def top_k_precip(
+    precip: xr.DataArray,
+    k: int = 100,
+    *,
+    time_dim: str = "time",
+) -> tuple[xr.DataArray, xr.DataArray, xr.DataArray]:
+    """
+    Extract the k largest precipitation values per grid‑cell along *time*.
+
+    Parameters
+    ----------
+    precip   : xr.DataArray
+        3‑D array (time, y, x) of precipitation values.
+    k        : int, default 100
+        Number of largest values to keep.
+    time_dim : str, default "time"
+        Name of the time dimension in *precip*.
+
+    Returns
+    -------
+    top_vals  : xr.DataArray  (rank, y, x)
+        The k largest values, sorted descending.
+    top_idx   : xr.DataArray  (rank, y, x)
+        Integer indices along the *time* axis of those values.
+    top_times : xr.DataArray  (rank, y, x)
+        Datetime64 (or whatever coordinates) corresponding to *top_idx*.
+    """
+    if precip.ndim != 3 or precip.dims[0] != time_dim:
+        raise ValueError("precip must be (time, y, x) with time as first dim")
+
+    arr = precip.data                        # numpy or dask array
+    T, Y, X = arr.shape
+    k = min(k, T)                            # can’t take more than T
+
+    # ---- 1. argpartition gives us the k largest indices, unordered ----
+    idx_part = np.argpartition(-arr, k - 1, axis=0)[:k, :, :]  # (k, Y, X)
+
+    # ---- 2. gather the corresponding values --------------------------
+    val_part = np.take_along_axis(arr, idx_part, axis=0)        # (k, Y, X)
+
+    # ---- 3. sort the k‑block so values are descending ---------------
+    order = np.argsort(-val_part, axis=0)                       # (k, Y, X)
+    top_idx  = np.take_along_axis(idx_part, order, axis=0)
+    top_vals = np.take_along_axis(val_part, order, axis=0)
+
+    # ---- 4. map indices → timestamps --------------------------------
+    time_coord = precip[time_dim].values                        # (T,)
+    top_times = time_coord[top_idx]                             # (k, Y, X)
+
+    # ---- 5. wrap results back into DataArrays -----------------------
+    rank = np.arange(k)
+    dims_out = ("event",) + precip.dims[1:]                      # ('event', 'y', 'x')
+    coords = {
+        "event": rank,
+        precip.dims[1]: precip.coords[precip.dims[1]],
+        precip.dims[2]: precip.coords[precip.dims[2]],
+    }
+
+    top_vals_da  = xr.DataArray(top_vals,  dims=dims_out, coords=coords, name="top_values")
+    top_idx_da   = xr.DataArray(top_idx,   dims=dims_out, coords=coords, name="time_index")
+    top_times_da = xr.DataArray(top_times, dims=dims_out, coords=coords, name="time")
+
+    return top_vals_da, top_idx_da, top_times_da
+
 
 
 def process_tile(filespath,ny, nx, wrun):
@@ -47,21 +216,41 @@ def process_tile(filespath,ny, nx, wrun):
 
     lat = finp.lat.isel(time=0).data.squeeze()
     lon = finp.lon.isel(time=0).data.squeeze()
-  
-    n_events, mean_duration, mean_intensity, srun = decompose_precipitation(finp.RAIN, cfg.WET_VALUE_H)
-    totpr = finp.RAIN.where(finp.RAIN > cfg.WET_VALUE_H, 0.0).sum(dim='time') 
 
-    peak_at_start = xr.apply_ufunc(
-    event_max_1d,
-    finp.RAIN,     # (time, y, x)
-    srun,              # (time, y, x)
-    input_core_dims=[['time'], ['time']],
-    output_core_dims=[['time']],
-    vectorize=True,        # loop in compiled NumPy, not Python
-    dask='parallelized',   # work on each dask block independently
-    output_dtypes=[finp.RAIN.dtype],
-    dask_gufunc_kwargs={'allow_rechunk': True}
-    ).transpose(*finp.RAIN.dims)
+    precipitation = finp.RAIN.where(finp.RAIN>cfg.WET_VALUE_H, 0.0)
+    wet_hours = precipitation > cfg.WET_VALUE_H
+    srun = spells_at_start(wet_hours, dim='time')
+
+    n_events = srun.where(srun > 0).count(dim='time')
+    mean_duration = srun.where(srun > 0).mean(dim='time')
+    mean_intensity = precipitation.where(wet_hours).mean(dim='time')
+    totpr = precipitation.where(wet_hours, 0.0).sum(dim='time')
+
+    peak_at_start, cumul_at_start = max_cumul_at_start(precipitation, srun)
+    peak_at_start = peak_at_start.transpose(*precipitation.dims)
+    cumul_at_start = cumul_at_start.transpose(*precipitation.dims)
+
+    # precip:  (time, y, x) DataArray
+    top_vals_peak, top_idx_peak, top_times_peak = top_k_precip(peak_at_start, k=100)
+    top_vals_cumul, top_idx_cumul, top_times_cumul = top_k_precip(cumul_at_start, k=100)
+
+    top_duration_cumul = srun.isel(time=top_idx_cumul)
+    top_duration_peak = srun.isel(time=top_idx_peak)
+
+
+    ds_stats = xr.Dataset({
+        'cumul': (['event','y','x'], top_vals_cumul.data.squeeze()),
+        'cumul_duration': (['event','y','x'], top_duration_cumul.data.squeeze()),
+        'cumul_time': (['event','y','x'], top_times_cumul.data.squeeze()),
+        'peak': (['event','y','x'], top_vals_peak.data.squeeze()),
+        'peak_duration': (['event','y','x'], top_duration_peak.data.squeeze()),
+        'peak_time': (['event','y','x'], top_times_peak.data.squeeze()),
+        'lat':(['y','x'],lat),
+        'lon':(['y','x'],lon),
+        })
+
+    fout = f"{cfg.path_out}/{wrun}/split_files_tiles_{tile_size}/Hourly_decomposition_top100_NDI_{ny}y-{nx}x.nc"
+    ds_stats.to_netcdf(fout, mode='w', format='NETCDF4')
 
     #Build xarray dataset with results
     ds_results = xr.Dataset({
@@ -69,101 +258,60 @@ def process_tile(filespath,ny, nx, wrun):
         'mean_duration': (['y','x'],mean_duration.data.squeeze()),
         'mean_intensity': (['y','x'],mean_intensity.data.squeeze()),
         'total_precipitation': (['y','x'],totpr.data.squeeze()),
-        'srun': (['time','y','x'],  srun.data.squeeze().astype(bool)),
-        'peak_at_start': (['time','y','x'], peak_at_start.data.squeeze()),
+        'peak_at_start': (['y','x'], peak_at_start.mean(dim='time').data.squeeze()),
         'lat':(['y','x'],lat),
         'lon':(['y','x'],lon),
         })
     
     fout = f"{cfg.path_out}/{wrun}/split_files_tiles_{tile_size}/Hourly_decomposition_NDI_{ny}y-{nx}x.nc"
-    ds_results.to_netcdf(fout, mode='w', format='NETCDF4')
-
+    ds_results.to_netcdf(fout, mode='w', format='NETCDF4')  
 
     for seas in ['DJF','MAM','JJA','SON']:
-
+        # Calculate seasonal statistics
         fin_seas = finp.sel(time=finp.time.dt.season == seas)
-        n_events, mean_duration, mean_intensity, srun = decompose_precipitation(fin_seas.RAIN, cfg.WET_VALUE_H)
-        totpr = fin_seas.RAIN.where(fin_seas.RAIN > cfg.WET_VALUE_H, 0.0).sum(dim='time')
+        precipitation = fin_seas.RAIN.where(fin_seas.RAIN>cfg.WET_VALUE_H, 0.0)
+        wet_hours = precipitation > cfg.WET_VALUE_H
+        srun_seas = srun.sel(time=fin_seas.time)
+        n_events_seas = srun_seas.where(srun_seas > 0).count(dim='time')
+        mean_duration_seas = srun_seas.where(srun_seas > 0).mean(dim='time')
+        mean_intensity_seas = precipitation.where(wet_hours).mean(dim='time')
+        totpr_seas = precipitation.where(wet_hours, 0.0).sum(dim='time')
+        peak_at_start, cumul_at_start = max_cumul_at_start(precipitation, srun_seas)
+        peak_at_start = peak_at_start.transpose(*precipitation.dims)
+        cumul_at_start = cumul_at_start.transpose(*precipitation.dims)
+        top_vals_peak, top_idx_peak, top_times_peak = top_k_precip(peak_at_start, k=100)
+        top_vals_cumul, top_idx_cumul, top_times_cumul = top_k_precip(cumul_at_start, k=100)
 
-        peak_at_start_seas = peak_at_start.sel(time=finp.time.dt.season == seas).mean(dim='time')
+        top_duration_cumul = srun_seas.isel(time=top_idx_cumul)
+        top_duration_peak = srun_seas.isel(time=top_idx_peak)
 
-
-        #Build xarray dataset with results
-        # Note: 'srun' is not calculated for seasonal data, as it is not needed
-
-        ds_seas = xr.Dataset({
-            'n_events': (['y','x'], n_events.data.squeeze()),
-            'mean_duration': (['y','x'], mean_duration.data.squeeze()),
-            'mean_intensity': (['y','x'], mean_intensity.data.squeeze()),
-            'total_precipitation': (['y','x'], totpr.data.squeeze()),
-            #'srun': (['time','y','x'], srun.data.squeeze().astype(bool)),
-            'peak_at_start': (['y','x'], peak_at_start_seas.data.squeeze()),
-            'lat':(['y','x'], lat),
-            'lon':(['y','x'], lon),
+        ds_stats = xr.Dataset({
+            'cumul': (['event','y','x'], top_vals_cumul.data.squeeze()),
+            'cumul_duration': (['event','y','x'], top_duration_cumul.data.squeeze()),
+            'cumul_time': (['event','y','x'], top_times_cumul.data.squeeze()),
+            'peak': (['event','y','x'], top_vals_peak.data.squeeze()),
+            'peak_duration': (['event','y','x'], top_duration_peak.data.squeeze()),
+            'peak_time': (['event','y','x'], top_times_peak.data.squeeze()),
+            'lat':(['y','x'],lat),
+            'lon':(['y','x'],lon),
         })
-        fout_seas = f"{cfg.path_out}/{wrun}/split_files_tiles_{tile_size}/Hourly_decomposition_NDI_{seas}_{ny}y-{nx}x.nc"
-        ds_seas.to_netcdf(fout_seas, mode='w', format='NETCDF4')
-         
-    
-def decompose_precipitation(precipitation, wet_value):
 
-    wet_hours = precipitation > wet_value
-    srun = simple_spell_duration(wet_hours)
-    n_events = srun.where(srun > 0).count(dim='time')
-    mean_duration = srun.where(srun > 0).mean(dim='time')
-    mean_intensity = precipitation.where(wet_hours).mean(dim='time')
 
-    return n_events, mean_duration, mean_intensity, srun
+        fout = f"{cfg.path_out}/{wrun}/split_files_tiles_{tile_size}/Hourly_decomposition_top100_NDI_{seas}_{ny}y-{nx}x.nc"
+        ds_stats.to_netcdf(fout, mode='w', format='NETCDF4')
 
-def event_max_1d(p, srun):
-    """
-    p   : precip  (time,)
-    srun : srun    (time,)  -- 0 except at event start where it holds length
-    returns a 1‑D array the same length as `time` whose non‑NaNs are
-    the max precip of the event and sit on the first hour of that event.
-    """
-    out = np.full_like(p, np.nan, dtype=float)
-
-    starts = np.where(srun > 0)[0]         # event beginnings
-    for i in starts:
-        L = int(srun[i])                   # duration in hours
-        if L:                             # be safe if srun contains zeros
-            out[i] = np.nanmax(p[i : i + L])
-    return out
-
-def simple_spell_duration(bool_array):
-    """
-    Simple approach using apply_ufunc for better performance.
-    """
-    def process_timeseries(ts):
-        """Process a single time series."""
-        result = np.zeros_like(ts, dtype=int)
+        ds_results = xr.Dataset({
+            'n_events': (['y','x'],n_events_seas.data.squeeze()),
+            'mean_duration': (['y','x'],mean_duration_seas.data.squeeze()),
+            'mean_intensity': (['y','x'],mean_intensity_seas.data.squeeze()),
+            'total_precipitation': (['y','x'],totpr_seas.data.squeeze()),
+            'peak_at_start': (['y','x'], peak_at_start.mean(dim='time').data.squeeze()),
+            'lat':(['y','x'],lat),
+            'lon':(['y','x'],lon),
+            })
         
-        if not ts.any():
-            return result
-            
-        # Find transitions
-        padded = np.concatenate(([0], ts, [0]))
-        diff = np.diff(padded.astype(int))
-        starts = np.where(diff == 1)[0]
-        ends = np.where(diff == -1)[0]
-        
-        # Assign durations to start positions
-        for start, end in zip(starts, ends):
-            result[start] = end - start
-            
-        return result
-    
-    return xr.apply_ufunc(
-        process_timeseries,
-        bool_array,
-        input_core_dims=[['time']],
-        output_core_dims=[['time']],
-        vectorize=True,
-        dask='parallelized',
-        output_dtypes=[int],
-        dask_gufunc_kwargs={'allow_rechunk': True}
-    ).transpose(*bool_array.dims)    
+        fout = f"{cfg.path_out}/{wrun}/split_files_tiles_{tile_size}/Hourly_decomposition_NDI_{seas}_{ny}y-{nx}x.nc"
+        ds_results.to_netcdf(fout, mode='w', format='NETCDF4')  
 
 
 def main():
