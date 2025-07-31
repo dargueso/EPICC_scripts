@@ -28,9 +28,10 @@ import subprocess as subprocess
 from joblib import Parallel, delayed
 
 
-wrun = cfg.wrf_runs[0]
+wrun = cfg.wrf_runs[1]
 tile_size = 50
-freq = '10MIN'
+freq = '01H'
+buffer= 0
 ###########################################################
 ###########################################################
 
@@ -44,18 +45,17 @@ def main():
     nlons = files_ref.sizes['x']
     files_ref.close()
 
-    Parallel(n_jobs=20)(delayed(split_files)(fin,nlons,nlats,tile_size) for fin in filesin)
+    Parallel(n_jobs=20)(delayed(split_files)(fin,nlons,nlats,tile_size, buffer) for fin in filesin)
 
     #split_files(f'{cfg.path_in}/{wrun}/UIB_LANDMASK.nc',nlons,nlats,tile_size)
 
     #Then concatenate using:
     # for ny in $(seq -s " " -f %03g 0 10); do for nx in $(seq -s " " -f %03g 0 10); do ncrcat UIB_10MIN_RAIN_*_${ny}y-${nx}x.nc UIB_10MIN_RAIN_2011-2020_${ny}y-${nx}x.nc ;done done
 
-
 ###########################################################
 ###########################################################
 
-def split_files(fin,nlons,nlats,tile_size):
+def split_files(fin,nlons,nlats,tile_size, buffer=0):
 
     """Split files based on longitude using xarray"""
     print(fin)
@@ -65,14 +65,22 @@ def split_files(fin,nlons,nlats,tile_size):
 
     for nnlon,slon in enumerate(range(0,nlons,tile_size)):
       for nnlat,slat in enumerate(range(0,nlats,tile_size)):
+        
+        if buffer == 0:
+            fout = fin.replace(".nc",f'_{nnlat:03d}y-{nnlon:03d}x.nc')
+        else:
+            fout = fin.replace(".nc",f'_{nnlat:03d}y-{nnlon:03d}x_{buffer:03d}buffer.nc')
 
-        fout = fin.replace(".nc",f'_{nnlat:03d}y-{nnlon:03d}x.nc')
+        slon = slon - buffer
+        slat = slat - buffer
 
-        elon = slon + tile_size
-        elat = slat + tile_size
+        elon = slon + tile_size + 2*buffer
+        elat = slat + tile_size + 2*buffer
 
         if elon > nlons: elon=nlons
         if elat > nlats: elat=nlats
+        if slon < 0: slon=0
+        if slat < 0: slat=0
 
         fin_tile = finxr.isel(x=slice(slon,elon),y=slice(slat,elat))
         fin_tile.to_netcdf(fout)
