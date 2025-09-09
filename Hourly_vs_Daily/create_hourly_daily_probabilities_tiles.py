@@ -27,7 +27,6 @@ import synthetic_future_utils as sf
 # Pattern of your pre-split tile files  (edit if the path changes)
 
 tile_size   = 50          # number of native gridpoints per tile
-buffer_lab  = "025buffer" # used only for output filenames
 N_JOBS      = 20         # parallel workers (set 1 to run serially)
 
 # ---------------------------------------------------------------------
@@ -72,7 +71,7 @@ def process_tile(filespath,ny, nx, wrun):
     # ---------------- write result ------------------
     fout = (
         f"{cfg.path_out}/{wrun}/probability_hourly_"
-        f"{ytile}y-{xtile}x_{buffer_lab}.nc"
+        f"{ytile}y-{xtile}x.nc"
     )
     sf.save_probability_data(
         hdist, wdist, n_samples, cfg.drain_bins, cfg.hrain_bins, fout=fout
