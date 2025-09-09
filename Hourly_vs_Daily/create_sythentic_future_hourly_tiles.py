@@ -245,7 +245,7 @@ def main():
             f"[{wrun}] Found {len(tiles)} tiles – launching with {N_JOBS} jobs\n"
         )
         Parallel(n_jobs=N_JOBS)(
-            delayed(process_tile)(wrun, y, x) for y, x in tiles[0]
+            delayed(process_tile)(wrun, y, x) for y, x in tiles
         )
 
 
