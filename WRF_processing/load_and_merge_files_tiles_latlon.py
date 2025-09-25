@@ -40,7 +40,7 @@ def main():
     """  Split files into tiles """
     filespatterns = [#f'{cfg.path_in}/{wrun}/split_files_tiles_50/Hourly_decomposition_NDI',
                      #f'{cfg.path_in}/{wrun}/split_files_tiles_50/Hourly_decomposition_top100_NDI',
-                     f'{cfg.path_in}/{wrun}/probability_hourly',
+                     f'{cfg.path_in}/{wrun}/rainfall_probability_optimized_conditional',
                     #  f'{cfg.path_in}/{wrun}/split_files_tiles_50/Hourly_decomposition_NDI_DJF',
                     #  f'{cfg.path_in}/{wrun}/split_files_tiles_50/Hourly_decomposition_NDI_MAM',
                     #  f'{cfg.path_in}/{wrun}/split_files_tiles_50/Hourly_decomposition_NDI_JJA',
@@ -49,7 +49,7 @@ def main():
     for filespath in filespatterns:
       #filespath = f'{cfg.path_in}/{wrun}/split_files_tiles_50/Hourly_decomposition_NDI_SON'
 
-      filessuffix = f'_025buffer'
+      filessuffix = f''
       filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_01H_RAIN_20??-??.nc'))
       files_ref = xr.open_dataset(filesin[0])
       nlats = files_ref.sizes['y']
@@ -59,7 +59,7 @@ def main():
       for nnlat in range(nlats//tile_size+1):
         print(nnlat)
         latlongrid.append([f'{filespath}_{nnlat:03d}y-{nnlon:03d}x{filessuffix}.nc' for nnlon in range(nlons//tile_size+1)])
-      fin_all = xr.open_mfdataset(latlongrid,combine='nested',concat_dim=["y", "x"]).load()
+      fin_all = xr.open_mfdataset(latlongrid,combine='nested',concat_dim=["y", "x"],engine='netcdf4').load()
       print(f'Ej: {filespath}_000y-000x{filessuffix}.nc')
       fout = latlongrid[0][0].replace("_000y-000x",f'')
       print(f'Output file: {fout}')
