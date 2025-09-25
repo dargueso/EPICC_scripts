@@ -10,6 +10,8 @@ hrain_bins = np.concatenate((np.arange(0, 10, 1), np.arange(10, 105, 5)))
 buffer = 25
 tile_size = 50
 n_samples = 100
+syear = 2011
+eyear = 2020
 
 # Define quantiles for the analysis
 qs = np.array([0.50, 0.75, 0.90, 0.95, 0.99, 0.999], dtype=np.float32)
