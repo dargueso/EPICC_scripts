@@ -19,7 +19,7 @@ import multiprocessing
 # Configuration
 PATH_IN = '/home/dargueso/postprocessed/EPICC/'
 PATH_OUT = '/home/dargueso/postprocessed/EPICC/'
-WRUN = "EPICC_2km_ERA5_CMIP6anom"
+WRUN = "EPICC_2km_ERA5"
 
 # Parallel processing configuration
 N_JOBS = 10  # Number of tiles to process simultaneously (adjust based on your system)
@@ -91,8 +91,8 @@ PATH_IN = '/home/dargueso/postprocessed/EPICC/'
 PATH_OUT = '/home/dargueso/postprocessed/EPICC/'
 WET_VALUE_H = 0.1
 WET_VALUE_D = 1.0
-DRAIN_BINS = np.concatenate((np.arange(1, 10, 1), np.arange(10, 105, 5)))
-HRAIN_BINS = np.concatenate((np.arange(0, 10, 1), np.arange(10, 105, 5)))
+DRAIN_BINS = np.arange(0, 105, 5)
+HRAIN_BINS = np.arange(0, 105, 5)
 
 try:
     from numba import jit
@@ -237,7 +237,7 @@ def calculate_wet_hour_intensity_distribution_optimized(ds_h_wet_days, ds_d, wet
 
     return hourly_distribution_bin, wet_hours_distribution_bin, samples_per_bin
 
-wrun = "EPICC_2km_ERA5_CMIP6anom"
+wrun = "EPICC_2km_ERA5"
 TILE_ID = "REPLACE_TILE_ID"
 file_pattern = f'{PATH_IN}/{wrun}/split_files_tiles_50/UIB_01H_RAIN_20??-??_{TILE_ID}.nc'
 output_file = f'{PATH_OUT}/{wrun}/rainfall_probability_optimized_conditional_{TILE_ID}.nc'
