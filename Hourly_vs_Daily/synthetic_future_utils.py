@@ -162,7 +162,7 @@ def save_probability_data(hourly_distribution_bin,
             'x': np.arange(nx)                 # x grid points
         },
         name   = 'samples_per_bin',
-        attrs  = {'description': 'Sample count per drain-bin'}
+        attrs  = {'description': 'Sample count per bin-bin'}
     )
 
     # ------------------------------------------------------------------
@@ -209,40 +209,74 @@ def _window_sum(arr, radius):
 #####################################################################
 
 @njit(cache=True)
-def _process_single_cell(rain, bin_idx, wet_cdf, hour_cdf, hr_edges, thresh, iy, ix, rng_state):
+def _calculate_quantiles_streaming(values_array, quantiles, thresh):
     """
-    Process a single cell serially to avoid parallel memory issues.
-    Returns a list of daily maximum values for this cell.
+    Calculate quantiles from an array of values above threshold.
+    Much more memory efficient than storing all values.
+    """
+    # Filter values above threshold
+    valid_values = values_array[values_array > thresh]
+    
+    if len(valid_values) == 0:
+        return np.full(len(quantiles), np.nan, dtype=np.float32)
+    
+    # Sort values for quantile calculation
+    valid_values = np.sort(valid_values)
+    n = len(valid_values)
+    
+    result = np.empty(len(quantiles), dtype=np.float32)
+    
+    for i, q in enumerate(quantiles):
+        if q == 0.0:
+            result[i] = valid_values[0]
+        elif q == 1.0:
+            result[i] = valid_values[-1]
+        else:
+            # Linear interpolation for quantiles
+            index = q * (n - 1)
+            lower_idx = int(np.floor(index))
+            upper_idx = int(np.ceil(index))
+            
+            if lower_idx == upper_idx:
+                result[i] = valid_values[lower_idx]
+            else:
+                weight = index - lower_idx
+                result[i] = valid_values[lower_idx] * (1 - weight) + valid_values[upper_idx] * weight
+    
+    return result
+
+@njit(cache=True)
+def _process_cell_for_quantiles(rain, bin_idx, wet_cdf, hour_cdf, hr_edges, 
+                               thresh, iy, ix, rng_state, quantiles):
+    """
+    Process a single cell and return quantiles directly.
+    Memory efficient - doesn't store all values.
     """
     n_t = rain.shape[0]
-    values_list = []
+    temp_values = np.empty(n_t * 24, dtype=np.float32)  # Worst case: 24 values per day
+    value_count = 0
     
     for t in range(n_t):
         R = rain[t, iy, ix]
         if R <= 0 or not np.isfinite(R):
-            values_list.append(np.float32(0.0))
             continue
         
         b = bin_idx[t, iy, ix]
         if b < 0 or b >= wet_cdf.shape[0]:
-            values_list.append(np.float32(0.0))
             continue
 
         # 1 — wet-hour count
         wet_cdf_slice = wet_cdf[b, :, iy, ix]
         if not np.any(wet_cdf_slice > 0):
-            values_list.append(np.float32(0.0))
             continue
             
         Nh = np.searchsorted(wet_cdf_slice, rng_state.random()) + 1
         if Nh <= 0:
-            values_list.append(np.float32(0.0))
             continue
 
         # 2 — hourly-intensity bins
         cdf_hr = hour_cdf[b, :, iy, ix]
         if not np.any(cdf_hr > 0):
-            values_list.append(np.float32(0.0))
             continue
             
         idx_bins = np.empty(Nh, np.int64)
@@ -260,7 +294,6 @@ def _process_single_cell(rain, bin_idx, wet_cdf, hour_cdf, hr_edges, thresh, iy,
 
         s_int = intens.sum()
         if s_int == 0.0:
-            values_list.append(np.float32(0.0))
             continue
             
         values = R * intens / s_int
@@ -268,7 +301,6 @@ def _process_single_cell(rain, bin_idx, wet_cdf, hour_cdf, hr_edges, thresh, iy,
         if np.any(values < thresh):
             mask = values >= thresh
             if not np.any(mask):
-                values_list.append(np.float32(0.0))
                 continue
             values = values[mask]
             values *= R / values.sum()
@@ -276,43 +308,47 @@ def _process_single_cell(rain, bin_idx, wet_cdf, hour_cdf, hr_edges, thresh, iy,
         # Store the maximum hourly value for this timestep
         if len(values) > 0:
             max_val = np.max(values)
-            values_list.append(np.float32(max_val if max_val > thresh else 0.0))
-        else:
-            values_list.append(np.float32(0.0))
+            if max_val > thresh:
+                temp_values[value_count] = max_val
+                value_count += 1
     
-    return values_list
+    # Calculate quantiles from collected values
+    if value_count > 0:
+        actual_values = temp_values[:value_count]
+        return _calculate_quantiles_streaming(actual_values, quantiles, thresh)
+    else:
+        return np.full(len(quantiles), np.nan, dtype=np.float32)
 
-def generate_dmax_hourly_values_per_timestep(
+def generate_quantiles_directly(
         rain_arr,            # (time, ny, nx)  float32
         wet_cdf, hour_cdf,   # cum-sums (ready)
         bin_idx,             # (time, ny, nx)  int16
         hr_edges,            # (n_hour_bins+1,)
-        buffers,             # list[array('f')]
-        iy0, iy1, ix0, ix1,
+        quantiles,           # quantiles to calculate
+        iy0, iy1, ix0, ix1,  # inner tile boundaries (no buffer)
         thresh=0.1,
         seed=None):
     """
-    Generate hourly values for each timestep and store time series in buffers.
-    Serial version to avoid parallel memory issues.
+    Generate quantiles directly without storing full time series.
+    Only processes the inner tile region (no buffer).
+    Much more memory efficient.
     """
     rng = np.random.Generator(np.random.PCG64(seed))
     
-    width = ix1 - ix0
-    c = 0
+    ny_inner = iy1 - iy0
+    nx_inner = ix1 - ix0
+    n_quantiles = len(quantiles)
     
-    # Process each cell serially
-    for iy in range(iy0, iy1):
-        for ix in range(ix0, ix1):
-            # Clear the buffer first
-            buffers[c].clear()
-            
-            # Process this cell
-            cell_values = _process_single_cell(
+    # Result array: (n_quantiles, ny_inner, nx_inner) - only inner tile
+    result = np.full((n_quantiles, ny_inner, nx_inner), np.nan, dtype=np.float32)
+    
+    # Process only the inner tile cells (no buffer)
+    for i, iy in enumerate(range(iy0, iy1)):
+        for j, ix in enumerate(range(ix0, ix1)):
+            cell_quantiles = _process_cell_for_quantiles(
                 rain_arr, bin_idx, wet_cdf, hour_cdf, hr_edges, 
-                thresh, iy, ix, rng)
+                thresh, iy, ix, rng, quantiles)
             
-            # Add values to buffer
-            for val in cell_values:
-                buffers[c].append(val)
-            
-            c += 1
+            result[:, i, j] = cell_quantiles
+    
+    return result
