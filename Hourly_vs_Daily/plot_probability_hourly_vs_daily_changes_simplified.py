@@ -28,64 +28,7 @@ DELTA_CMAP  = "coolwarm_r"    # *reversed* so blue shows positive Δ
 DATAFILEP    = "rainfall_probability_optimized_conditional_2n_mm_bins_Present.nc" # 
 DATAFILEF    = "rainfall_probability_optimized_conditional_2n_mm_bins_Future.nc" #
 
-# ─── Functions ─────────────────────────────────────────────
-def group_drain_bins(ds):
-    """
-    Groups drain_bin into ranges: 1-4, 5-9, 10-14, ..., 95-99
-    Computes weighted averages using samples_per_bin as weights.
-    """
-    
-    # Create group labels for each drain_bin using numpy operations
-    bin_starts = ((ds.drain_bin.values - 1) // 5) * 5 + 1
-    bin_ends = np.where(bin_starts < 95, bin_starts + 3, 99)
-    group_labels = [f"{start}-{end}" for start, end in zip(bin_starts, bin_ends)]
-    
-    # Add group coordinate to dataset
-    ds_with_groups = ds.assign_coords(group=('drain_bin', group_labels))
-    
-    # Get weights
-    weights = ds_with_groups.samples_per_bin
-    
-    # Compute weighted averages and sums
-    result = xr.Dataset({
-        'wet_hours_distribution': (ds_with_groups.wet_hours_distribution * weights).groupby('group').sum() / weights.groupby('group').sum(),
-        'samples_per_bin': weights.groupby('group').sum(),
-        'hourly_distribution': (ds_with_groups.hourly_distribution * weights).groupby('group').sum() / weights.groupby('group').sum()
-    })
-    
-import xarray as xr
-import numpy as np
 
-def group_drain_bins(ds):
-    """
-    Groups drain_bin into ranges: 1-4, 5-9, 10-14, ..., 95-99
-    Computes weighted averages using samples_per_bin as weights.
-    """
-    
-    # Create group labels for each drain_bin using numpy operations
-    bin_starts = ((ds.drain_bin.values - 1) // 5) * 5 + 1
-    bin_ends = np.where(bin_starts < 95, bin_starts + 3, 99)
-    group_labels = [f"{start}-{end}" for start, end in zip(bin_starts, bin_ends)]
-    
-    # Add group coordinate to dataset
-    ds_with_groups = ds.assign_coords(group=('drain_bin', group_labels))
-    
-    # Get weights
-    weights = ds_with_groups.samples_per_bin
-    
-    # Compute weighted averages and sums
-    result = xr.Dataset({
-        'wet_hours_distribution': (ds_with_groups.wet_hours_distribution * weights).groupby('group').sum() / weights.groupby('group').sum(),
-        'samples_per_bin': weights.groupby('group').sum(),
-        'hourly_distribution': (ds_with_groups.hourly_distribution * weights).groupby('group').sum() / weights.groupby('group').sum()
-    })
-    
-    # Replace 'group' dimension with 'drain_bin' using left edges
-    unique_starts = np.unique(bin_starts)
-    result = result.rename({'group': 'drain_bin'})
-    result = result.assign_coords(drain_bin=unique_starts)
-    
-    return result
 
 # ─── Load & pre‑process data ────────────────────────────────────────────
 ds_p          = xr.open_dataset(DATAFILEP)
@@ -95,10 +38,6 @@ ds = xr.concat([ds_p, ds_f], dim="experiment")
 ds = ds.assign_coords(experiment=["Present", "Future"]).isel(y=slice(258-buffer,258+buffer),x=slice(559-buffer,559+buffer))
 #ds = ds.assign_coords(experiment=["Present", "Future"]).isel(y=slice(423-buffer,423+buffer),x=slice(250-buffer,250+buffer))
 #ds = ds.assign_coords(experiment=["Present", "Future"]).isel(y=slice(625-buffer,625+buffer),x=slice(375-buffer,375+buffer))
-
-#ds = group_drain_bins(ds)
-# Usage:
-# ds_grouped = group_drain_bins(ds)
 
 wet_hour_dist_present = ds.wet_hours_distribution.data
 hourly_intensity_dist_present = ds.hourly_distribution.data
@@ -120,10 +59,11 @@ comp_wHr /= comp_samp[:, :, np.newaxis, :, :]
 drain_edges = ds.drain_bin.values                     # 0, 5, 10 … mm
 hrain_centers = ds.hrain_bin.values                  # 0.5, 1.5, 2.5 … mm
 hrain_edges = np.concatenate(([0], (hrain_centers[1:] + hrain_centers[:-1]) / 2, [hrain_centers[-1] + 1]))
-hrain_edges[-1]=200
+hrain_edges[-1]=101
 hrain_edges = hrain_edges.astype(int)
 hour_vals   = ds.hour.values                          # 0 … 23
 
+import pdb; pdb.set_trace()  # fmt: skip
 
 labels = [f"{lo}–{hi}" for lo, hi in zip(drain_edges[:-1], drain_edges[1:])]
 labels.append(f'>{drain_edges[-1]}')
@@ -273,7 +213,7 @@ fig.suptitle("Wet‑hour probability by daily rainfall")
 fig.subplots_adjust(
     left=0.05, right=0.95, top=0.90, bottom=0.2, wspace=0.10, hspace=0.1
 )
-plt.savefig("wet_hour_probability_heatmaps-Mallorca_2n_mm.png", dpi=300, bbox_inches="tight")
+plt.savefig("wet_hour_probability_heatmaps-Mallorca_5mm.png", dpi=300, bbox_inches="tight")
 
 
 # ###############################################################################
@@ -403,4 +343,4 @@ fig.suptitle("Hourly vs daily rainfall intensity")
 fig.subplots_adjust(
     left=0.05, right=0.95, top=0.90, bottom=0.2, wspace=0.10, hspace=0.1
 )
-plt.savefig("intensity_probability_heatmaps-Mallorca_2n_mm.png", dpi=300, bbox_inches="tight")
+plt.savefig("intensity_probability_heatmaps-Mallorca_5mm.png", dpi=300, bbox_inches="tight")
