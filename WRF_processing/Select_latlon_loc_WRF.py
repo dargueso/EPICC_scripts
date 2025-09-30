@@ -7,7 +7,7 @@ ilat = 39.639
 ilon = 2.647
 
 # Open the NetCDF file
-ncfile = nc.Dataset("/home/dargueso/share/geo_em_files/BALEARS_CC_1km/geo_em.d02.nc")
+ncfile = nc.Dataset("/home/dargueso/share/geo_em_files/EPICC/geo_em.d01.EPICC_2km_ERA5_HVC_GWD.nc")
 
 # Extract the lat/lon values
 
