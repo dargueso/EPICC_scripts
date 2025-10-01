@@ -19,7 +19,7 @@ warnings.filterwarnings('ignore', message='All-NaN slice encountered')
 
 tile_size   = 50          # number of native gridpoints per tile
 buffer_lab  = "025buffer" # used only for output filenames
-N_JOBS      = 1          # Can now use more jobs since memory usage is much lower
+N_JOBS      = 10          # Can now use more jobs since memory usage is much lower
 
 # Pattern of your pre-split tile files
 pattern_tiles = (
@@ -51,6 +51,16 @@ def build_file_list(wrun, ytile, xtile):
     files = sorted(glob.glob(pattern))
     print(f"[{wrun}] Found {len(files)} files for tile {ytile}y-{xtile}x")
     return files
+
+def process_tile_safe(wrun, ytile, xtile):
+    """Safe wrapper around process_tile with error handling."""
+    try:
+        return process_tile(wrun, ytile, xtile)
+    except Exception as e:
+        print(f"ERROR processing tile {ytile}y-{xtile}x: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 def process_tile(wrun, ytile, xtile):
     """Worker function executed in parallel - now much more memory efficient."""
@@ -146,7 +156,6 @@ def process_tile(wrun, ytile, xtile):
     comp_wHr = np.where(nonzero_mask[:, None], 
                         comp_wHr / comp_samp[:, None], 
                         0.0)
-
     wet_cdf = np.cumsum(comp_wWet, axis=1).astype(np.float32, order="C")
     hour_cdf = np.cumsum(comp_wHr, axis=1).astype(np.float32, order="C")
 
@@ -269,10 +278,8 @@ def process_tile(wrun, ytile, xtile):
     print(f"Dimensions: {future_synthetic_quant.dims}")
     print(f"Quantiles: {qs_values}")
     
-    # Clean up memory and explicitly close datasets
+    # Clean up memory - don't explicitly close datasets, let xarray handle it
     import gc
-    finf.close()
-    rainfall_probability.close()
     del rain_arr, bin_idx, result_quantiles
     del future_synthetic_quant, rainfall_probability, finf
     gc.collect()
@@ -288,10 +295,17 @@ def main():
         if not tiles:
             raise RuntimeError(f"No tiles found for run {wrun}")
 
-        print(f"[{wrun}] Found {len(tiles)} tiles — launching with {N_JOBS} jobs\n")
+        print(f"[{wrun}] Found {len(tiles)} tiles — processing serially to avoid segfaults\n")
         
+        # Process tiles serially with error handling
+        # for y, x in tiles:
+        #     result = process_tile_safe(wrun, y, x)
+        #     if result is None:
+        #         print(f"Skipping failed tile {y}y-{x}x")
+                
+        # Alternative: if you want to use parallel processing, uncomment below and comment out the serial loop above
         Parallel(n_jobs=N_JOBS)(
-            delayed(process_tile)(wrun, y, x) for y, x in tiles
+            delayed(process_tile_safe)(wrun, y, x) for y, x in tiles
         )
 
 if __name__ == "__main__":
