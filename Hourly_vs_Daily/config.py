@@ -5,11 +5,11 @@ path_in = '/home/dargueso/postprocessed/EPICC/'
 path_out = '/home/dargueso/postprocessed/EPICC/'
 WET_VALUE_H = 0.1  # mm
 WET_VALUE_D = 1.0 # mm
-drain_bins = np.concatenate((np.arange(1, 10, 1), np.arange(10, 105, 5)))
-hrain_bins = np.concatenate((np.arange(0, 10, 1), np.arange(10, 105, 5)))
+drain_bins = np.arange(0, 105, 5)
+hrain_bins = np.arange(0, 101, 1)
 buffer = 25
 tile_size = 50
-n_samples = 100
+n_samples = 1000
 syear = 2011
 eyear = 2020
 
