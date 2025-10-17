@@ -6,10 +6,13 @@ Ultra-conservative rainfall analysis script with parallel processing
 - Parallel processing with proper process isolation
 - Each tile gets fresh Python interpreter
 """
+import os
+os.environ['HDF5_USE_FILE_LOCKING'] = 'FALSE'
+os.environ['NETCDF4_PLUGIN_PATH'] = ''
 
 import subprocess
 import sys
-import os
+
 import time
 from glob import glob
 import re
@@ -80,10 +83,14 @@ def run_single_tile_script(y_coord, x_coord):
     
     # Read the original working script
     original_script = """#!/usr/bin/env python
+
+import os
+os.environ['HDF5_USE_FILE_LOCKING'] = 'FALSE'
+os.environ['NETCDF4_PLUGIN_PATH'] = ''
+
 import xarray as xr
 import numpy as np
 import time
-import os
 from glob import glob
 
 # Configuration
