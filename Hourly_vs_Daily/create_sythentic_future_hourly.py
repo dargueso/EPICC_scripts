@@ -12,24 +12,32 @@ import pandas as pd
 from numba import njit, float32, prange 
 from numba.typed import List
 import config as cfg
+from glob import glob
 
-y_idx=cfg.y_idx
-x_idx=cfg.x_idx
+
 WET_VALUE_H = cfg.WET_VALUE_H  # mm
 WET_VALUE_D = cfg.WET_VALUE_D  # mm
 qs = cfg.qs
 drain_bins = cfg.drain_bins
 hrain_bins = cfg.hrain_bins
 buffer = cfg.buffer
+tile_size = cfg.tile_size
 n_samples = cfg.n_samples
+
+
+wrun = "EPICC_2km_ERA5_CMIP6anom"
 
 def main():
 
-    start_time = time.time()
-    finf = xr.open_dataset(f'UIB_DAY_RAIN_{y_idx}y-{x_idx}x_Future_large.nc')
 
-    rainfall_probability = xr.open_dataset('rainfall_probability_hourly_vs_daily.nc')                                                                                                                  
-    
+    start_time = time.time()
+    filesinf= sorted(glob(f"{cfg.path_in}/{wrun}/UIB_DAY_RAIN_2011-01.nc"))
+    finf = xr.open_mfdataset(
+        filesinf,
+        combine="by_coords",
+        )
+    rainfall_probability = xr.open_dataset(f"{cfg.path_in}/EPICC_2km_ERA5/rainfall_probability_optimized_conditional_5mm_bins.nc")     
+
     ## Calculation of synthetic future hourly data
     rain_daily_future = finf.RAIN.where(finf.RAIN > WET_VALUE_D)
     rain_arr = rain_daily_future.data.astype(np.float32, order='C')
@@ -40,6 +48,12 @@ def main():
 
     # convert daily total to its bin index once so the kernel re-uses it fast
     bin_idx = (np.digitize(rain_arr, drain_bins) - 1).astype(np.int16)                                                                                    
+
+    # Convert dask arrays to numpy arrays before passing to numba
+    if hasattr(rain_arr, 'compute'):
+        rain_arr = rain_arr.compute()
+    if hasattr(bin_idx, 'compute'):
+        bin_idx = bin_idx.compute()
 
     ny, nx = rain_arr.shape[1:]
     ix0, ix1 = buffer, nx - buffer
@@ -54,9 +68,9 @@ def main():
             buffers.append(List.empty_list(float32))
         sample_buffers.append(buffers)
 
-    wet_hour_dist_present = rainfall_probability.wet_hours_distribution.data[0,:].squeeze()
-    hourly_intensity_dist_present = rainfall_probability.hourly_distribution.data[0,:].squeeze() 
-    samples_per_bin_present = rainfall_probability.samples_per_bin.data[0,:].squeeze()
+    wet_hour_dist_present = rainfall_probability.wet_hours_distribution.data.squeeze()
+    hourly_intensity_dist_present = rainfall_probability.hourly_distribution.data.squeeze() 
+    samples_per_bin_present = rainfall_probability.samples_per_bin.data.squeeze()
 
     wet_hour_dist_present = np.nan_to_num(wet_hour_dist_present, nan=0.0)
     hourly_intensity_dist_present = np.nan_to_num(hourly_intensity_dist_present, nan=0.0)
