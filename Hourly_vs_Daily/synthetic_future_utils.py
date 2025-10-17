@@ -257,11 +257,12 @@ def _process_cell_for_quantiles(rain, bin_idx, wet_cdf, hour_cdf, hr_edges,
     value_count = 0
     
     for t in range(n_t):
+        
         R = rain[t, iy, ix]
         if R <= 0 or not np.isfinite(R):
             continue
-        
         b = bin_idx[t, iy, ix]
+        
         if b < 0 or b >= wet_cdf.shape[0]:
             continue
 
@@ -291,7 +292,7 @@ def _process_cell_for_quantiles(rain, bin_idx, wet_cdf, hour_cdf, hr_edges,
             lo = hr_edges[idx_bins[k]]
             hi = hr_edges[idx_bins[k] + 1]
             intens[k] = lo + (hi - lo) * rng_state.random()
-
+        
         s_int = intens.sum()
         if s_int == 0.0:
             continue
