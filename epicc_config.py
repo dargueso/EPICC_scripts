@@ -1,4 +1,4 @@
-path_in = "/vg6a/dargueso/postprocessed/EPICC/"
+path_in = "/home/dargueso/postprocessed/EPICC/"
 patt_in = "UIB"
 path_out = "/home/dargueso/Analyses/EPICC/"
 path_cmaps = "/home/dargueso/share/colormaps/"
@@ -6,8 +6,8 @@ geoem_in = "/home/dargueso/share/geo_em_files/EPICC"
 path_bdy = "/home/dargueso/OBS_DATA/ERA5/"
 patt_bdy = "era5_monthly_prec"
 bdy_data = "ERA5"
-path_wrfout = "/vg6a/dargueso/postprocessed/EPICC"
-path_postproc = "/vg6a/dargueso/postprocessed/EPICC"
+path_wrfout = "/home/dargueso/postprocessed/EPICC"
+path_postproc = "/home/dargueso/postprocessed/EPICC"
 
 institution = "UIB"
 patt_wrf = "wrfout"
@@ -40,7 +40,7 @@ qtiles = [
     1.0,
 ]
 wet_value = 0.1  # mm
-wrf_runs = ["EPICC_2km_ERA5_HVC_GWD", "EPICC_2km_ERA5_CMIP6anom_HVC_GWD"]
+wrf_runs = ["EPICC_2km_ERA5", "EPICC_2km_ERA5_CMIP6anom"]
 
 
 reg_coords = {
