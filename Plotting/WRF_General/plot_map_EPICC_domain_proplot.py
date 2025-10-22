@@ -75,11 +75,11 @@ mbounds = map_bounds(reg)
 #Plotting
 # Create a figure
 fig, axs = plot.subplots(width=12,height=8,ncols=1,nrows=1,proj=cart_proj)
-axs.format(
-        suptitle="WRF DOMAIN",
-        suptitlesize='40',
-        abc=False
-    )
+# axs.format(
+#         suptitle="WRF DOMAIN",
+#         suptitlesize='40',
+#         abc=False
+#     )
 
 axs[0].add_feature(cfeature.COASTLINE,linewidth=0.5,zorder=101)
 axs[0].add_feature(cfeature.BORDERS,linewidth=0.5,zorder=101)
@@ -95,7 +95,7 @@ cmap_kw = {'left': 0}
 m0=axs[0].contourf(to_np(lons), to_np(lats), hgt.where(lm_is>0,0),
                  transform=ccrs.PlateCarree(),cmap=cmap,
                  cmap_kw=cmap_kw,levels = range(0,3200,200),extend='both')
-axs[0].colorbar(m0, loc='b', label='m')
+axs[0].colorbar(m0, loc='b', label='Elevation (m)',shrink=0.5)
 axs[0].set_xlim(cartopy_xlim(hgt,geobounds=mbounds))
 axs[0].set_ylim(cartopy_ylim(hgt,geobounds=mbounds))
 gl0=axs[0].gridlines(color="black", linestyle="dotted",linewidth=0.5,draw_labels=True,x_inline=False, y_inline=False)
