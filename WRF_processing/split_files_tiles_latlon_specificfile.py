@@ -28,7 +28,7 @@ import subprocess as subprocess
 from joblib import Parallel, delayed
 
 
-wrun = cfg.wrf_runs[1]
+wrun = cfg.wrf_runs[0]
 tile_size = 50
 freq = 'DAY'
 buffer= 25 
@@ -63,25 +63,31 @@ def split_files(fin,nlons,nlats,tile_size, buffer=0):
     finxr = xr.open_dataset(fin).load()
 
 
-    for nnlon,slon in enumerate(range(0,nlons,tile_size)):
-      for nnlat,slat in enumerate(range(0,nlats,tile_size)):
+    for nnlon,stlon in enumerate(range(0,nlons,tile_size)):
+      for nnlat,stlat in enumerate(range(0,nlats,tile_size)):
         
         if buffer == 0:
             fout = fin.replace(".nc",f'_{nnlat:03d}y-{nnlon:03d}x.nc')
         else:
             fout = fin.replace(".nc",f'_{nnlat:03d}y-{nnlon:03d}x_{buffer:03d}buffer.nc')
+       
+        print("nnlat, nnlon:", nnlat, nnlon)
+        print("stlon, stlat before buffer:", stlon, stlat)
 
-        slon = slon - buffer
-        slat = slat - buffer
+        slon = stlon - buffer
+        slat = stlat - buffer
 
-        elon = slon + tile_size + 2*buffer
-        elat = slat + tile_size + 2*buffer
+        elon = stlon + tile_size + 2*buffer
+        elat = stlat + tile_size + 2*buffer
+
+
 
         if elon > nlons: elon=nlons
         if elat > nlats: elat=nlats
         if slon < 0: slon=0
         if slat < 0: slat=0
 
+        print("slon, slat after buffer:", slon, slat)
         fin_tile = finxr.isel(x=slice(slon,elon),y=slice(slat,elat))
         fin_tile.to_netcdf(fout)
 
