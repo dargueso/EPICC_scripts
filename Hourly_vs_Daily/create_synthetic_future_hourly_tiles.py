@@ -23,7 +23,7 @@ warnings.filterwarnings('ignore', message='All-NaN slice encountered')
 
 tile_size   = 50          # number of native gridpoints per tile
 buffer_lab  = "025buffer" # used only for output filenames
-N_JOBS      = 4         # Can now use more jobs since memory usage is much lower
+N_JOBS      = 20         # Can now use more jobs since memory usage is much lower
 
 # Pattern of your pre-split tile files
 pattern_tiles = (
@@ -175,6 +175,8 @@ def process_tile(wrun, ytile, xtile, min_ytile, max_ytile, min_xtile, max_xtile)
         if ytile == "000": iy0 = 0
         if xtile == max_xtile: ix1 = nx
         if ytile == max_ytile: iy1 = ny
+
+
         
         # Calculate actual inner tile dimensions
         ny_inner = iy1 - iy0
@@ -200,7 +202,6 @@ def process_tile(wrun, ytile, xtile, min_ytile, max_ytile, min_xtile, max_xtile)
                 iy0, iy1, ix0, ix1,
                 thresh=cfg.WET_VALUE_H,
                 seed=123 + sample)
-            
             result_quantiles[sample, :, :, :] = sample_quantiles
         
         # Edge padding
@@ -208,6 +209,7 @@ def process_tile(wrun, ytile, xtile, min_ytile, max_ytile, min_xtile, max_xtile)
         if xtile == max_xtile: result_quantiles[:,:,:,-cfg.buffer:]=np.nan
         if ytile == min_ytile: result_quantiles[:,:,:cfg.buffer,:]=np.nan
         if ytile == max_ytile: result_quantiles[:,:,-cfg.buffer:,:]=np.nan
+
 
         # Create xarray Dataset
         print(f"[{wrun}] Creating output dataset...")
