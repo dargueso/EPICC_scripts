@@ -17,183 +17,6 @@ def compute_histogram(values, bins):
     hist, _ = np.histogram(valid, bins=bins, density=True)
     return hist * np.diff(bins)
 
-def calculate_wet_hour_intensity_distribution(ds_h_wet_days, 
-                              ds_d, 
-                              wet_hour_fraction,
-                              drain_bins = np.arange(0,55,5), 
-                              hrain_bins = np.arange(0, 105, 5),
-                              ):
-    """
-    Calculate the wet hour intensity distribution and other statistics for hourly rainfall.
-    """
-    ny = ds_h_wet_days.sizes['y']
-    nx = ds_h_wet_days.sizes['x']
-    nhbins = len(hrain_bins) - 1
-    ndbins = len(drain_bins)
-
-    wet_hours_fraction = np.zeros((ndbins, ny, nx))
-    samples_per_bin = np.zeros((ndbins, ny, nx))
-    hourly_distribution_bin = np.zeros((ndbins, nhbins, ny, nx))
-    wet_hours_distribution_bin = np.zeros((ndbins, 24, ny, nx))
-
-    for ibin in tqdm(range(ndbins), desc="Processing rainfall bins"):
-        if ibin == ndbins-1:
-            upper_bound = np.inf
-        else:
-            lower_bound = drain_bins[ibin]
-            upper_bound = drain_bins[ibin + 1]   
-
-        bin_days = (ds_d >= lower_bound) & (ds_d < upper_bound) 
-        bin_days_hourly = bin_days.reindex(time=ds_h_wet_days.time, method='ffill')
-        bin_ds_h_masked = ds_h_wet_days.where(bin_days_hourly)
-
-        wet_hours = bin_ds_h_masked.where(bin_ds_h_masked > 0).count(dim=['time'])
-        wet_hours_fraction[ibin,:,:] = wet_hours / bin_days_hourly.sum(dim=['time'])
-        samples_per_bin[ibin,:,:] = np.sum(bin_days.values, axis=(0))
-        
-        masked = bin_ds_h_masked.where(bin_ds_h_masked > 0)
-
-        # Fix: Check if masked has chunks to determine if it's a dask array
-        use_dask = hasattr(masked.data, 'chunks') and masked.data.chunks is not None
-        
-        # If using dask, ensure time dimension is in a single chunk
-        if use_dask:
-            masked = masked.chunk(dict(time=-1))
-        
-        hist_hourint = xr.apply_ufunc(
-            compute_histogram,
-            masked,
-            input_core_dims=[["time"]],
-            output_core_dims=[["bin"]],
-            kwargs={"bins": hrain_bins},
-            vectorize=True,
-            dask="parallelized" if use_dask else "forbidden",
-            output_dtypes=[float],
-            dask_gufunc_kwargs={
-            "output_sizes": {"bin": len(hrain_bins) - 1}
-            } if use_dask else {},
-        )
-        hourly_distribution_bin[ibin, :, :, :] = hist_hourint.transpose("bin", "y", "x").data
-
-        masked_wethour = wet_hour_fraction.where(bin_days)* 24.0  # Convert to hours
-
-        # Fix: Check if masked_wethour has chunks to determine if it's a dask array
-        use_dask_wethour = hasattr(masked_wethour.data, 'chunks') and masked_wethour.data.chunks is not None
-
-        # If using dask, ensure time dimension is in a single chunk
-        if use_dask_wethour:
-            masked_wethour = masked_wethour.chunk(dict(time=-1))
-
-        hist_wethours = xr.apply_ufunc(
-            compute_histogram,
-            masked_wethour,
-            input_core_dims=[["time"]],
-            output_core_dims=[["bin"]],
-            kwargs={"bins": np.arange(1, 26, 1)},
-            vectorize=True,
-            dask="parallelized" if use_dask_wethour else "forbidden",
-            output_dtypes=[float],
-            dask_gufunc_kwargs={
-            "output_sizes": {"bin": 24}
-            } if use_dask_wethour else {},
-        )
-
-        wet_hours_distribution_bin [ibin, :, :, :] = hist_wethours.transpose("bin", "y", "x").data
-
-    return hourly_distribution_bin, wet_hours_distribution_bin, samples_per_bin
-
-def save_probability_data(hourly_distribution_bin, 
-                          wet_hours_distribution_bin, 
-                          samples_per_bin, 
-                          drain_bins, 
-                          hrain_bins,
-                          fout='rainfall_probabilities.nc'):
-    """
-    Build an xarray with probabilities and save to a pickle file.
-    """
-    # ------------------------------------------------------------------
-    # 1.  Coordinate vectors
-    # ------------------------------------------------------------------
-    drain_bin_edges = drain_bins                       # 11 edges, 0 … 50 mm
-    hrain_bin_edges = hrain_bins                       # 21 edges, 0 … 100 mm
-    hour_vec        = np.arange(1,25)                  # 1 … 24
-    ny = hourly_distribution_bin.shape[2]  # Fix: changed from shape[3] to shape[2]
-    nx = hourly_distribution_bin.shape[3]  # Fix: changed from shape[4] to shape[3]
-
-    # For the hourly-rain axis we usually want *bin centres*
-    # rather than edges, so take the midpoint between each pair:
-    hrain_bin_mid = (hrain_bin_edges[:-1] + hrain_bin_edges[1:]) / 2   # 20 values
-
-    # ------------------------------------------------------------------
-    # 2.  Wrap each array in a DataArray
-    # ------------------------------------------------------------------
-    hourly_da = xr.DataArray(
-        data   = hourly_distribution_bin,              # shape (11, 20, 2)
-        dims   = ('drain_bin', 'hrain_bin','y', 'x'),
-        coords = {
-            'drain_bin' : drain_bin_edges,             # mm
-            'hrain_bin' : hrain_bin_mid,               # mm h⁻¹ (bin centres)
-            'y': np.arange(ny),                # y grid points
-            'x': np.arange(nx)                 # x grid points
-        },
-        name   = 'hourly_distribution',
-        attrs  = {'description': 'Hourly rainfall distribution per drain-bin'}
-    )
-
-    wet_hours_da = xr.DataArray(
-        data   = wet_hours_distribution_bin,           # shape (11, 24, 2)
-        dims   = ('drain_bin', 'hour','y', 'x'),
-        coords = {
-            'drain_bin' : drain_bin_edges,
-            'hour'      : hour_vec,                    # 1 … 24 (local hour)
-            'y': np.arange(ny),                # y grid points
-            'x': np.arange(nx)                 # x grid points
-        },
-        name   = 'wet_hours_distribution',
-        attrs  = {'description': 'Number of wet hours per drain-bin'}
-    )
-
-    samples_da = xr.DataArray(
-        data   = samples_per_bin,                      # shape (11, 2)
-        dims   = ( 'drain_bin', 'y', 'x'),
-        coords = {
-            'drain_bin' : drain_bin_edges,
-            'y': np.arange(ny),                # y grid points
-            'x': np.arange(nx)                 # x grid points
-        },
-        name   = 'samples_per_bin',
-        attrs  = {'description': 'Sample count per bin-bin'}
-    )
-
-    # ------------------------------------------------------------------
-    # 3.  Merge into one Dataset
-    # ------------------------------------------------------------------
-    ds = xr.Dataset(
-        data_vars = {
-            'hourly_distribution'   : hourly_da,
-            'wet_hours_distribution': wet_hours_da,
-            'samples_per_bin'       : samples_da
-        },
-        coords = {
-            'drain_bin' : ('drain_bin', drain_bin_edges, {'units': 'mm'}),
-            'hrain_bin' : ('hrain_bin', hrain_bin_mid,   {'units': 'mm h-1'}),
-            'hour'      : ('hour', hour_vec),
-            'y': ('y', np.arange(ny)),                # y grid points
-            'x': ('x', np.arange(nx)),                 # x grid points
-        },
-        attrs = {
-            'title'      : 'Rainfall bin statistics',
-            'created_by' : 'merge-arrays-into-xarray.py',
-            'note'       : 'hrain_bin coordinate uses bin centres; change to edges if preferred'
-        }
-    )
-
-    # ------------------------------------------------------------------
-    # 4.  (Optional) quick sanity check and save
-    # ------------------------------------------------------------------
-    print(ds)
-    ds.to_netcdf(fout)
-    return (ds)
 
 def _window_sum(arr, radius):
     """
@@ -247,13 +70,14 @@ def _calculate_quantiles_streaming(values_array, quantiles, thresh):
 
 @njit(cache=True)
 def _process_cell_for_quantiles(rain, bin_idx, wet_cdf, hour_cdf, hr_edges, 
-                               thresh, iy, ix, rng_state, quantiles):
+                               thresh, iy, ix, rng_state, quantiles,n_interval):
     """
     Process a single cell and return quantiles directly.
     Memory efficient - doesn't store all values.
     """
     n_t = rain.shape[0]
-    temp_values = np.empty(n_t * 24, dtype=np.float32)  # Worst case: 24 values per day
+    temp_values = np.empty(n_t * n_interval, dtype=np.float32)  # Worst case: 24 values per day (if hourly), 144 if 10min
+    #temp_values = None
     value_count = 0
     
     for t in range(n_t):
@@ -308,15 +132,18 @@ def _process_cell_for_quantiles(rain, bin_idx, wet_cdf, hour_cdf, hr_edges,
 
         # Store the maximum hourly value for this timestep
         if len(values) > 0:
+            n_values = len(values)
             max_val = np.max(values)
-            if max_val > thresh:
-                temp_values[value_count] = max_val
-                value_count += 1
-    
-    # Calculate quantiles from collected values
+            min_val = np.min(values)
+            if min_val > thresh:
+                for k in range(n_values):
+                    temp_values[value_count] = values[k]
+                    value_count += 1
+            else:
+                raise ValueError("Unexpected value below threshold after masking.")
+
     if value_count > 0:
-        actual_values = temp_values[:value_count]
-        return _calculate_quantiles_streaming(actual_values, quantiles, thresh)
+        return _calculate_quantiles_streaming(temp_values[:value_count], quantiles, thresh)
     else:
         return np.full(len(quantiles), np.nan, dtype=np.float32)
 
@@ -348,7 +175,7 @@ def generate_quantiles_directly(
         for j, ix in enumerate(range(ix0, ix1)):
             cell_quantiles = _process_cell_for_quantiles(
                 rain_arr, bin_idx, wet_cdf, hour_cdf, hr_edges, 
-                thresh, iy, ix, rng, quantiles)
+                thresh, iy, ix, rng, quantiles, n_interval=24)
             
             result[:, i, j] = cell_quantiles
     
