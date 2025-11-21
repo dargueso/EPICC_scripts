@@ -30,8 +30,8 @@ from joblib import Parallel, delayed
 
 wrun = cfg.wrf_runs[1]
 tile_size = 50
-freq = 'DAY'
-buffer= 25
+freq = '01H'
+buffer=10 
 ###########################################################
 ###########################################################
 
@@ -77,8 +77,8 @@ def split_files(fin,nlons,nlats,tile_size, buffer=0):
         slon = stlon - buffer
         slat = stlat - buffer
 
-        elon = stlon + tile_size + 2*buffer
-        elat = stlat + tile_size + 2*buffer
+        elon = slon + tile_size + 2*buffer
+        elat = slat + tile_size + 2*buffer
 
         if elon > nlons: elon=nlons
         if elat > nlats: elat=nlats
@@ -86,6 +86,7 @@ def split_files(fin,nlons,nlats,tile_size, buffer=0):
         if slat < 0: slat=0
 
         print("slon, slat after buffer:", slon, slat)
+        print("elon, elat after buffer:", elon, elat)
         fin_tile = finxr.isel(x=slice(slon,elon),y=slice(slat,elat))
         fin_tile.to_netcdf(fout)
 
