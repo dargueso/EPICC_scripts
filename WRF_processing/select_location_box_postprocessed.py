@@ -31,8 +31,18 @@ from joblib import Parallel, delayed
 wrun = cfg.wrf_runs[0]
 #y_idx=258; x_idx=559 #1.01 km away from Palma University station 
 #y_idx=250; x_idx=423 # 0.76 km away from Turis
-y_idx=384; x_idx=569 #  Spanish Med Pyrenees
-freq = '10MIN'
+#y_idx=384; x_idx=569 #  Spanish Med Pyrenees
+freq = '01H'
+# locs_x_idx = [559,423,569,795,638,821,1091,866,335,433,989]
+# locs_y_idx = [258,250,384,527,533,407,174,506,119,254,425]
+# locs_names = ['Mallorca','Turis','Pyrenees','Rosiglione', 'Ardeche','Corte','Catania','Barga','Almeria','Valencia',"L'Aquila"]
+
+locs_x_idx = [559,423,569,795,638,821,1091,989]#,433,866,335]
+locs_y_idx = [258,250,384,527,533,407,174,425]#,254,506,119]
+locs_names = ['Mallorca','Turis','Pyrenees','Rosiglione', 'Ardeche','Corte','Catania',"L'Aquila"]#,'Valencia','Barga','Almeria']
+
+
+
 ###########################################################
 ###########################################################
 
@@ -42,21 +52,23 @@ def main():
 
     filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_{freq}_RAIN_20??-??.nc'))
     files_ref = xr.open_dataset(filesin[0])
- 
 
-    Parallel(n_jobs=20)(delayed(select_files)(fin,y_idx,x_idx) for fin in filesin)
+    for iloc,loc_name in enumerate(locs_names):
+        y_idx = locs_y_idx[iloc]
+        x_idx = locs_x_idx[iloc]
+        Parallel(n_jobs=20)(delayed(select_files)(fin,y_idx,x_idx) for fin in filesin)
 
 
 
 #####################################################################
 #####################################################################
 
-def select_files(fin,y_idx,x_idx,buffer=5):
+def select_files(fin,y_idx,x_idx,buffer=10):
     """Select box around location using xarray"""
 
     print(fin)
     finxr = xr.open_dataset(fin).load()
-    fout = fin.replace(".nc",f'_{y_idx:03d}y-{x_idx:03d}x.nc')
+    fout = fin.replace(".nc",f'_{y_idx:03d}y-{x_idx:03d}x_{buffer:03d}buffer.nc')
 
     finxr = finxr.isel(y=slice(int(y_idx)-buffer,int(y_idx)+buffer+1),x=slice(int(x_idx)-buffer,int(x_idx)+buffer+1))
     finxr.to_netcdf(fout)
