@@ -31,7 +31,7 @@ from joblib import Parallel, delayed
 wrun = cfg.wrf_runs[0]
 tile_size = 50
 freq = 'DAY'
-buffer= 25 
+buffer= 10 
 ###########################################################
 ###########################################################
 
@@ -39,7 +39,7 @@ def main():
 
     """  Split files into tiles """
 
-    filesin = sorted(glob(f'{cfg.path_in}/{wrun}/rainfall_probability_optimized_conditional_5mm_bins.nc'))
+    filesin = sorted(glob(f'{cfg.path_in}/{wrun}/rainfall_probability_optimized_conditional_hourly.nc'))
     files_ref = xr.open_dataset(filesin[0])
     nlats = files_ref.sizes['y']
     nlons = files_ref.sizes['x']
@@ -77,8 +77,8 @@ def split_files(fin,nlons,nlats,tile_size, buffer=0):
         slon = stlon - buffer
         slat = stlat - buffer
 
-        elon = stlon + tile_size + 2*buffer
-        elat = stlat + tile_size + 2*buffer
+        elon = slon + tile_size + 2*buffer
+        elat = slat + tile_size + 2*buffer
 
 
 
