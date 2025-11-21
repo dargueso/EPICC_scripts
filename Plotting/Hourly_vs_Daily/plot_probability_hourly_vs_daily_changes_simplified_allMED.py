@@ -37,8 +37,8 @@ SHOW_DELTA  = True
 XLIMHRLY = False
 COLORMAP    = "viridis"       # base cmap for the two experiments
 DELTA_CMAP  = "coolwarm_r"    # *reversed* so blue shows positive Δ
-DATAFILEP    = "/home/dargueso//postprocessed/EPICC/EPICC_2km_ERA5/rainfall_probability_optimized_conditional_5mm_bins.nc" # 
-DATAFILEF    = "/home/dargueso//postprocessed/EPICC/EPICC_2km_ERA5_CMIP6anom/rainfall_probability_optimized_conditional_5mm_bins.nc" #
+DATAFILEP    = "/home/dargueso//postprocessed/EPICC/EPICC_2km_ERA5/rainfall_probability_optimized_conditional_hourly.ncc" # 
+DATAFILEF    = "/home/dargueso//postprocessed/EPICC/EPICC_2km_ERA5_CMIP6anom/rainfall_probability_optimized_conditional_hourly.nc" #
 
 
 
