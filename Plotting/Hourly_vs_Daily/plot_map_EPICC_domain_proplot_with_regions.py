@@ -66,9 +66,10 @@ mbounds = None
 
 # Locations
 
-locs_x_idx = [559,423,569,795,638]
-locs_y_idx = [258,250,384,527,533]
-locs_names = ['Mallorca','Turis','Pyrenees','Rosiglione', 'Ardeche']
+locs_x_idx = [559,423,569,795,638,821,1091,989]#,335,433,866]
+locs_y_idx = [258,250,384,527,533,407,174,425]#,119,254,506]
+locs_names = ['Mallorca','Turis','Pyrenees','Rosiglione', 'Ardeche','Corte','Catania',"L'Aquila"]#'Almeria','Valencia','Barga']
+
 
 
 cart_proj._threshold /= 100.
@@ -137,7 +138,7 @@ axs[0].contourf(to_np(lons), to_np(lats), region_sq,
                 zorder=101)
 
 cs = axs[0].contourf(to_np(lons), to_np(lats), med_mask['combined_mask'].values,
-                levels=[0.5, 1.5, 2.5],
+                levels=[1.5, 2.5, 3.5],
                 hatches=['////','....'],
                 colors='none',
                 edgecolor='black',
