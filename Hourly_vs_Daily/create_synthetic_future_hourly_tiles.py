@@ -22,7 +22,7 @@ warnings.filterwarnings('ignore', message='All-NaN slice encountered')
 # ---------------------------------------------------------------------
 
 tile_size   = 50          # number of native gridpoints per tile
-buffer_lab  = "025buffer" # used only for output filenames
+buffer_lab  = "010buffer" # used only for output filenames
 N_JOBS      = 20         # Can now use more jobs since memory usage is much lower
 
 # Pattern of your pre-split tile files
@@ -100,7 +100,7 @@ def process_tile(wrun, ytile, xtile, min_ytile, max_ytile, min_xtile, max_xtile)
 
         ds_dist = (
             f"{cfg.path_in}/EPICC_2km_ERA5/split_files_tiles_{tile_size}_{buffer_lab}/"
-            f"rainfall_probability_optimized_conditional_5mm_bins_{ytile}y-{xtile}x_{buffer_lab}.nc"
+            f"rainfall_probability_optimized_conditional_hourly_{ytile}y-{xtile}x_{buffer_lab}.nc"
         )
         
         # Load the rainfall probability dataset
@@ -163,7 +163,7 @@ def process_tile(wrun, ytile, xtile, min_ytile, max_ytile, min_xtile, max_xtile)
         gc.collect()
 
         # Define quantiles
-        qs_values = np.array([0.50, 0.75, 0.90, 0.95, 0.99, 0.999], dtype=np.float32)
+        qs_values = np.array([0.1, 0.2, 0.25, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85,0.90, 0.95,0.98, 0.99,0.995, 0.999,0.9999,1], dtype=np.float32)
         n_quantiles = len(qs_values)
 
         ny, nx = rain_arr.shape[1:]
@@ -201,7 +201,8 @@ def process_tile(wrun, ytile, xtile, min_ytile, max_ytile, min_xtile, max_xtile)
                 qs_values,
                 iy0, iy1, ix0, ix1,
                 thresh=cfg.WET_VALUE_H,
-                seed=123 + sample)
+                seed=123 + sample,
+                n_interval=144)
             result_quantiles[sample, :, :, :] = sample_quantiles
         
         # Edge padding
@@ -243,7 +244,7 @@ def process_tile(wrun, ytile, xtile, min_ytile, max_ytile, min_xtile, max_xtile)
         
         # Calculate confidence intervals
         future_synthetic_quant_renamed = future_synthetic_quant.rename({'quantile': 'qs_time'})    
-        future_synthetic_quant_confidence = future_synthetic_quant_renamed.quantile(q=[0.025, 0.975], dim='sample')
+        future_synthetic_quant_confidence = future_synthetic_quant_renamed.quantile(q=[0.01,0.025,0.05,0.1,0.9,0.95,0.975,0.99], dim='sample')
         confidence_file = f'{cfg.path_out}/{wrun}/future_synthetic_quant_confidence_{ytile}y-{xtile}x_{buffer_lab}.nc'
         future_synthetic_quant_confidence.to_netcdf(confidence_file)
 
@@ -302,6 +303,8 @@ def main():
         print(f"  y-range: {min_ytile} to {max_ytile}")
         print(f"  x-range: {min_xtile} to {max_xtile}")
         print(f"Processing tiles...\n")
+
+        #tiles=[('005','011')]
 
 
         # Process tiles serially with error handling
