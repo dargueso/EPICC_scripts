@@ -22,7 +22,7 @@ import multiprocessing
 # Configuration
 PATH_IN = '/home/dargueso/postprocessed/EPICC/'
 PATH_OUT = '/home/dargueso/postprocessed/EPICC/'
-WRUN = "EPICC_2km_ERA5_CMIP6anom"
+WRUN = "EPICC_2km_ERA5"
 
 # Parallel processing configuration
 N_JOBS = 10  # Number of tiles to process simultaneously (adjust based on your system)
@@ -150,6 +150,55 @@ def compute_histogram_numpy(values, bins):
     
     return hist
 
+
+def calculate_gini_coefficient(rainfall_data):
+
+    # Get the raw numpy array
+    rr_arr = rainfall_data.values  # Shape: (total_hours, y, x)
+    
+    total_hours, y, x = rr_arr.shape
+    
+    # Check if we have complete days
+    if total_hours % 24 != 0:
+        # Truncate to complete days
+        complete_hours = (total_hours // 24) * 24
+        rr_arr = rr_arr[:complete_hours, :, :]
+        total_hours = complete_hours
+    
+    ndays = total_hours // 24
+    
+    # Reshape to (ndays, 24, y, x) - group hours into days
+    rr_reshaped = rr_arr.reshape((ndays, 24, y, x))
+    
+    # Sort along the hour axis (axis=1)
+    arr_sorted = np.sort(np.nan_to_num(rr_reshaped, nan=0), axis=1)
+    
+    # Count non-NaN values per day
+    n = np.sum(~np.isnan(rr_reshaped), axis=1)  # Shape: (ndays, y, x)
+    
+    # Sum of values per day
+    sum_vals = np.nansum(rr_reshaped, axis=1)  # Shape: (ndays, y, x)
+    sum_vals = np.where(sum_vals == 0, np.nan, sum_vals)
+    
+    # Create rank array for the 24 hours
+    r = np.arange(1, 25)  # ranks 1 to 24
+    
+    # Reshape r to broadcast: (1, 24, 1, 1)
+    r = r.reshape(1, 24, 1, 1)
+    
+    # Expand n to broadcast: (ndays, 1, y, x)
+    n_broadcasted = np.expand_dims(n, axis=1)
+    
+    # Calculate Gini coefficient
+    # Formula: sum((2*r - n - 1) * x_sorted) / (n * sum(x))
+    numerator = np.sum((2 * r - n_broadcasted - 1) * arr_sorted, axis=1)
+    
+    # Avoid division by zero
+    denominator = n * sum_vals
+    gini = np.where(denominator > 0, numerator / denominator, np.nan)
+    
+    return gini  # Shape: (ndays, y, x)
+
 def calculate_wet_hour_intensity_distribution_optimized(ds_h_wet_days, ds_d, wet_hour_fraction,
                                                       drain_bins=DRAIN_BINS, hrain_bins=HRAIN_BINS):
     print("Computing rainfall distributions...")
@@ -161,6 +210,7 @@ def calculate_wet_hour_intensity_distribution_optimized(ds_h_wet_days, ds_d, wet
 
     wet_hours_fraction = np.zeros((n_drain_bins, ny, nx))
     samples_per_bin = np.zeros((n_drain_bins, ny, nx))
+    gini_coeff_per_bin = np.zeros((n_drain_bins, ny, nx))
     hourly_distribution_bin = np.zeros((n_drain_bins, n_hrain_bins, ny, nx))
     wet_hours_distribution_bin = np.zeros((n_drain_bins, 24, ny, nx))
 
@@ -200,7 +250,11 @@ def calculate_wet_hour_intensity_distribution_optimized(ds_h_wet_days, ds_d, wet
         
         samples_per_bin[ibin, :, :] = bin_days.sum(dim=['time']).values
         bin_wet_hours = wet_hour_fraction.where(bin_days)
-        
+
+        # # # Gini coefficient
+        gini_per_day = calculate_gini_coefficient(bin_ds_h_masked) 
+        gini_coeff_per_bin[ibin, :, :] = np.nanmean(gini_per_day, axis=0)
+ 
         # Histograms
         masked_hourly = bin_ds_h_masked.where(bin_ds_h_masked > 0)
         hist_func = compute_histogram_numba if NUMBA_AVAILABLE else compute_histogram_numpy
@@ -242,9 +296,9 @@ def calculate_wet_hour_intensity_distribution_optimized(ds_h_wet_days, ds_d, wet
         
         wet_hours_distribution_bin[ibin, :, :, :] = hist_wet_hours.transpose("bin", "y", "x").values
 
-    return hourly_distribution_bin, wet_hours_distribution_bin, samples_per_bin
+    return hourly_distribution_bin, wet_hours_distribution_bin, samples_per_bin, gini_coeff_per_bin
 
-wrun = "EPICC_2km_ERA5_CMIP6anom"
+wrun = "EPICC_2km_ERA5"
 TILE_ID = "REPLACE_TILE_ID"
 file_pattern = f'{PATH_IN}/{wrun}/split_files_tiles_50/UIB_01H_RAIN_20??-??_{TILE_ID}.nc'
 output_file = f'{PATH_OUT}/{wrun}/rainfall_probability_optimized_conditional_{TILE_ID}.nc'
@@ -273,7 +327,7 @@ ds_h_wet_days = ds_h_wet_days.load()
 ds_d = ds_d.load()
 wet_hour_fraction = wet_hour_fraction.load()
 
-hourly_dist, wet_hours_dist, samples = calculate_wet_hour_intensity_distribution_optimized(
+hourly_dist, wet_hours_dist, samples, gini_coeff = calculate_wet_hour_intensity_distribution_optimized(
     ds_h_wet_days, ds_d, wet_hour_fraction, DRAIN_BINS, HRAIN_BINS
 )
 
@@ -303,10 +357,17 @@ samples_da = xr.DataArray(
     coords={'drain_bin': DRAIN_BINS[:-1], 'y': y_coords, 'x': x_coords}
 )
 
+gini_da = xr.DataArray(
+    data=gini_coeff,
+    dims=('drain_bin', 'y', 'x'),
+    coords={'drain_bin': DRAIN_BINS[:-1], 'y': y_coords, 'x': x_coords}
+)
+
 output_ds = xr.Dataset({
     'hourly_distribution': hourly_da,
     'wet_hours_distribution': wet_hours_da,
-    'samples_per_bin': samples_da
+    'samples_per_bin': samples_da,
+    'gini_coefficient': gini_da
 })
 
 print(f"Saving to {output_file}...")
