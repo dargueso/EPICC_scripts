@@ -25,7 +25,7 @@ WRUN_FUTURE = "EPICC_2km_ERA5_CMIP6anom"
 
 FREQ = '1H'
 WET_THRESHOLD = 0.1
-PERCENTILES = [50, 75, 90, 95, 99, 99.9]
+PERCENTILES = [10, 20, 25, 40, 50, 60, 70, 75, 80, 85, 90, 95, 98, 99, 99.5, 99.9, 99.99, 100]
 ALPHA = 0.05
 
 # Test options:
@@ -36,6 +36,12 @@ TEST_TYPE = 'mann-whitney'
 
 TILE_SIZE = 50
 N_PROCESSES = 16  # Used for within-tile parallelization
+
+# Single tile testing mode
+SINGLE_TILE_MODE = False  # Set to True to test a single tile, False for full domain
+SINGLE_TILE_Y = 5  # Tile index in y direction (0-indexed)
+SINGLE_TILE_X = 11  # Tile index in x direction (0-indexed)
+# For tile 005y-011x: y_range = [250-299], x_range = [550-599]
 
 FREQ_TO_NAME = {
     '10MIN': '10MIN',
@@ -160,7 +166,10 @@ def process_tile_numba_percentiles_only(rain_present, rain_future, wet_threshold
 
 @jit(nopython=True, parallel=True)
 def process_tile_numba_with_test(rain_present, rain_future, wet_threshold, percentiles, alpha):
-    """Process tile with percentiles and Mann-Whitney test."""
+    """
+    Process tile with percentiles and Mann-Whitney test.
+    For each percentile, tests if values ABOVE that percentile differ between present and future.
+    """
     nt, ny, nx = rain_present.shape
     n_perc = len(percentiles)
     
@@ -168,20 +177,22 @@ def process_tile_numba_with_test(rain_present, rain_future, wet_threshold, perce
     perc_fut = np.full((n_perc, ny, nx), np.nan, dtype=np.float32)
     perc_chg = np.full((n_perc, ny, nx), np.nan, dtype=np.float32)
     perc_chg_pct = np.full((n_perc, ny, nx), np.nan, dtype=np.float32)
-    pvalues = np.full((ny, nx), np.nan, dtype=np.float32)
-    is_sig = np.zeros((ny, nx), dtype=np.int8)
+    pvalues = np.full((n_perc, ny, nx), np.nan, dtype=np.float32)
+    is_sig = np.zeros((n_perc, ny, nx), dtype=np.int8)
     
     for iy in prange(ny):
         for ix in range(nx):
             pres_ts = rain_present[:, iy, ix]
             fut_ts = rain_future[:, iy, ix]
             
+            # Get all wet events
             pres_wet = pres_ts[pres_ts >= wet_threshold]
             fut_wet = fut_ts[fut_ts >= wet_threshold]
             
             n_pres = len(pres_wet)
             n_fut = len(fut_wet)
             
+            # Calculate percentiles
             if n_pres > 0:
                 for ip in range(n_perc):
                     perc_pres[ip, iy, ix] = np.percentile(pres_wet, percentiles[ip])
@@ -190,6 +201,7 @@ def process_tile_numba_with_test(rain_present, rain_future, wet_threshold, perce
                 for ip in range(n_perc):
                     perc_fut[ip, iy, ix] = np.percentile(fut_wet, percentiles[ip])
             
+            # Calculate changes
             if n_pres > 0 and n_fut > 0:
                 for ip in range(n_perc):
                     pp = perc_pres[ip, iy, ix]
@@ -198,17 +210,32 @@ def process_tile_numba_with_test(rain_present, rain_future, wet_threshold, perce
                     if pp > 0:
                         perc_chg_pct[ip, iy, ix] = 100.0 * (pf - pp) / pp
             
-            if n_pres >= 10 and n_fut >= 10:
-                _, pvalue = mannwhitneyu_fast(pres_wet, fut_wet)
-                pvalues[iy, ix] = pvalue
-                if not np.isnan(pvalue) and pvalue < alpha:
-                    is_sig[iy, ix] = 1
+            # Perform Mann-Whitney test for EACH percentile
+            # Test values ABOVE each percentile threshold
+            for ip in range(n_perc):
+                if not np.isnan(perc_pres[ip, iy, ix]) and not np.isnan(perc_fut[ip, iy, ix]):
+                    # Get values above this percentile threshold
+                    pres_above = pres_wet[pres_wet >= perc_pres[ip, iy, ix]]
+                    fut_above = fut_wet[fut_wet >= perc_fut[ip, iy, ix]]
+                    
+                    n_pres_above = len(pres_above)
+                    n_fut_above = len(fut_above)
+                    
+                    # Only test if we have enough samples
+                    if n_pres_above >= 10 and n_fut_above >= 10:
+                        _, pvalue = mannwhitneyu_fast(pres_above, fut_above)
+                        pvalues[ip, iy, ix] = pvalue
+                        if not np.isnan(pvalue) and pvalue < alpha:
+                            is_sig[ip, iy, ix] = 1
     
     return perc_pres, perc_fut, perc_chg, perc_chg_pct, pvalues, is_sig
 
 
 def process_tile_scipy(rain_present, rain_future, wet_threshold, percentiles, alpha):
-    """Process tile using scipy (no numba)."""
+    """
+    Process tile using scipy (no numba).
+    For each percentile, tests if values ABOVE that percentile differ between present and future.
+    """
     nt, ny, nx = rain_present.shape
     n_perc = len(percentiles)
     percentiles_arr = np.array(percentiles)
@@ -217,39 +244,54 @@ def process_tile_scipy(rain_present, rain_future, wet_threshold, percentiles, al
     perc_fut = np.full((n_perc, ny, nx), np.nan, dtype=np.float32)
     perc_chg = np.full((n_perc, ny, nx), np.nan, dtype=np.float32)
     perc_chg_pct = np.full((n_perc, ny, nx), np.nan, dtype=np.float32)
-    pvalues = np.full((ny, nx), np.nan, dtype=np.float32)
-    is_sig = np.zeros((ny, nx), dtype=np.int8)
+    pvalues = np.full((n_perc, ny, nx), np.nan, dtype=np.float32)
+    is_sig = np.zeros((n_perc, ny, nx), dtype=np.int8)
     
     for iy in range(ny):
         for ix in range(nx):
             pres_ts = rain_present[:, iy, ix]
             fut_ts = rain_future[:, iy, ix]
             
+            # Get all wet events
             pres_wet = pres_ts[pres_ts >= wet_threshold]
             fut_wet = fut_ts[fut_ts >= wet_threshold]
             
             n_pres = len(pres_wet)
             n_fut = len(fut_wet)
             
+            # Calculate percentiles
             if n_pres > 0:
                 perc_pres[:, iy, ix] = np.percentile(pres_wet, percentiles_arr)
             
             if n_fut > 0:
                 perc_fut[:, iy, ix] = np.percentile(fut_wet, percentiles_arr)
             
+            # Calculate changes
             if n_pres > 0 and n_fut > 0:
                 perc_chg[:, iy, ix] = perc_fut[:, iy, ix] - perc_pres[:, iy, ix]
                 with np.errstate(divide='ignore', invalid='ignore'):
                     perc_chg_pct[:, iy, ix] = 100.0 * perc_chg[:, iy, ix] / perc_pres[:, iy, ix]
             
-            if n_pres >= 10 and n_fut >= 10:
-                try:
-                    _, pvalue = stats.mannwhitneyu(pres_wet, fut_wet, alternative='two-sided')
-                    pvalues[iy, ix] = pvalue
-                    if not np.isnan(pvalue) and pvalue < alpha:
-                        is_sig[iy, ix] = 1
-                except Exception:
-                    pass
+            # Perform Mann-Whitney test for EACH percentile
+            # Test values ABOVE each percentile threshold
+            for ip in range(n_perc):
+                if not np.isnan(perc_pres[ip, iy, ix]) and not np.isnan(perc_fut[ip, iy, ix]):
+                    # Get values above this percentile threshold
+                    pres_above = pres_wet[pres_wet >= perc_pres[ip, iy, ix]]
+                    fut_above = fut_wet[fut_wet >= perc_fut[ip, iy, ix]]
+                    
+                    n_pres_above = len(pres_above)
+                    n_fut_above = len(fut_above)
+                    
+                    # Only test if we have enough samples
+                    if n_pres_above >= 10 and n_fut_above >= 10:
+                        try:
+                            _, pvalue = stats.mannwhitneyu(pres_above, fut_above, alternative='two-sided')
+                            pvalues[ip, iy, ix] = pvalue
+                            if not np.isnan(pvalue) and pvalue < alpha:
+                                is_sig[ip, iy, ix] = 1
+                        except Exception:
+                            pass
     
     return perc_pres, perc_fut, perc_chg, perc_chg_pct, pvalues, is_sig
 
@@ -317,8 +359,8 @@ def main():
     percentiles_future_full = np.full((n_percentiles, ny, nx), np.nan, dtype=np.float32)
     percentiles_change_full = np.full((n_percentiles, ny, nx), np.nan, dtype=np.float32)
     percentiles_change_pct_full = np.full((n_percentiles, ny, nx), np.nan, dtype=np.float32)
-    pvalues_full = np.full((ny, nx), np.nan, dtype=np.float32)
-    is_significant_full = np.zeros((ny, nx), dtype=np.int8)
+    pvalues_full = np.full((n_percentiles, ny, nx), np.nan, dtype=np.float32)  # Now per percentile
+    is_significant_full = np.zeros((n_percentiles, ny, nx), dtype=np.int8)  # Now per percentile
     
     print(f"\n2. Processing tiles (one at a time)...")
     sys.stdout.flush()
@@ -330,78 +372,99 @@ def main():
     
     percentiles_arr = np.array(PERCENTILES, dtype=np.float32)
     
-    for iy_tile in range(ny_tiles):
-        for ix_tile in range(nx_tiles):
-            tile_start = time.time()
+    # Determine which tiles to process
+    if SINGLE_TILE_MODE:
+        print(f"   SINGLE TILE MODE: Processing tile {SINGLE_TILE_Y:03d}y-{SINGLE_TILE_X:03d}x")
+        tile_list = [(SINGLE_TILE_Y, SINGLE_TILE_X)]
+        y_start_tile = SINGLE_TILE_Y * TILE_SIZE
+        y_end_tile = min(y_start_tile + TILE_SIZE, ny)
+        x_start_tile = SINGLE_TILE_X * TILE_SIZE
+        x_end_tile = min(x_start_tile + TILE_SIZE, nx)
+        print(f"   Y range: [{y_start_tile}-{y_end_tile-1}], X range: [{x_start_tile}-{x_end_tile-1}]")
+        sys.stdout.flush()
+    else:
+        tile_list = [(iy, ix) for iy in range(ny_tiles) for ix in range(nx_tiles)]
+    
+    for iy_tile, ix_tile in tile_list:
+        tile_start = time.time()
+        
+        # Calculate bounds
+        y_start = iy_tile * TILE_SIZE
+        y_end = min(y_start + TILE_SIZE, ny)
+        x_start = ix_tile * TILE_SIZE
+        x_end = min(x_start + TILE_SIZE, nx)
+        
+        # Load tile (SEQUENTIAL - one at a time)
+        t_io = time.time()
+        rain_present = ds_present.RAIN.isel(
+            y=slice(y_start, y_end),
+            x=slice(x_start, x_end)
+        ).values.astype(np.float32)
+        
+        rain_future = ds_future.RAIN.isel(
+            y=slice(y_start, y_end),
+            x=slice(x_start, x_end)
+        ).values.astype(np.float32)
+        io_time = time.time() - t_io
+        io_times.append(io_time)
+        
+        # Process tile (PARALLEL within tile)
+        t_compute = time.time()
+        
+        if TEST_TYPE == 'none':
+            perc_pres, perc_fut, perc_chg, perc_chg_pct = process_tile_numba_percentiles_only(
+                rain_present, rain_future, WET_THRESHOLD, percentiles_arr
+            )
+            # Create empty arrays with correct shape (percentile dimension)
+            ny_tile = y_end - y_start
+            nx_tile = x_end - x_start
+            pvalues = np.full((n_percentiles, ny_tile, nx_tile), np.nan, dtype=np.float32)
+            is_sig = np.zeros((n_percentiles, ny_tile, nx_tile), dtype=np.int8)
+        
+        elif TEST_TYPE == 'mann-whitney-fast':
+            perc_pres, perc_fut, perc_chg, perc_chg_pct, pvalues, is_sig = process_tile_numba_with_test(
+                rain_present, rain_future, WET_THRESHOLD, percentiles_arr, ALPHA
+            )
+        
+        else:  # scipy version
+            perc_pres, perc_fut, perc_chg, perc_chg_pct, pvalues, is_sig = process_tile_scipy(
+                rain_present, rain_future, WET_THRESHOLD, PERCENTILES, ALPHA
+            )
+        
+        compute_time = time.time() - t_compute
+        compute_times.append(compute_time)
+        
+        # Store results
+        percentiles_present_full[:, y_start:y_end, x_start:x_end] = perc_pres
+        percentiles_future_full[:, y_start:y_end, x_start:x_end] = perc_fut
+        percentiles_change_full[:, y_start:y_end, x_start:x_end] = perc_chg
+        percentiles_change_pct_full[:, y_start:y_end, x_start:x_end] = perc_chg_pct
+        pvalues_full[:, y_start:y_end, x_start:x_end] = pvalues  # Now has percentile dimension
+        is_significant_full[:, y_start:y_end, x_start:x_end] = is_sig  # Now has percentile dimension
+        
+        tiles_processed += 1
+        tile_time = time.time() - tile_start
+        tile_times.append(tile_time)
+        
+        # Progress reporting
+        if SINGLE_TILE_MODE:
+            # Always show progress for single tile
+            print(f"   Tile {SINGLE_TILE_Y:03d}y-{SINGLE_TILE_X:03d}x complete:")
+            print(f"      I/O: {io_time:.2f}s, compute: {compute_time:.2f}s, total: {tile_time:.2f}s")
+            sys.stdout.flush()
+        elif tiles_processed % 10 == 0 or tiles_processed == len(tile_list):
+            # Progress every 10 tiles for full domain
+            elapsed = time.time() - total_start
+            avg_io = np.mean(io_times[-10:])
+            avg_compute = np.mean(compute_times[-10:])
+            avg_tile = np.mean(tile_times[-10:])
+            eta_sec = (len(tile_list) - tiles_processed) * avg_tile
             
-            # Calculate bounds
-            y_start = iy_tile * TILE_SIZE
-            y_end = min(y_start + TILE_SIZE, ny)
-            x_start = ix_tile * TILE_SIZE
-            x_end = min(x_start + TILE_SIZE, nx)
-            
-            # Load tile (SEQUENTIAL - one at a time)
-            t_io = time.time()
-            rain_present = ds_present.RAIN.isel(
-                y=slice(y_start, y_end),
-                x=slice(x_start, x_end)
-            ).values.astype(np.float32)
-            
-            rain_future = ds_future.RAIN.isel(
-                y=slice(y_start, y_end),
-                x=slice(x_start, x_end)
-            ).values.astype(np.float32)
-            io_time = time.time() - t_io
-            io_times.append(io_time)
-            
-            # Process tile (PARALLEL within tile)
-            t_compute = time.time()
-            
-            if TEST_TYPE == 'none':
-                perc_pres, perc_fut, perc_chg, perc_chg_pct = process_tile_numba_percentiles_only(
-                    rain_present, rain_future, WET_THRESHOLD, percentiles_arr
-                )
-                pvalues = np.full((y_end - y_start, x_end - x_start), np.nan, dtype=np.float32)
-                is_sig = np.zeros((y_end - y_start, x_end - x_start), dtype=np.int8)
-            
-            elif TEST_TYPE == 'mann-whitney-fast':
-                perc_pres, perc_fut, perc_chg, perc_chg_pct, pvalues, is_sig = process_tile_numba_with_test(
-                    rain_present, rain_future, WET_THRESHOLD, percentiles_arr, ALPHA
-                )
-            
-            else:  # scipy version
-                perc_pres, perc_fut, perc_chg, perc_chg_pct, pvalues, is_sig = process_tile_scipy(
-                    rain_present, rain_future, WET_THRESHOLD, PERCENTILES, ALPHA
-                )
-            
-            compute_time = time.time() - t_compute
-            compute_times.append(compute_time)
-            
-            # Store results
-            percentiles_present_full[:, y_start:y_end, x_start:x_end] = perc_pres
-            percentiles_future_full[:, y_start:y_end, x_start:x_end] = perc_fut
-            percentiles_change_full[:, y_start:y_end, x_start:x_end] = perc_chg
-            percentiles_change_pct_full[:, y_start:y_end, x_start:x_end] = perc_chg_pct
-            pvalues_full[y_start:y_end, x_start:x_end] = pvalues
-            is_significant_full[y_start:y_end, x_start:x_end] = is_sig
-            
-            tiles_processed += 1
-            tile_time = time.time() - tile_start
-            tile_times.append(tile_time)
-            
-            # Progress every 10 tiles
-            if tiles_processed % 10 == 0 or tiles_processed == total_tiles:
-                elapsed = time.time() - total_start
-                avg_io = np.mean(io_times[-10:])
-                avg_compute = np.mean(compute_times[-10:])
-                avg_tile = np.mean(tile_times[-10:])
-                eta_sec = (total_tiles - tiles_processed) * avg_tile
-                
-                print(f"   Tile {tiles_processed:3d}/{total_tiles} "
-                      f"({100*tiles_processed/total_tiles:5.1f}%) | "
-                      f"I/O: {avg_io:5.2f}s, compute: {avg_compute:5.2f}s | "
-                      f"ETA: {eta_sec/60:5.1f} min")
-                sys.stdout.flush()
+            print(f"   Tile {tiles_processed:3d}/{len(tile_list)} "
+                  f"({100*tiles_processed/len(tile_list):5.1f}%) | "
+                  f"I/O: {avg_io:5.2f}s, compute: {avg_compute:5.2f}s | "
+                  f"ETA: {eta_sec/60:5.1f} min")
+            sys.stdout.flush()
     
     ds_present.close()
     ds_future.close()
@@ -410,21 +473,66 @@ def main():
     print(f"\n3. Saving output...")
     t0 = time.time()
     
+    # In single tile mode, extract only the tile data
+    if SINGLE_TILE_MODE:
+        y_start_tile = SINGLE_TILE_Y * TILE_SIZE
+        y_end_tile = min(y_start_tile + TILE_SIZE, ny)
+        x_start_tile = SINGLE_TILE_X * TILE_SIZE
+        x_end_tile = min(x_start_tile + TILE_SIZE, nx)
+        
+        # Extract only the tile
+        percentiles_present_out = percentiles_present_full[:, y_start_tile:y_end_tile, x_start_tile:x_end_tile]
+        percentiles_future_out = percentiles_future_full[:, y_start_tile:y_end_tile, x_start_tile:x_end_tile]
+        percentiles_change_out = percentiles_change_full[:, y_start_tile:y_end_tile, x_start_tile:x_end_tile]
+        percentiles_change_pct_out = percentiles_change_pct_full[:, y_start_tile:y_end_tile, x_start_tile:x_end_tile]
+        pvalues_out = pvalues_full[:, y_start_tile:y_end_tile, x_start_tile:x_end_tile]  # Include percentile dimension
+        is_significant_out = is_significant_full[:, y_start_tile:y_end_tile, x_start_tile:x_end_tile]  # Include percentile dimension
+        lat_out = lat[y_start_tile:y_end_tile, x_start_tile:x_end_tile]
+        lon_out = lon[y_start_tile:y_end_tile, x_start_tile:x_end_tile]
+        
+        ny_out = y_end_tile - y_start_tile
+        nx_out = x_end_tile - x_start_tile
+        y_coords = np.arange(y_start_tile, y_end_tile)
+        x_coords = np.arange(x_start_tile, x_end_tile)
+        
+        extra_attrs = {
+            'tile_y_index': SINGLE_TILE_Y,
+            'tile_x_index': SINGLE_TILE_X,
+            'tile_y_range': f'{y_start_tile}-{y_end_tile-1}',
+            'tile_x_range': f'{x_start_tile}-{x_end_tile-1}'
+        }
+    else:
+        # Full domain
+        percentiles_present_out = percentiles_present_full
+        percentiles_future_out = percentiles_future_full
+        percentiles_change_out = percentiles_change_full
+        percentiles_change_pct_out = percentiles_change_pct_full
+        pvalues_out = pvalues_full
+        is_significant_out = is_significant_full
+        lat_out = lat
+        lon_out = lon
+        
+        ny_out = ny
+        nx_out = nx
+        y_coords = np.arange(ny)
+        x_coords = np.arange(nx)
+        extra_attrs = {}
+    
     ds_output = xr.Dataset(
         data_vars=dict(
-            percentiles_present=(("percentile", "y", "x"), percentiles_present_full),
-            percentiles_future=(("percentile", "y", "x"), percentiles_future_full),
-            percentiles_change=(("percentile", "y", "x"), percentiles_change_full),
-            percentiles_change_pct=(("percentile", "y", "x"), percentiles_change_pct_full),
-            pvalue=(("y", "x"), pvalues_full),
-            is_significant=(("y", "x"), is_significant_full),
-            lat=(("y", "x"), lat),
-            lon=(("y", "x"), lon),
+            percentiles_present=(("percentile", "y", "x"), percentiles_present_out),
+            percentiles_future=(("percentile", "y", "x"), percentiles_future_out),
+            percentiles_change=(("percentile", "y", "x"), percentiles_change_out),
+            percentiles_change_pct=(("percentile", "y", "x"), percentiles_change_pct_out),
+            pvalue=(("percentile", "y", "x"), pvalues_out),  # Now has percentile dimension
+            is_significant=(("percentile", "y", "x"), is_significant_out),  # Now has percentile dimension
+            lat=(("y", "x"), lat_out),
+            lon=(("y", "x"), lon_out),
         ),
         coords=dict(
             percentile=PERCENTILES,
-            y=np.arange(ny),
-            x=np.arange(nx),
+            y=y_coords,
+            x=x_coords,
         ),
         attrs={
             'description': f'Percentiles and statistical significance for {FREQ} rainfall',
@@ -434,7 +542,9 @@ def main():
             'significance_level': ALPHA,
             'present_period': WRUN_PRESENT,
             'future_period': WRUN_FUTURE,
-            'processing': 'sequential I/O, parallel computation'
+            'processing': 'sequential I/O, parallel computation',
+            'note': 'Each percentile has independent p-value testing events above that threshold',
+            **extra_attrs
         }
     )
     
@@ -442,11 +552,22 @@ def main():
     ds_output['percentiles_future'].attrs = {'long_name': 'Percentiles future', 'units': f'mm/{FREQ}'}
     ds_output['percentiles_change'].attrs = {'long_name': 'Change', 'units': f'mm/{FREQ}'}
     ds_output['percentiles_change_pct'].attrs = {'long_name': 'Percent change', 'units': '%'}
-    ds_output['pvalue'].attrs = {'long_name': 'P-value', 'method': TEST_TYPE}
-    ds_output['is_significant'].attrs = {'long_name': 'Significant', 'alpha': ALPHA}
+    ds_output['pvalue'].attrs = {
+        'long_name': 'P-value',
+        'method': TEST_TYPE,
+        'description': 'Tests if events ABOVE each percentile threshold differ between present and future'
+    }
+    ds_output['is_significant'].attrs = {
+        'long_name': 'Significant',
+        'alpha': ALPHA,
+        'description': 'Independent test for each percentile (events above threshold)'
+    }
     
     suffix = TEST_TYPE.replace('-', '_')
-    output_file = f'{PATH_OUT}/{WRUN_PRESENT}/percentiles_and_significance_{FREQ}_{suffix}_seqio.nc'
+    if SINGLE_TILE_MODE:
+        output_file = f'{PATH_OUT}/{WRUN_PRESENT}/percentiles_and_significance_{FREQ}_{suffix}_tile_{SINGLE_TILE_Y:03d}y_{SINGLE_TILE_X:03d}x.nc'
+    else:
+        output_file = f'{PATH_OUT}/{WRUN_PRESENT}/percentiles_and_significance_{FREQ}_{suffix}_seqio.nc'
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     ds_output.to_netcdf(output_file)
     
@@ -454,16 +575,28 @@ def main():
     print(f"   Save time: {time.time()-t0:.2f}s")
     
     # Summary
-    n_significant = np.sum(is_significant_full)
-    n_total = np.sum(~np.isnan(pvalues_full))
-    
     print(f"\n4. Summary:")
-    print(f"   Grid points: {ny * nx:,}")
-    if n_total > 0:
-        print(f"   Significant: {n_significant:,}/{n_total:,} ({100*n_significant/n_total:.1f}%)")
-    print(f"\n   Mean percentile changes:")
+    if SINGLE_TILE_MODE:
+        print(f"   Tile: {SINGLE_TILE_Y:03d}y-{SINGLE_TILE_X:03d}x")
+        print(f"   Tile dimensions: {ny_out} x {nx_out}")
+        print(f"   Grid point range: Y[{y_coords[0]}-{y_coords[-1]}], X[{x_coords[0]}-{x_coords[-1]}]")
+    else:
+        print(f"   Full domain: {ny_out} x {nx_out}")
+    print(f"   Grid points: {ny_out * nx_out:,}")
+    
+    # Report statistics per percentile
+    print(f"\n   Per-percentile statistics:")
     for i, p in enumerate(PERCENTILES):
-        print(f"      P{p:5.1f}: {np.nanmean(percentiles_change_pct_full[i]):+7.1f}%")
+        n_sig_this_perc = np.sum(is_significant_out[i, :, :])
+        n_total_this_perc = np.sum(~np.isnan(pvalues_out[i, :, :]))
+        mean_change = np.nanmean(percentiles_change_pct_out[i])
+        
+        if n_total_this_perc > 0:
+            sig_pct = 100 * n_sig_this_perc / n_total_this_perc
+            print(f"      P{p:5.1f}: {mean_change:+7.1f}% change, "
+                  f"{n_sig_this_perc:,}/{n_total_this_perc:,} significant ({sig_pct:.1f}%)")
+        else:
+            print(f"      P{p:5.1f}: {mean_change:+7.1f}% change")
     
     total_time = time.time() - total_start
     avg_io = np.mean(io_times)
