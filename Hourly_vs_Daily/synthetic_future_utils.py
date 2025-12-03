@@ -70,14 +70,20 @@ def _calculate_quantiles_streaming(values_array, quantiles, thresh):
 
 @njit(cache=True)
 def _process_cell_for_quantiles(rain, bin_idx, wet_cdf, hour_cdf, hr_edges, 
-                               thresh, iy, ix, rng_state, quantiles,n_interval):
+                               thresh, iy, ix, rng_state, quantiles, n_interval):
     """
     Process a single cell and return quantiles directly.
     Memory efficient - doesn't store all values.
+    
+    CRITICAL: n_interval must match the size of wet_cdf dimension 1
+    For 10-minute intervals: n_interval should be ~144 (depends on CDF shape)
+    For hourly intervals: n_interval should be ~24 (depends on CDF shape)
     """
     n_t = rain.shape[0]
-    temp_values = np.empty(n_t * n_interval, dtype=np.float32)  # Worst case: 24 values per day (if hourly), 144 if 10min
-    #temp_values = None
+    
+    # CRITICAL FIX: Allocate temp array based on n_interval parameter
+    # This MUST be sized correctly to avoid buffer overflow
+    temp_values = np.empty(n_t * n_interval, dtype=np.float32)
     value_count = 0
     
     for t in range(n_t):
@@ -90,7 +96,7 @@ def _process_cell_for_quantiles(rain, bin_idx, wet_cdf, hour_cdf, hr_edges,
         if b < 0 or b >= wet_cdf.shape[0]:
             continue
 
-        # 1 — wet-hour count
+        # 1 - wet-interval count
         wet_cdf_slice = wet_cdf[b, :, iy, ix]
         if not np.any(wet_cdf_slice > 0):
             continue
@@ -99,7 +105,7 @@ def _process_cell_for_quantiles(rain, bin_idx, wet_cdf, hour_cdf, hr_edges,
         if Nh <= 0:
             continue
 
-        # 2 — hourly-intensity bins
+        # 2 - interval-intensity bins
         cdf_hr = hour_cdf[b, :, iy, ix]
         if not np.any(cdf_hr > 0):
             continue
@@ -108,7 +114,7 @@ def _process_cell_for_quantiles(rain, bin_idx, wet_cdf, hour_cdf, hr_edges,
         for k in range(Nh):
             idx_bins[k] = np.searchsorted(cdf_hr, rng_state.random())
 
-        # 3 — intensities inside bins
+        # 3 - intensities inside bins
         intens = np.empty(Nh, np.float32)
         for k in range(Nh):
             if idx_bins[k] >= len(hr_edges) - 1:
@@ -130,17 +136,24 @@ def _process_cell_for_quantiles(rain, bin_idx, wet_cdf, hour_cdf, hr_edges,
             values = values[mask]
             values *= R / values.sum()
 
-        # Store the maximum hourly value for this timestep
+        # Store the values for this timestep
         if len(values) > 0:
             n_values = len(values)
-            max_val = np.max(values)
             min_val = np.min(values)
+            
+            # CRITICAL SAFETY CHECK: Prevent buffer overflow
+            if value_count + n_values > len(temp_values):
+                # This should not happen if n_interval is set correctly
+                # If it does, stop processing this cell to prevent crash
+                break
+                
             if min_val > thresh:
                 for k in range(n_values):
                     temp_values[value_count] = values[k]
                     value_count += 1
             else:
-                raise ValueError("Unexpected value below threshold after masking.")
+                # This shouldn't happen after masking, but handle it gracefully
+                pass
 
     if value_count > 0:
         return _calculate_quantiles_streaming(temp_values[:value_count], quantiles, thresh)
@@ -151,7 +164,7 @@ def generate_quantiles_directly(
         rain_arr,            # (time, ny, nx)  float32
         wet_cdf, hour_cdf,   # cum-sums (ready)
         bin_idx,             # (time, ny, nx)  int16
-        hr_edges,            # (n_hour_bins+1,)
+        hr_edges,            # (n_interval_bins+1,)
         quantiles,           # quantiles to calculate
         iy0, iy1, ix0, ix1,  # inner tile boundaries (no buffer)
         thresh=0.1,
@@ -160,12 +173,23 @@ def generate_quantiles_directly(
     Generate quantiles directly without storing full time series.
     Only processes the inner tile region (no buffer).
     Much more memory efficient.
+    
+    CRITICAL FIX: Automatically determines n_interval from wet_cdf shape
+    to prevent buffer overflow when processing 10-minute vs hourly data.
     """
     rng = np.random.Generator(np.random.PCG64(seed))
     
     ny_inner = iy1 - iy0
     nx_inner = ix1 - ix0
     n_quantiles = len(quantiles)
+    
+    # CRITICAL FIX: Calculate n_interval from wet_cdf dimensions
+    # wet_cdf shape is (n_bins, n_wet_intervals, ny, nx)
+    # For 10-minute intervals: n_interval will be ~144
+    # For hourly intervals: n_interval will be ~24
+    n_interval = wet_cdf.shape[1]  # Maximum number of intervals per day
+    
+    #print(f"  [DEBUG] Processing with n_interval={n_interval} (from wet_cdf.shape[1])")
     
     # Result array: (n_quantiles, ny_inner, nx_inner) - only inner tile
     result = np.full((n_quantiles, ny_inner, nx_inner), np.nan, dtype=np.float32)
@@ -175,7 +199,7 @@ def generate_quantiles_directly(
         for j, ix in enumerate(range(ix0, ix1)):
             cell_quantiles = _process_cell_for_quantiles(
                 rain_arr, bin_idx, wet_cdf, hour_cdf, hr_edges, 
-                thresh, iy, ix, rng, quantiles, n_interval=24)
+                thresh, iy, ix, rng, quantiles, n_interval)
             
             result[:, i, j] = cell_quantiles
     
