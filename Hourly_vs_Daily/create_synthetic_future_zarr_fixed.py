@@ -294,7 +294,7 @@ def main():
     
     # Load present-day probability distributions
     print("\n1. Loading probability distributions...")
-    prob_file = f'{PATH_IN}/{WRUN_PRESENT}/histograms/condprob_{FREQ_HIGH}_given_{FREQ_LOW}_full_domain.nc'
+    prob_file = f'{PATH_IN}/{WRUN_PRESENT}/condprob_{FREQ_HIGH}_given_{FREQ_LOW}_full_domain.nc'
     ds_prob = xr.open_dataset(prob_file)
     
     # Load future low-frequency rainfall (flexible frequency)
