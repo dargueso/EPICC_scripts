@@ -21,12 +21,12 @@ WET_VALUE_LOFREQ = 1.0  # mm (for low frequency)
 #####################################################################
 
 # Frequency pair to compare
-FREQ_HIGH = '10MIN'      # Options: '10MIN', '1H', '3H', '6H', '12H'
+FREQ_HIGH = '1H'      # Options: '10MIN', '1H', '3H', '6H', '12H'
 FREQ_LOW = 'D'        # Options: '1H', '3H', '6H', '12H', 'D' (daily)
 
 # Bins for each frequency (will be used for both axes)
-BINS_HIGH = np.arange(0, 101, 1)  # For hourly: 0-100mm in 1mm steps
-BINS_LOW = np.arange(0, 105, 5)  # For daily: 0-100mm in 5mm steps
+BINS_HIGH = np.arange(0, 100, 1)  # For hourly: 0-100mm in 1mm steps
+BINS_LOW = np.arange(0, 100, 5)  # For daily: 0-100mm in 5mm steps
 
 # Add infinity as the last bin edge to catch all values above max
 BINS_HIGH = np.append(BINS_HIGH, np.inf)
@@ -132,12 +132,18 @@ def process_tile(tile_info):
     intervals_high = config['intervals_high']
     intervals_low = config['intervals_low']
     repeats = config['repeats']
+    ny_full = config['ny_full']
+    nx_full = config['nx_full']
     
     # Define tile bounds
     y_start = iy_tile * tile_size
-    y_end = y_start + tile_size
+    y_end = min(y_start + tile_size, ny_full)  # Don't exceed domain
     x_start = ix_tile * tile_size
-    x_end = x_start + tile_size
+    x_end = min(x_start + tile_size, nx_full)  # Don't exceed domain
+    
+    # Get actual tile dimensions (may be smaller than tile_size at edges)
+    actual_ny = y_end - y_start
+    actual_nx = x_end - x_start
     
     tile_id = f"{iy_tile:03d}y-{ix_tile:03d}x"
     
@@ -157,26 +163,26 @@ def process_tile(tile_info):
         
         # Resample to high frequency
         n_intervals_high = n_timesteps_use // intervals_high
-        rain_high = rain_10min_trimmed.reshape(n_intervals_high, intervals_high, tile_size, tile_size).sum(axis=1)
+        rain_high = rain_10min_trimmed.reshape(n_intervals_high, intervals_high, actual_ny, actual_nx).sum(axis=1)
         
         # Resample to low frequency
-        rain_low = rain_10min_trimmed.reshape(n_intervals_low, intervals_low, tile_size, tile_size).sum(axis=1)
+        rain_low = rain_10min_trimmed.reshape(n_intervals_low, intervals_low, actual_ny, actual_nx).sum(axis=1)
         
         # Keep high-freq data in low-freq blocks
-        rain_high_blocks = rain_high.reshape(n_intervals_low, repeats, tile_size, tile_size)
+        rain_high_blocks = rain_high.reshape(n_intervals_low, repeats, actual_ny, actual_nx)
         
         # Initialize arrays
         nbins_high = len(BINS_HIGH) - 1
         nbins_low = len(BINS_LOW) - 1
         
-        hist_2d_intensity = np.zeros((nbins_high, nbins_low, tile_size, tile_size), dtype=np.float32)
-        hist_2d_n_wet = np.zeros((repeats, nbins_low, tile_size, tile_size), dtype=np.float32)
-        gini_by_bin = np.full((nbins_low, tile_size, tile_size), np.nan, dtype=np.float32)
-        n_events_by_bin = np.zeros((nbins_low, tile_size, tile_size), dtype=np.int32)
+        hist_2d_intensity = np.zeros((nbins_high, nbins_low, actual_ny, actual_nx), dtype=np.float32)
+        hist_2d_n_wet = np.zeros((repeats, nbins_low, actual_ny, actual_nx), dtype=np.float32)
+        gini_by_bin = np.full((nbins_low, actual_ny, actual_nx), np.nan, dtype=np.float32)
+        n_events_by_bin = np.zeros((nbins_low, actual_ny, actual_nx), dtype=np.int32)
         
         # Process each grid point in tile
-        for iy in range(tile_size):
-            for ix in range(tile_size):
+        for iy in range(actual_ny):
+            for ix in range(actual_nx):
                 # Get timeseries for this grid point
                 rain_high_point = rain_high[:, iy, ix]
                 rain_low_point = np.repeat(rain_low[:, iy, ix], repeats)
@@ -281,9 +287,9 @@ print(f"   Opened in {t1-t0:.2f}s")
 print(f"   Full domain shape: {ds_full.RAIN.shape}")
 print(f"   Dimensions: y={len(ds_full.y)}, x={len(ds_full.x)}")
 
-# Calculate number of tiles
-ny_tiles = len(ds_full.y) // tile_size
-nx_tiles = len(ds_full.x) // tile_size
+# Calculate number of tiles (including partial tiles at edges)
+ny_tiles = int(np.ceil(len(ds_full.y) / tile_size))
+nx_tiles = int(np.ceil(len(ds_full.x) / tile_size))
 total_tiles = ny_tiles * nx_tiles
 
 print(f"\n2. Processing {total_tiles} tiles ({ny_tiles} x {nx_tiles})...")
@@ -305,7 +311,9 @@ config = {
     'WET_VALUE_LOFREQ': WET_VALUE_LOFREQ,
     'intervals_high': intervals_high,
     'intervals_low': intervals_low,
-    'repeats': repeats
+    'repeats': repeats,
+    'ny_full': len(ds_full.y),
+    'nx_full': len(ds_full.x)
 }
 
 tile_tasks = []
@@ -414,7 +422,7 @@ ds_hist['n_events'].attrs = {
     'units': 'count'
 }
 
-output_file = f'{PATH_OUT}/{WRUN}/histograms/condprob_{FREQ_HIGH}_given_{FREQ_LOW}_full_domain.nc'
+output_file = f'{PATH_OUT}/{WRUN}/condprob_{FREQ_HIGH}_given_{FREQ_LOW}_full_domain.nc'
 os.makedirs(os.path.dirname(output_file), exist_ok=True)
 ds_hist.to_netcdf(output_file)
 
