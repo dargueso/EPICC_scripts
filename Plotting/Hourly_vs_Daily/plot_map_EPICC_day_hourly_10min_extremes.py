@@ -25,6 +25,7 @@ import string
 import seaborn as sns
 import matplotlib as mpl
 from matplotlib.gridspec import GridSpec
+from scipy.stats import anderson_ksamp,ks_2samp,mannwhitneyu
 
 from wrf import (to_np, getvar,get_cartopy, cartopy_xlim,GeoBounds,CoordPair,
                  cartopy_ylim, latlon_coords)
@@ -92,8 +93,7 @@ subregs = np.zeros_like(lm_is.values)
 #####################################################################
 #####################################################################
 
-
-qtile = 0.90
+qtile = 0.99
 
 # mylevels=np.arange(0, 45, 5)
 mylevels=np.asarray([0,2,4,6,8,10,15,20,25,30,35,40,50,60,70,80,90,100])
@@ -110,6 +110,30 @@ mpl.rcParams["font.size"] = 14
 mpl.rcParams["hatch.color"] = "red"
 mpl.rcParams["hatch.linewidth"] = 0.8
 
+def bootstrap_p99(data1, data2, q=99, thr=0.1, nboot=3000):
+    diffs = []
+    n1, n2 = len(data1), len(data2)
+
+    for _ in range(nboot):
+        s1 = np.random.choice(data1, n1, replace=True)
+        s2 = np.random.choice(data2, n2, replace=True)
+
+        # apply wet threshold inside the bootstrap
+        s1_wet = s1[s1 > thr]
+        s2_wet = s2[s2 > thr]
+
+        p1 = np.percentile(s1_wet, q)
+        p2 = np.percentile(s2_wet, q)
+
+        diffs.append(p2 - p1)
+
+    diffs = np.array(diffs)
+    ci = np.percentile(diffs, [2.5, 97.5])
+    p = min(np.mean(diffs <= 0), np.mean(diffs >= 0)) * 2
+
+    return np.mean(diffs), ci, p
+
+
 #####################################################################
 #####################################################################
 
@@ -121,37 +145,52 @@ for season in seasons:
         suffix_season = f'_{season}'
 
 
-    filein_pres_d = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/UIB_DAY_RAIN_2011-2020_qtiles_{mode}{suffix_season}.nc'
-    fin_pres_d = xr.open_dataset(filein_pres_d).sel(quantile=qtile).squeeze()
+    filein_d = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/RAIN_qtiles/UIB_DAY_RAIN_2011-2020_qtiles_wetonly_sig_mwu.nc'
+    fin_d = xr.open_dataset(filein_d).sel(quantile=qtile).squeeze()
 
-    filein_pres_h = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/UIB_01H_RAIN_2011-2020_qtiles_{mode}{suffix_season}.nc'
-    fin_pres_h = xr.open_dataset(filein_pres_h).sel(quantile=qtile).squeeze()
+    filein_h = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/RAIN_qtiles/UIB_01H_RAIN_2011-2020_qtiles_wetonly_sig_mwu.nc'
+    fin_h = xr.open_dataset(filein_h).sel(quantile=qtile).squeeze()
 
-    filein_pres_m = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/UIB_10MIN_RAIN_2011-2020_qtiles_{mode}{suffix_season}.nc'
-    fin_pres_m = xr.open_dataset(filein_pres_m).sel(quantile=qtile).squeeze()
-
-
-    filein_fut_d = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5_CMIP6anom/UIB_DAY_RAIN_2011-2020_qtiles_{mode}{suffix_season}.nc'
-    fin_fut_d = xr.open_dataset(filein_fut_d).sel(quantile=qtile).squeeze()
-
-    filein_fut_h = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5_CMIP6anom/UIB_01H_RAIN_2011-2020_qtiles_{mode}{suffix_season}.nc'
-    fin_fut_h = xr.open_dataset(filein_fut_h).sel(quantile=qtile).squeeze()
-
-    filein_fut_m = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5_CMIP6anom/UIB_10MIN_RAIN_2011-2020_qtiles_{mode}{suffix_season}.nc'
-    fin_fut_m = xr.open_dataset(filein_fut_m).sel(quantile=qtile).squeeze()
+    filein_m = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/RAIN_qtiles/UIB_10MIN_RAIN_2011-2020_qtiles_wetonly_sig_mwu.nc'
+    fin_m = xr.open_dataset(filein_m).sel(quantile=qtile).squeeze()
 
 
-    filein_sig_d = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/UIB_DAY_RAIN_2011-2020_qtiles_wetonly_sig.nc'
-    #filein_sig_h = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/UIB_DAY_RAIN_2011-2020_qtiles_wetonly_sig.nc'
-    finsig_d = xr.open_dataset(filein_sig_d).sel(quantile=qtile).squeeze()
-    #finsig_h = xr.open_dataset(filein_sig_h).sel(quantile=qtile).squeeze()
 
-    data_p={'daily':fin_pres_d['RAIN'].values,'hourly':fin_pres_h['RAIN'].values,'10min':fin_pres_m['RAIN'].values}
-    data_f={'daily':fin_fut_d['RAIN'].values,'hourly':fin_fut_h['RAIN'].values,'10min':fin_fut_m['RAIN'].values}
-    data_diff={'daily':(fin_fut_d['RAIN'].values-fin_pres_d['RAIN'].values)*100/fin_pres_d['RAIN'].values,
-            'hourly':(fin_fut_h['RAIN'].values-fin_pres_h['RAIN'].values)*100/fin_pres_h['RAIN'].values,
-            '10min':(fin_fut_m['RAIN'].values-fin_pres_m['RAIN'].values)*100/fin_pres_m['RAIN'].values}
+    data_p={'daily':fin_d['percentiles_present'].values,'hourly':fin_h['percentiles_present'].values,'10min':fin_m['percentiles_present'].values}
+    data_f={'daily':fin_d['percentiles_future'].values,'hourly':fin_h['percentiles_future'].values,'10min':fin_m['percentiles_future'].values}
+    data_diff={'daily':(fin_d['percentiles_future'].values-fin_d['percentiles_present'].values)*100/fin_d['percentiles_present'].values,
+            'hourly':(fin_h['percentiles_future'].values-fin_h['percentiles_present'].values)*100/fin_h['percentiles_present'].values,
+            '10min':(fin_m['percentiles_future'].values-fin_m['percentiles_present'].values)*100/fin_m['percentiles_present'].values}
 
+    data_sig = {'daily':fin_d['significance'].values,
+                'hourly':fin_h['significance'].values,
+                '10min':fin_m['significance'].values}
+    
+
+    test_nc_p = xr.open_dataset(f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/RAIN_locations/UIB_01H_RAIN_258y-559x_010buffer.nc').isel(y=10,x=10)
+    test_nc_f = xr.open_dataset(f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5_CMIP6anom/RAIN_locations/UIB_01H_RAIN_258y-559x_010buffer.nc').isel(y=10,x=10)
+
+    test_qtile_p = test_nc_p.where(test_nc_p['RAIN']>0.1).quantile(qtile,dim='time')
+    test_qtile_f = test_nc_f.where(test_nc_p['RAIN']>0.1).quantile(qtile,dim='time')
+
+    ext_p = test_nc_p.where(test_nc_p['RAIN']>test_qtile_p['RAIN'],drop=True).RAIN.values
+    ext_f = test_nc_f.where(test_nc_f['RAIN']>test_qtile_f['RAIN'],drop=True).RAIN.values
+
+    stat, p = mannwhitneyu(ext_p, ext_f, alternative='two-sided')
+    print(p)
+
+    stat, p = ks_2samp(ext_p, ext_f)
+    print(p)
+
+    result = anderson_ksamp([ext_p, ext_f])
+    print(result)
+
+    # mean_diff, ci, p = bootstrap_p99(test_nc_p.RAIN.values, test_nc_f.RAIN.values)
+    # print("Mean difference:", mean_diff)
+    # print("95% CI:", ci)
+    # print("p-value:", p)
+    import pdb; pdb.set_trace()  # fmt: skip
+                              
 
     #####################################################################
     #####################################################################
@@ -242,10 +281,10 @@ for season in seasons:
 
         
     for row, datatype in enumerate(['daily', 'hourly', '10min']):
-        if datatype == 'daily':
-            sig_var = finsig_d['significance'].values
-            sig_levs = np.array([-0.5, 0.5, 1.5])
-            sig = sig_var<0.01
+ 
+        sig_var = data_sig[datatype]
+        sig_levs = np.array([-0.5, 0.5, 1.5])
+        sig = sig_var<0.01
 
         axs = fig.add_subplot(gs_main[row, 2], projection=cart_proj)
         axs.set_title(f"{string.ascii_lowercase[row * 3 + 2]}", 
