@@ -35,10 +35,13 @@ WET_VALUE_LOW = 1.0   # mm per low-freq interval
 BINS_HIGH = np.arange(0, 101, 1)  # For hourly: 0-100mm in 1mm steps
 BINS_LOW = np.arange(0, 105, 5)   # For daily: 0-100mm in 5mm steps
 
-# Quantiles to calculate
+# Quantiles to calculate from synthetic samples
 QUANTILES = np.array([0.1, 0.2, 0.25, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85,
                       0.90, 0.95, 0.98, 0.99, 0.995, 0.999, 0.9999, 1.0], 
                      dtype=np.float32)
+
+# Bootstrap confidence levels to compute across samples
+BOOTSTRAP_QUANTILES = np.array([0.01, 0.025, 0.05, 0.1, 0.9, 0.95, 0.975, 0.99], dtype=np.float32)
 
 # Processing parameters
 TILE_SIZE = 50
@@ -255,8 +258,12 @@ def process_tile(tile_info):
     nx_inner = ix1 - ix0
     
     n_quantiles = len(QUANTILES)
-    result_quantiles = np.full((N_SAMPLES, n_quantiles, ny_inner, nx_inner), 
-                               np.nan, dtype=np.float32)
+    BOOTSTRAP_QUANTILES = config['bootstrap_quantiles']
+    n_bootstrap = len(BOOTSTRAP_QUANTILES)
+    
+    # Store all samples temporarily to compute bootstrap quantiles
+    all_samples = np.full((N_SAMPLES, n_quantiles, ny_inner, nx_inner), 
+                          np.nan, dtype=np.float32)
     
     # Generate samples
     for sample in range(N_SAMPLES):
@@ -264,9 +271,24 @@ def process_tile(tile_info):
             rain_tile, wet_cdf_tile, hour_cdf_tile, bin_idx_tile,
             BINS_HIGH.astype(np.float32), QUANTILES,
             iy0, iy1, ix0, ix1, n_interval, WET_VALUE_HIGH,
-            seed=123 + sample)  # FIXED: Match tiles version - same seed for same sample across all tiles
+            seed=123 + sample)
         
-        result_quantiles[sample, :, :, :] = sample_quantiles
+        all_samples[sample, :, :, :] = sample_quantiles
+    
+    # Compute bootstrap quantiles across samples for each (quantile, y, x)
+    # Result shape: (n_bootstrap, n_quantiles, ny_inner, nx_inner)
+    result_quantiles = np.full((n_bootstrap, n_quantiles, ny_inner, nx_inner), 
+                               np.nan, dtype=np.float32)
+    
+    for iq in range(n_quantiles):
+        for iy in range(ny_inner):
+            for ix in range(nx_inner):
+                sample_values = all_samples[:, iq, iy, ix]
+                # Only compute bootstrap quantiles where we have valid samples
+                valid_mask = ~np.isnan(sample_values)
+                if np.sum(valid_mask) > 0:
+                    valid_samples = sample_values[valid_mask]
+                    result_quantiles[:, iq, iy, ix] = np.quantile(valid_samples, BOOTSTRAP_QUANTILES)
     
     # CRITICAL FIX: Apply edge masking to output, not during extraction
     # Mask the outer BUFFER pixels for edge tiles
@@ -381,6 +403,7 @@ def main():
     config = {
         'buffer': BUFFER,
         'quantiles': QUANTILES,
+        'bootstrap_quantiles': BOOTSTRAP_QUANTILES,
         'bins_high': BINS_HIGH,
         'wet_value_high': WET_VALUE_HIGH,
         'n_interval': n_interval,
@@ -403,7 +426,8 @@ def main():
     # Combine results
     print("\n7. Combining tile results...")
     n_quantiles = len(QUANTILES)
-    result_full = np.full((N_SAMPLES, n_quantiles, ny, nx), np.nan, dtype=np.float32)
+    n_bootstrap = len(BOOTSTRAP_QUANTILES)
+    result_full = np.full((n_bootstrap, n_quantiles, ny, nx), np.nan, dtype=np.float32)
     
     for result in results:
         if result is not None:
@@ -420,18 +444,18 @@ def main():
     print("\n8. Creating output dataset...")
     ds_output = xr.Dataset(
         data_vars=dict(
-            precipitation=(("sample", "quantile", "y", "x"), result_full),
+            precipitation=(("bootstrap_quantile", "quantile", "y", "x"), result_full),
             lat=(("y", "x"), lat),
             lon=(("y", "x"), lon),
         ),
         coords=dict(
-            sample=np.arange(N_SAMPLES),
+            bootstrap_quantile=BOOTSTRAP_QUANTILES,
             quantile=QUANTILES,
             y=np.arange(ny),
             x=np.arange(nx),
         ),
         attrs={
-            'description': f'Synthetic future {FREQ_HIGH} rainfall quantiles from {FREQ_LOW} totals',
+            'description': f'Bootstrap confidence intervals for synthetic future {FREQ_HIGH} rainfall quantiles from {FREQ_LOW} totals',
             'units': f'mm/{FREQ_HIGH}',
             'wet_threshold_high': WET_VALUE_HIGH,
             'wet_threshold_low': WET_VALUE_LOW,
@@ -439,24 +463,16 @@ def main():
             'freq_low': FREQ_LOW,
             'n_samples': N_SAMPLES,
             'buffer_size': BUFFER,
-            'note': f'Quantiles calculated from synthetic {FREQ_HIGH} values > {WET_VALUE_HIGH} mm. Edge buffer of {BUFFER} pixels masked with NaN.'
+            'bootstrap_quantiles': BOOTSTRAP_QUANTILES.tolist(),
+            'note': f'Bootstrap quantiles (confidence levels) calculated from {N_SAMPLES} synthetic realizations of {FREQ_HIGH} values > {WET_VALUE_HIGH} mm. Edge buffer of {BUFFER} pixels masked with NaN. Use bootstrap_quantile dimension to assess uncertainty.'
         }
     )
     
     # Save
-    output_file = f'{PATH_OUT}/{WRUN_FUTURE}/synthetic_future_{FREQ_HIGH}_from_{FREQ_LOW}_full_domain.nc'
+    output_file = f'{PATH_OUT}/{WRUN_FUTURE}/synthetic_future_{FREQ_HIGH}_from_{FREQ_LOW}_confidence.nc'
     print(f"\n9. Saving to: {output_file}")
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     ds_output.to_netcdf(output_file)
-    
-    # Calculate confidence intervals
-    print("\n10. Calculating confidence intervals...")
-    ds_renamed = ds_output.rename({'quantile': 'qs_time'})
-    ds_confidence = ds_renamed.quantile(q=[0.01, 0.025, 0.05, 0.1, 0.9, 0.95, 0.975, 0.99], dim='sample')
-    
-    confidence_file = f'{PATH_OUT}/{WRUN_FUTURE}/synthetic_future_{FREQ_HIGH}_from_{FREQ_LOW}_confidence.nc'
-    ds_confidence.to_netcdf(confidence_file)
-    print(f"   Confidence intervals saved to: {confidence_file}")
     
     total_time = time.time() - total_start
     print("\n" + "="*60)
