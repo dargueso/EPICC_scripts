@@ -23,7 +23,7 @@ PATH_OUT = '/home/dargueso/postprocessed/EPICC/'
 WRUN_PRESENT = "EPICC_2km_ERA5"
 WRUN_FUTURE = "EPICC_2km_ERA5_CMIP6anom"
 
-FREQ = '1H'
+FREQ = 'D'
 WET_THRESHOLD = 0.1
 PERCENTILES = [10, 20, 25, 40, 50, 60, 70, 75, 80, 85, 90, 95, 98, 99, 99.5, 99.9, 99.99, 100]
 ALPHA = 0.05
@@ -284,7 +284,7 @@ def process_tile_scipy(rain_present, rain_future, wet_threshold, percentiles, al
                     n_fut_above = len(fut_above)
                     
                     # Only test if we have enough samples
-                    if n_pres_above >= 10 and n_fut_above >= 10:
+                    if n_pres_above >= 5 and n_fut_above >= 5:
                         try:
                             _, pvalue = stats.mannwhitneyu(pres_above, fut_above, alternative='two-sided')
                             pvalues[ip, iy, ix] = pvalue
