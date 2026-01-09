@@ -2,7 +2,7 @@
 """
 Memory-efficient full-domain version with multiprocessing.
 Calculates synthetic future high-frequency rainfall quantiles from low-frequency totals.
-FIXED: Correct buffer handling at domain edges
+FIXED: Correct buffer handling at domain edges + FAST multiprocessing via zarr
 """
 import os
 import time
@@ -12,6 +12,8 @@ from multiprocessing import Pool
 from numba import njit
 from scipy.ndimage import uniform_filter
 import warnings
+import tempfile
+import shutil
 warnings.filterwarnings('ignore')
 
 # =============================================================================
@@ -208,17 +210,17 @@ def generate_quantiles_for_tile(rain_arr, wet_cdf, hour_cdf, bin_idx, hr_edges,
     return result
 
 # =============================================================================
-# TILE PROCESSING FUNCTION - FIXED VERSION
+# TILE PROCESSING FUNCTION - FIXED VERSION WITH ZARR
 # =============================================================================
 
 def process_tile(tile_info):
-    """Process a single tile with CORRECTED edge buffer handling."""
-    (iy_tile, ix_tile, rain_arr, bin_idx, wet_cdf, hour_cdf, 
-     tile_size, config) = tile_info
+    """Process a single tile - loads data from zarr instead of receiving via pickle."""
+    (iy_tile, ix_tile, TILE_SIZE, config, temp_dir, checkpoint_dir) = tile_info
     
     # Unpack config
     BUFFER = config['buffer']
     QUANTILES = config['quantiles']
+    BOOTSTRAP_QUANTILES = config['bootstrap_quantiles']
     BINS_HIGH = config['bins_high']
     WET_VALUE_HIGH = config['wet_value_high']
     n_interval = config['n_interval']
@@ -226,42 +228,44 @@ def process_tile(tile_info):
     ny_tiles = config['ny_tiles']
     nx_tiles = config['nx_tiles']
     
-    # Full domain dimensions
-    ny_full, nx_full = rain_arr.shape[1:]
+    n_quantiles = len(QUANTILES)
+    n_bootstrap = len(BOOTSTRAP_QUANTILES)
     
-    # Tile bounds WITHOUT buffer (what we want to output)
-    y_start = iy_tile * tile_size
-    y_end = min(ny_full, y_start + tile_size)
-    x_start = ix_tile * tile_size
-    x_end = min(nx_full, x_start + tile_size)
+    # Load data from zarr stores
+    rain_arr = xr.open_zarr(f"{temp_dir}/rain.zarr").rain.values
+    bin_idx = xr.open_zarr(f"{temp_dir}/bin_idx.zarr").bin_idx.values
+    wet_cdf = xr.open_zarr(f"{temp_dir}/wet_cdf.zarr").wet_cdf.values
+    hour_cdf = xr.open_zarr(f"{temp_dir}/hour_cdf.zarr").hour_cdf.values
     
-    # Tile bounds WITH buffer (what we extract for processing)
+    ny, nx = rain_arr.shape[1:]
+    
+    # Calculate tile boundaries with buffer
+    y_start = iy_tile * TILE_SIZE
+    y_end = min(y_start + TILE_SIZE, ny)
+    x_start = ix_tile * TILE_SIZE
+    x_end = min(x_start + TILE_SIZE, nx)
+    
+    ny_inner = y_end - y_start
+    nx_inner = x_end - x_start
+    
+    # Extract tile with buffer for smoothing context
     y_start_buf = max(0, y_start - BUFFER)
-    y_end_buf = min(ny_full, y_end + BUFFER)
+    y_end_buf = min(ny, y_end + BUFFER)
     x_start_buf = max(0, x_start - BUFFER)
-    x_end_buf = min(nx_full, x_end + BUFFER)
+    x_end_buf = min(nx, x_end + BUFFER)
     
-    # Extract tile with buffer
     rain_tile = rain_arr[:, y_start_buf:y_end_buf, x_start_buf:x_end_buf]
     bin_idx_tile = bin_idx[:, y_start_buf:y_end_buf, x_start_buf:x_end_buf]
     wet_cdf_tile = wet_cdf[:, :, y_start_buf:y_end_buf, x_start_buf:x_end_buf]
     hour_cdf_tile = hour_cdf[:, :, y_start_buf:y_end_buf, x_start_buf:x_end_buf]
     
-    # Calculate inner region indices relative to the buffered tile
-    # These are the actual data indices within the extracted tile
-    iy0 = y_start - y_start_buf  # Offset from buffer start to actual tile start
-    iy1 = iy0 + (y_end - y_start)  # Inner tile height
-    ix0 = x_start - x_start_buf  # Offset from buffer start to actual tile start
-    ix1 = ix0 + (x_end - x_start)  # Inner tile width
+    # Coordinates within buffered tile for the actual tile region
+    iy0 = y_start - y_start_buf
+    iy1 = iy0 + ny_inner
+    ix0 = x_start - x_start_buf
+    ix1 = ix0 + nx_inner
     
-    ny_inner = iy1 - iy0
-    nx_inner = ix1 - ix0
-    
-    n_quantiles = len(QUANTILES)
-    BOOTSTRAP_QUANTILES = config['bootstrap_quantiles']
-    n_bootstrap = len(BOOTSTRAP_QUANTILES)
-    
-    # Store all samples temporarily to compute bootstrap quantiles
+    # Generate N_SAMPLES for this tile
     all_samples = np.full((N_SAMPLES, n_quantiles, ny_inner, nx_inner), 
                           np.nan, dtype=np.float32)
     
@@ -276,7 +280,6 @@ def process_tile(tile_info):
         all_samples[sample, :, :, :] = sample_quantiles
     
     # Compute bootstrap quantiles across samples for each (quantile, y, x)
-    # Result shape: (n_bootstrap, n_quantiles, ny_inner, nx_inner)
     result_quantiles = np.full((n_bootstrap, n_quantiles, ny_inner, nx_inner), 
                                np.nan, dtype=np.float32)
     
@@ -284,14 +287,12 @@ def process_tile(tile_info):
         for iy in range(ny_inner):
             for ix in range(nx_inner):
                 sample_values = all_samples[:, iq, iy, ix]
-                # Only compute bootstrap quantiles where we have valid samples
                 valid_mask = ~np.isnan(sample_values)
                 if np.sum(valid_mask) > 0:
                     valid_samples = sample_values[valid_mask]
                     result_quantiles[:, iq, iy, ix] = np.quantile(valid_samples, BOOTSTRAP_QUANTILES)
     
-    # CRITICAL FIX: Apply edge masking to output, not during extraction
-    # Mask the outer BUFFER pixels for edge tiles
+    # Apply edge masking to output
     if iy_tile == 0:  # Top edge
         result_quantiles[:, :, :BUFFER, :] = np.nan
     if iy_tile == ny_tiles - 1:  # Bottom edge
@@ -300,6 +301,10 @@ def process_tile(tile_info):
         result_quantiles[:, :, :, :BUFFER] = np.nan
     if ix_tile == nx_tiles - 1:  # Right edge
         result_quantiles[:, :, :, -BUFFER:] = np.nan
+    
+    # Save checkpoint
+    checkpoint_file = f'{checkpoint_dir}/tile_{iy_tile:03d}_{ix_tile:03d}.npy'
+    np.save(checkpoint_file, result_quantiles)
     
     return (iy_tile, ix_tile, result_quantiles, ny_inner, nx_inner)
 
@@ -314,170 +319,268 @@ def main():
     
     total_start = time.time()
     
-    # Load present-day probability distributions
-    print("\n1. Loading probability distributions...")
-    prob_file = f'{PATH_IN}/{WRUN_PRESENT}/condprob_{FREQ_HIGH}_given_{FREQ_LOW}_full_domain.nc'
-    ds_prob = xr.open_dataset(prob_file)
+    # Create temporary directory for zarr stores
+    temp_dir = tempfile.mkdtemp(prefix='synthetic_future_')
+    print(f"\nUsing temporary directory: {temp_dir}")
     
-    # Load future low-frequency rainfall (flexible frequency)
-    print(f"\n2. Loading future {FREQ_LOW} rainfall...")
-    freq_name_low = FREQ_TO_NAME[FREQ_LOW]
-    future_file = f'{PATH_IN}/{WRUN_FUTURE}/UIB_{freq_name_low}_RAIN.zarr'
-    
-    # Try to open, if not found, suggest correct path
     try:
-        ds_future = xr.open_zarr(future_file, consolidated=True)
-    except FileNotFoundError:
-        print(f"   ERROR: Could not find {future_file}")
-        print(f"   Please ensure your {FREQ_LOW} rainfall data is available")
-        print(f"   Expected file: UIB_{freq_name_low}_RAIN.zarr")
-        raise
-    
-    # Get data arrays
-    rain_low_freq = ds_future.RAIN.where(ds_future.RAIN > WET_VALUE_LOW).values.astype(np.float32, copy=True)
-    lat = ds_future.lat.isel(time=0).values.copy()
-    lon = ds_future.lon.isel(time=0).values.copy()
-    
-    ny, nx = rain_low_freq.shape[1:]
-    print(f"   Domain size: {ny} x {nx}")
-    print(f"   Time steps: {rain_low_freq.shape[0]}")
-    
-    # Compute bin indices
-    print("\n3. Computing bin indices...")
-    bin_idx = (np.digitize(rain_low_freq, BINS_LOW) - 1).astype(np.int16)
-    
-    # Prepare probability distributions
-    print("\n4. Preparing probability distributions...")
-    wet_dist = ds_prob.cond_prob_n_wet.values.copy()  # (n_wet_timesteps, bin_low, y, x)
-    hour_dist = ds_prob.cond_prob_intensity.values.copy()  # (bin_high, bin_low, y, x)
-    n_events = ds_prob.n_events.values.copy()  # (bin_low, y, x)
-    
-    ds_prob.close()
-    ds_future.close()
-    
-    # Convert to proper format and handle NaNs
-    wet_dist = np.nan_to_num(wet_dist, nan=0.0)
-    hour_dist = np.nan_to_num(hour_dist, nan=0.0)
-    n_events = np.nan_to_num(n_events, nan=0.0)
-    
-    # Transpose to match expected format: (bin_low, n_intervals, y, x)
-    wet_dist = np.transpose(wet_dist, (1, 0, 2, 3))
-    hour_dist = np.transpose(hour_dist, (1, 0, 2, 3))
-    
-    # Apply smoothing with buffer
-    print("\n5. Applying spatial smoothing...")
-    wet_weighted = wet_dist * n_events[:, np.newaxis, :, :]
-    hour_weighted = hour_dist * n_events[:, np.newaxis, :, :]
-    
-    comp_samp = _window_sum(n_events, BUFFER)
-    comp_wet = _window_sum(wet_weighted, BUFFER)
-    comp_hour = _window_sum(hour_weighted, BUFFER)
-    
-    # Safe division
-    nonzero_mask = comp_samp != 0
-    comp_wet = np.where(nonzero_mask[:, None], comp_wet / comp_samp[:, None], 0.0)
-    comp_hour = np.where(nonzero_mask[:, None], comp_hour / comp_samp[:, None], 0.0)
-    
-    # Create CDFs
-    wet_cdf = np.cumsum(comp_wet, axis=1).astype(np.float32, order="C")
-    hour_cdf = np.cumsum(comp_hour, axis=1).astype(np.float32, order="C")
-    
-    # Cleanup
-    del wet_dist, hour_dist, n_events, wet_weighted, hour_weighted
-    del comp_samp, comp_wet, comp_hour, nonzero_mask
-    
-    # Calculate tiles
-    ny_tiles = (ny + TILE_SIZE - 1) // TILE_SIZE
-    nx_tiles = (nx + TILE_SIZE - 1) // TILE_SIZE
-    total_tiles = ny_tiles * nx_tiles
-
-    mytiles_x = np.ceil(nx / TILE_SIZE).astype(int)
-    mytiles_y = np.ceil(ny / TILE_SIZE).astype(int)
-    
-    print(f"\n6. Total tiles to process: {mytiles_x} x {mytiles_y} = {mytiles_x * mytiles_y}")
-    print(f"\n6. Processing {total_tiles} tiles ({ny_tiles} x {nx_tiles})...")
-    print(f"   Using {N_PROCESSES} processes")
-    print(f"   Generating {N_SAMPLES} samples per tile")
-    
-    # Create config dict
-    config = {
-        'buffer': BUFFER,
-        'quantiles': QUANTILES,
-        'bootstrap_quantiles': BOOTSTRAP_QUANTILES,
-        'bins_high': BINS_HIGH,
-        'wet_value_high': WET_VALUE_HIGH,
-        'n_interval': n_interval,
-        'n_samples': N_SAMPLES,
-        'ny_tiles': ny_tiles,
-        'nx_tiles': nx_tiles
-    }
-    
-    # Create tile tasks
-    tile_tasks = []
-    for iy_tile in range(ny_tiles):
-        for ix_tile in range(nx_tiles):
-            tile_tasks.append((iy_tile, ix_tile, rain_low_freq, bin_idx, 
-                             wet_cdf, hour_cdf, TILE_SIZE, config))
-    
-    # Process tiles in parallel
-    with Pool(processes=N_PROCESSES) as pool:
-        results = pool.map(process_tile, tile_tasks)
-    
-    # Combine results
-    print("\n7. Combining tile results...")
-    n_quantiles = len(QUANTILES)
-    n_bootstrap = len(BOOTSTRAP_QUANTILES)
-    result_full = np.full((n_bootstrap, n_quantiles, ny, nx), np.nan, dtype=np.float32)
-    
-    for result in results:
-        if result is not None:
-            iy_tile, ix_tile, tile_data, ny_inner, nx_inner = result
-            
-            y_start = iy_tile * TILE_SIZE
-            y_end = y_start + ny_inner
-            x_start = ix_tile * TILE_SIZE
-            x_end = x_start + nx_inner
-            
-            result_full[:, :, y_start:y_end, x_start:x_end] = tile_data
-    
-    # Create output dataset
-    print("\n8. Creating output dataset...")
-    ds_output = xr.Dataset(
-        data_vars=dict(
-            precipitation=(("bootstrap_quantile", "quantile", "y", "x"), result_full),
-            lat=(("y", "x"), lat),
-            lon=(("y", "x"), lon),
-        ),
-        coords=dict(
-            bootstrap_quantile=BOOTSTRAP_QUANTILES,
-            quantile=QUANTILES,
-            y=np.arange(ny),
-            x=np.arange(nx),
-        ),
-        attrs={
-            'description': f'Bootstrap confidence intervals for synthetic future {FREQ_HIGH} rainfall quantiles from {FREQ_LOW} totals',
-            'units': f'mm/{FREQ_HIGH}',
-            'wet_threshold_high': WET_VALUE_HIGH,
-            'wet_threshold_low': WET_VALUE_LOW,
-            'freq_high': FREQ_HIGH,
-            'freq_low': FREQ_LOW,
+        # Load present-day probability distributions
+        print("\n1. Loading probability distributions...")
+        prob_file = f'{PATH_IN}/{WRUN_PRESENT}/condprob_{FREQ_HIGH}_given_{FREQ_LOW}_full_domain.nc'
+        ds_prob = xr.open_dataset(prob_file)
+        
+        # Load future low-frequency rainfall
+        print(f"\n2. Loading future {FREQ_LOW} rainfall...")
+        freq_name_low = FREQ_TO_NAME[FREQ_LOW]
+        future_file = f'{PATH_IN}/{WRUN_FUTURE}/UIB_{freq_name_low}_RAIN.zarr'
+        
+        try:
+            ds_future = xr.open_zarr(future_file, consolidated=True)
+        except FileNotFoundError:
+            print(f"   ERROR: Could not find {future_file}")
+            print(f"   Please ensure your {FREQ_LOW} rainfall data is available")
+            print(f"   Expected file: UIB_{freq_name_low}_RAIN.zarr")
+            raise
+        
+        # Get data arrays
+        rain_low_freq = ds_future.RAIN.where(ds_future.RAIN > WET_VALUE_LOW).values.astype(np.float32, copy=True)
+        lat = ds_future.lat.isel(time=0).values.copy()
+        lon = ds_future.lon.isel(time=0).values.copy()
+        
+        ny, nx = rain_low_freq.shape[1:]
+        print(f"   Domain size: {ny} x {nx}")
+        print(f"   Time steps: {rain_low_freq.shape[0]}")
+        
+        # Compute bin indices
+        print("\n3. Computing bin indices...")
+        bin_idx = (np.digitize(rain_low_freq, BINS_LOW) - 1).astype(np.int16)
+        
+        # Prepare probability distributions
+        print("\n4. Preparing probability distributions...")
+        wet_dist = ds_prob.cond_prob_n_wet.values.copy()
+        hour_dist = ds_prob.cond_prob_intensity.values.copy()
+        n_events = ds_prob.n_events.values.copy()
+        
+        ds_prob.close()
+        ds_future.close()
+        
+        # Convert to proper format and handle NaNs
+        wet_dist = np.nan_to_num(wet_dist, nan=0.0)
+        hour_dist = np.nan_to_num(hour_dist, nan=0.0)
+        n_events = np.nan_to_num(n_events, nan=0.0)
+        
+        # Transpose to match expected format
+        wet_dist = np.transpose(wet_dist, (1, 0, 2, 3))
+        hour_dist = np.transpose(hour_dist, (1, 0, 2, 3))
+        
+        # Apply smoothing with buffer
+        print("\n5. Applying spatial smoothing...")
+        wet_weighted = wet_dist * n_events[:, np.newaxis, :, :]
+        hour_weighted = hour_dist * n_events[:, np.newaxis, :, :]
+        
+        comp_samp = _window_sum(n_events, BUFFER)
+        comp_wet = _window_sum(wet_weighted, BUFFER)
+        comp_hour = _window_sum(hour_weighted, BUFFER)
+        
+        # Safe division
+        nonzero_mask = comp_samp != 0
+        comp_wet = np.where(nonzero_mask[:, None], comp_wet / comp_samp[:, None], 0.0)
+        comp_hour = np.where(nonzero_mask[:, None], comp_hour / comp_samp[:, None], 0.0)
+        
+        # Create CDFs
+        wet_cdf = np.cumsum(comp_wet, axis=1).astype(np.float32, order="C")
+        hour_cdf = np.cumsum(comp_hour, axis=1).astype(np.float32, order="C")
+        
+        # Cleanup
+        del wet_dist, hour_dist, n_events, wet_weighted, hour_weighted
+        del comp_samp, comp_wet, comp_hour, nonzero_mask
+        
+        # Save to zarr stores for worker access
+        print("\n6. Writing data to temporary zarr stores...")
+        xr.Dataset({
+            'rain': (['time', 'y', 'x'], rain_low_freq)
+        }).to_zarr(f"{temp_dir}/rain.zarr", mode='w')
+        
+        xr.Dataset({
+            'bin_idx': (['time', 'y', 'x'], bin_idx)
+        }).to_zarr(f"{temp_dir}/bin_idx.zarr", mode='w')
+        
+        xr.Dataset({
+            'wet_cdf': (['bin_low', 'n_intervals', 'y', 'x'], wet_cdf)
+        }).to_zarr(f"{temp_dir}/wet_cdf.zarr", mode='w')
+        
+        xr.Dataset({
+            'hour_cdf': (['bin_low', 'bin_high', 'y', 'x'], hour_cdf)
+        }).to_zarr(f"{temp_dir}/hour_cdf.zarr", mode='w')
+        
+        del rain_low_freq, bin_idx, wet_cdf, hour_cdf
+        
+        # Calculate tiles
+        ny_tiles = (ny + TILE_SIZE - 1) // TILE_SIZE
+        nx_tiles = (nx + TILE_SIZE - 1) // TILE_SIZE
+        total_tiles = ny_tiles * nx_tiles
+        
+        print(f"\n7. Processing {total_tiles} tiles ({ny_tiles} x {nx_tiles})...")
+        print(f"   Using {N_PROCESSES} processes")
+        print(f"   Generating {N_SAMPLES} samples per tile")
+        
+        # Create config dict
+        config = {
+            'buffer': BUFFER,
+            'quantiles': QUANTILES,
+            'bootstrap_quantiles': BOOTSTRAP_QUANTILES,
+            'bins_high': BINS_HIGH,
+            'wet_value_high': WET_VALUE_HIGH,
+            'n_interval': n_interval,
             'n_samples': N_SAMPLES,
-            'buffer_size': BUFFER,
-            'bootstrap_quantiles': BOOTSTRAP_QUANTILES.tolist(),
-            'note': f'Bootstrap quantiles (confidence levels) calculated from {N_SAMPLES} synthetic realizations of {FREQ_HIGH} values > {WET_VALUE_HIGH} mm. Edge buffer of {BUFFER} pixels masked with NaN. Use bootstrap_quantile dimension to assess uncertainty.'
+            'ny_tiles': ny_tiles,
+            'nx_tiles': nx_tiles
         }
-    )
-    
-    # Save
-    output_file = f'{PATH_OUT}/{WRUN_FUTURE}/synthetic_future_{FREQ_HIGH}_from_{FREQ_LOW}_confidence.nc'
-    print(f"\n9. Saving to: {output_file}")
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
-    ds_output.to_netcdf(output_file)
-    
-    total_time = time.time() - total_start
-    print("\n" + "="*60)
-    print(f"Complete! Total time: {total_time/60:.2f} minutes")
-    print("="*60)
+        
+        # Setup checkpoint directory
+        checkpoint_dir = f'{PATH_OUT}/{WRUN_FUTURE}/checkpoint_tiles'
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        
+        # Check for existing checkpoint tiles
+        existing_tiles = set()
+        if os.path.exists(checkpoint_dir):
+            for fname in os.listdir(checkpoint_dir):
+                if fname.startswith('tile_') and fname.endswith('.npy'):
+                    # Extract tile indices from filename: tile_YYY_XXX.npy
+                    parts = fname.replace('.npy', '').split('_')
+                    if len(parts) == 3:
+                        try:
+                            iy = int(parts[1])
+                            ix = int(parts[2])
+                            existing_tiles.add((iy, ix))
+                        except ValueError:
+                            continue
+        
+        if existing_tiles:
+            print(f"   Found {len(existing_tiles)} existing checkpoint tiles - will resume from where left off")
+        
+        # Create tile tasks - only pass indices and paths, skip completed tiles
+        tile_tasks = []
+        skipped_count = 0
+        for iy_tile in range(ny_tiles):
+            for ix_tile in range(nx_tiles):
+                if (iy_tile, ix_tile) in existing_tiles:
+                    skipped_count += 1
+                    continue
+                tile_tasks.append((iy_tile, ix_tile, TILE_SIZE, config, temp_dir, checkpoint_dir))
+        
+        if skipped_count > 0:
+            print(f"   Skipping {skipped_count} already completed tiles")
+        print(f"   Processing {len(tile_tasks)} remaining tiles")
+        
+        # Process tiles in parallel with progress tracking
+        print(f"   Starting parallel processing at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        completed = [skipped_count]  # Start from number of skipped tiles
+        
+        def progress_callback(result):
+            completed[0] += 1
+            elapsed = time.time() - total_start
+            tiles_per_min = completed[0] / (elapsed / 60) if elapsed > 0 else 0
+            remaining_tiles = total_tiles - completed[0]
+            eta_min = remaining_tiles / tiles_per_min if tiles_per_min > 0 else 0
+            print(f"   Completed: {completed[0]:4d}/{total_tiles} tiles "
+                  f"({100*completed[0]/total_tiles:5.1f}%) | "
+                  f"Rate: {tiles_per_min:.2f} tiles/min | "
+                  f"ETA: {eta_min:.1f} min")
+        
+        results_list = []
+        if len(tile_tasks) > 0:
+            with Pool(processes=N_PROCESSES) as pool:
+                async_results = []
+                for tile_task in tile_tasks:
+                    result = pool.apply_async(process_tile, args=(tile_task,), callback=lambda r: progress_callback(r))
+                    async_results.append(result)
+                
+                # Wait for all tasks to complete
+                for r in async_results:
+                    results_list.append(r.get())
+        
+        # Load all results (new + checkpointed)
+        print("\n8. Loading all tile results (including checkpoints)...")
+        results = results_list
+        for iy_tile, ix_tile in existing_tiles:
+            checkpoint_file = f'{checkpoint_dir}/tile_{iy_tile:03d}_{ix_tile:03d}.npy'
+            tile_data = np.load(checkpoint_file)
+            
+            # Reconstruct result format
+            y_start = iy_tile * TILE_SIZE
+            y_end = min(y_start + TILE_SIZE, ny)
+            x_start = ix_tile * TILE_SIZE
+            x_end = min(x_start + TILE_SIZE, nx)
+            ny_inner = y_end - y_start
+            nx_inner = x_end - x_start
+            
+            results.append((iy_tile, ix_tile, tile_data, ny_inner, nx_inner))
+        
+        # Combine results
+        print("\n9. Combining tile results...")
+        n_quantiles = len(QUANTILES)
+        n_bootstrap = len(BOOTSTRAP_QUANTILES)
+        result_full = np.full((n_bootstrap, n_quantiles, ny, nx), np.nan, dtype=np.float32)
+        
+        for result in results:
+            if result is not None:
+                iy_tile, ix_tile, tile_data, ny_inner, nx_inner = result
+                
+                y_start = iy_tile * TILE_SIZE
+                y_end = y_start + ny_inner
+                x_start = ix_tile * TILE_SIZE
+                x_end = x_start + nx_inner
+                
+                result_full[:, :, y_start:y_end, x_start:x_end] = tile_data
+        
+        # Create output dataset
+        print("\n10. Creating output dataset...")
+        ds_output = xr.Dataset(
+            data_vars=dict(
+                precipitation=(("bootstrap_quantile", "quantile", "y", "x"), result_full),
+                lat=(("y", "x"), lat),
+                lon=(("y", "x"), lon),
+            ),
+            coords=dict(
+                bootstrap_quantile=BOOTSTRAP_QUANTILES,
+                quantile=QUANTILES,
+                y=np.arange(ny),
+                x=np.arange(nx),
+            ),
+            attrs={
+                'description': f'Bootstrap confidence intervals for synthetic future {FREQ_HIGH} rainfall quantiles from {FREQ_LOW} totals',
+                'units': f'mm/{FREQ_HIGH}',
+                'wet_threshold_high': WET_VALUE_HIGH,
+                'wet_threshold_low': WET_VALUE_LOW,
+                'freq_high': FREQ_HIGH,
+                'freq_low': FREQ_LOW,
+                'n_samples': N_SAMPLES,
+                'buffer_size': BUFFER,
+                'bootstrap_quantiles': BOOTSTRAP_QUANTILES.tolist(),
+                'note': f'Bootstrap quantiles (confidence levels) calculated from {N_SAMPLES} synthetic realizations of {FREQ_HIGH} values > {WET_VALUE_HIGH} mm. Edge buffer of {BUFFER} pixels masked with NaN. Use bootstrap_quantile dimension to assess uncertainty.'
+            }
+        )
+        
+        # Save
+        output_file = f'{PATH_OUT}/{WRUN_FUTURE}/synthetic_future_{FREQ_HIGH}_from_{FREQ_LOW}_confidence.nc'
+        print(f"\n11. Saving to: {output_file}")
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        ds_output.to_netcdf(output_file)
+        
+        # Clean up checkpoint directory after successful completion
+        print(f"\n12. Cleaning up checkpoint tiles...")
+        shutil.rmtree(checkpoint_dir, ignore_errors=True)
+        
+        total_time = time.time() - total_start
+        print("\n" + "="*60)
+        print(f"Complete! Total time: {total_time/60:.2f} minutes")
+        print("="*60)
+        
+    finally:
+        # Cleanup temporary directory
+        print(f"\nCleaning up temporary directory: {temp_dir}")
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 if __name__ == "__main__":
     main()
