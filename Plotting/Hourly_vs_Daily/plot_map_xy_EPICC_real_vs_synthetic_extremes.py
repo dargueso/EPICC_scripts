@@ -72,7 +72,7 @@ subregs = np.zeros_like(lm_is.values)
 #####################################################################
 
 
-qtile = 0.99
+qtile = 99
 confidence_level = 0.975
 buffer = 10
 
@@ -91,27 +91,23 @@ sig_levs = np.array([-0.5, 0.5, 1.5])
 
 #Load data
 
-#Loading CTL percentiles
+#Loading percentiles
 
-filein_pres = '/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/UIB_01H_RAIN_2011-2020_qtiles_wetonly.nc'
-fin_pres = xr.open_dataset(filein_pres).sel(quantile=qtile).squeeze()
-#Loading PGW percentiles
-
-filein_fut = '/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5_CMIP6anom/UIB_01H_RAIN_2011-2020_qtiles_wetonly.nc'
-fin_fut = xr.open_dataset(filein_fut).sel(quantile=qtile).squeeze()
+filein = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/percentiles_and_significance_10MIN_mann_whitney_seqio.nc'
+fin = xr.open_dataset(filein).sel(percentile=qtile).squeeze()
 
 #Loading SYN confidence intervals
 
-filein_syn = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5_CMIP6anom/future_synthetic_quant_confidence_{buffer:03d}buffer.nc'
-fin_syn = xr.open_dataset(filein_syn).sel(qs_time = qtile).squeeze()
+filein_syn = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5_CMIP6anom/synthetic_future_10MIN_from_1H_confidence.nc'
+fin_syn = xr.open_dataset(filein_syn).sel(quantile=qtile/100.).squeeze()
 
 fin_syn_all = xr.open_dataset(filein_syn).squeeze()
-fin_syn_all = fin_syn_all.isel(qs_time=slice(10,-2))
-qtiles= fin_syn_all.qs_time.values
+fin_syn_all = fin_syn_all.isel(quantile=slice(10,-2))
+qtiles= fin_syn_all['quantile'].values
 cl_hi = round(confidence_level,3)
 cl_lo = round(1 - cl_hi, 3)
 
-data = [fin_pres.RAIN, fin_fut.RAIN, fin_syn.precipitation.sel(quantile=confidence_level).squeeze()]
+data = [fin['percentiles_present'].values, fin['percentiles_future'].values, fin_syn.precipitation.sel(bootstrap_quantile=confidence_level).squeeze()]
 
 diff = data[1]- data[0]
 sig = data[1]- data[2]
@@ -140,20 +136,40 @@ gs_row1 = gs_main[1].subgridspec(1, 4, wspace=0.1)
 #####################################################################
 #####################################################################
 
+zarr_path_present = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5//UIB_01H_RAIN.zarr'
+zarr_path_future = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5_CMIP6anom/UIB_01H_RAIN.zarr'
+
+try:
+    ds_present = xr.open_zarr(zarr_path_present, consolidated=True)
+    ds_future = xr.open_zarr(zarr_path_future, consolidated=True)
+    print("   Opened with consolidated metadata")
+except KeyError:
+    ds_present = xr.open_zarr(zarr_path_present, consolidated=False)
+    ds_future = xr.open_zarr(zarr_path_future, consolidated=False)
+    print("   Opened without consolidated metadata")
+
 for loc in range(len(locs_names)):
-
-
 
     loc_name = locs_names[loc]
     print(loc_name)
     xloc = locs_x_idx[loc]
     yloc = locs_y_idx[loc]
 
-    filein_pres = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/UIB_01H_RAIN_{yloc:3d}y-{xloc:3d}x_{buffer:03d}buffer.nc'
-    fin_pres = xr.open_dataset(filein_pres).squeeze()
+    # filein_pres = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/UIB_01H_RAIN_{yloc:3d}y-{xloc:3d}x_{buffer:03d}buffer.nc'
+    # fin_pres = xr.open_dataset(filein_pres).squeeze()
 
-    filein_fut = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5_CMIP6anom/UIB_01H_RAIN_{yloc:3d}y-{xloc:3d}x_{buffer:03d}buffer.nc'
-    fin_fut = xr.open_dataset(filein_fut).squeeze()
+    # filein_fut = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5_CMIP6anom/UIB_01H_RAIN_{yloc:3d}y-{xloc:3d}x_{buffer:03d}buffer.nc'
+    # fin_fut = xr.open_dataset(filein_fut).squeeze()
+
+    fin_pres = ds_present.RAIN.isel(
+            y=slice(yloc-buffer,yloc+buffer+1),
+            x=slice(xloc-buffer,xloc+buffer+1),
+        ).astype(np.float32)
+    
+    fin_fut = ds_future.RAIN.isel(
+        y=slice(yloc-buffer,yloc+buffer+1),
+        x=slice(xloc-buffer,xloc+buffer+1),
+    ).astype(np.float32)
 
     fin_syn = fin_syn_all.isel(y=yloc,x=xloc).squeeze()
 
@@ -168,12 +184,11 @@ for loc in range(len(locs_names)):
     #fin_pres_loc = fin_pres.where(fin_pres.RAIN>0.1).isel(y=25,x=25).dropna(dim="time")
     #fin_fut_loc = fin_fut.where(fin_fut.RAIN>0.1).isel(y=25,x=25).dropna(dim="time")
 
-    fin_pres_loc = fin_pres.where(fin_pres.RAIN>0.1).stack(xyt=("time","y","x")).dropna(dim="xyt")
-    fin_fut_loc = fin_fut.where(fin_fut.RAIN>0.1).stack(xyt=("time","y","x")).dropna(dim="xyt")
+    fin_pres_loc = fin_pres.where(fin_pres>0.1).stack(xyt=("time","y","x")).dropna(dim="xyt")
+    fin_fut_loc = fin_fut.where(fin_fut>0.1).stack(xyt=("time","y","x")).dropna(dim="xyt")
 
-    fin_pres_qtiles = fin_pres_loc.quantile(qtiles, dim='xyt', skipna=True)
-    fin_fut_qtiles = fin_fut_loc.quantile(qtiles, dim='xyt', skipna=True)
-
+    fin_pres_qtiles = fin_pres_loc.chunk(dict(xyt=-1)).quantile(qtiles, dim='xyt', skipna=True)
+    fin_fut_qtiles = fin_fut_loc.chunk(dict(xyt=-1)).quantile(qtiles, dim='xyt', skipna=True)
 
     nw = loc%4
     nr = loc//4
@@ -196,18 +211,18 @@ for loc in range(len(locs_names)):
         transform=ax.transAxes, zorder=103, 
         verticalalignment='top', horizontalalignment='left')
     # Plot with improved styling
-    ax.plot(qtiles, fin_pres_qtiles.RAIN, label='Present-day observations', 
+    ax.plot(qtiles, fin_pres_qtiles, label='Present-day observations', 
             color='#2E86AB', linewidth=1, marker='o', markersize=2)
-    ax.plot(qtiles, fin_fut_qtiles.RAIN, label='Future observations', 
+    ax.plot(qtiles, fin_fut_qtiles, label='Future observations', 
             color="#E50C0C", linewidth=1, marker='s', markersize=2)
-    ax.plot(qtiles, fin_syn.sel(quantile=cl_hi).precipitation.squeeze(), 
+    ax.plot(qtiles, fin_syn.sel(bootstrap_quantile=cl_hi).precipitation.squeeze(), 
             label='Future synthetic', color='#F18F01', linewidth=0.5, 
             linestyle='--', marker=None)
-    ax.plot(qtiles, fin_syn.sel(quantile=cl_lo).precipitation.squeeze(), 
+    ax.plot(qtiles, fin_syn.sel(bootstrap_quantile=cl_lo).precipitation.squeeze(), 
             color='#F18F01', linewidth=0.5, 
             linestyle='--', marker=None)
-    ax.fill_between(qtiles, fin_syn.sel(quantile=cl_lo).precipitation.squeeze(), 
-                    fin_syn.sel(quantile=cl_hi).precipitation.squeeze(), 
+    ax.fill_between(qtiles, fin_syn.sel(bootstrap_quantile=cl_lo).precipitation.squeeze(), 
+                    fin_syn.sel(bootstrap_quantile=cl_hi).precipitation.squeeze(), 
                     color='#F18F01', alpha=0.2)
 
 
@@ -298,5 +313,5 @@ print(('Percentage of significant pixels:',
        np.sum(sig_var*to_np(med_mask['combined_mask'].values==2))/
        np.sum(to_np(med_mask['combined_mask'].values==2))*100))
 
-plt.savefig(f'/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/map_and_quantiles_1H_precipitation_q{qtile}th_cl{confidence_level}_{buffer:03d}buffer.png', 
+plt.savefig(f'/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/map_and_quantiles_10MIN_precipitation_q{qtile}th_cl{confidence_level}_{buffer:03d}buffer.png', 
                 dpi=300, bbox_inches='tight', facecolor='white')
