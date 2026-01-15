@@ -196,15 +196,15 @@ def process_tile(tile_info):
                 rain_low_point = rain_low_point[:min_len]
                 
                 # Filter to keep only WET HOURS in WET DAYS
-                wet_mask_daily = rain_low_point >= WET_VALUE_LOFREQ
-                wet_mask_hourly = rain_high_point >= WET_VALUE_HIFREQ
+                wet_mask_daily = rain_low_point > WET_VALUE_LOFREQ
+                wet_mask_hourly = rain_high_point > WET_VALUE_HIFREQ
                 wet_mask = wet_mask_daily & wet_mask_hourly
                 
                 rain_high_wet = rain_high_point[wet_mask]
                 rain_low_wet = rain_low_point[wet_mask]
                 
                 # For n_wet histogram
-                wet_mask_blocks = rain_low_blocks_point >= WET_VALUE_LOFREQ
+                wet_mask_blocks = rain_low_blocks_point > WET_VALUE_LOFREQ
                 rain_high_blocks_wet = rain_high_blocks_point[wet_mask_blocks, :]
                 rain_low_blocks_wet = rain_low_blocks_point[wet_mask_blocks]
                 
@@ -227,7 +227,7 @@ def process_tile(tile_info):
                 # HISTOGRAM 2: P(n_wet_timesteps | intensity_low)
                 ####################################################################
                 if len(rain_low_blocks_wet) > 0:
-                    n_wet_timesteps = (rain_high_blocks_wet >= WET_VALUE_HIFREQ).sum(axis=1)
+                    n_wet_timesteps = (rain_high_blocks_wet > WET_VALUE_HIFREQ).sum(axis=1)
                     
                     hist_counts_n_wet, _, _ = np.histogram2d(
                         n_wet_timesteps,
@@ -273,8 +273,8 @@ print(f"\nConfiguration:")
 print(f"High-freq bins ({FREQ_HIGH}): {len(BINS_HIGH)-1} bins")
 print(f"Low-freq bins ({FREQ_LOW}): {len(BINS_LOW)-1} bins")
 print(f"Max wet timesteps per {FREQ_LOW} period: {repeats}")
-print(f"Wet threshold ({FREQ_HIGH}): >= {WET_VALUE_HIFREQ} mm")
-print(f"Wet threshold ({FREQ_LOW}): >= {WET_VALUE_LOFREQ} mm")
+print(f"Wet threshold ({FREQ_HIGH}): > {WET_VALUE_HIFREQ} mm")
+print(f"Wet threshold ({FREQ_LOW}): > {WET_VALUE_LOFREQ} mm")
 print(f"Aggregation: {intervals_high} x 10min -> {FREQ_HIGH}, {intervals_low} x 10min -> {FREQ_LOW}")
 print(f"Parallel processes: {N_PROCESSES}")
 
@@ -404,7 +404,7 @@ ds_hist['cond_prob_intensity'].attrs = {
 
 ds_hist['cond_prob_n_wet'].attrs = {
     'long_name': f'P(number of wet {FREQ_HIGH} timesteps | {FREQ_LOW} intensity)',
-    'description': f'Conditional probability of having N wet {FREQ_HIGH} timesteps (>= {WET_VALUE_HIFREQ} mm) given {FREQ_LOW} rainfall intensity',
+    'description': f'Conditional probability of having N wet {FREQ_HIGH} timesteps (> {WET_VALUE_HIFREQ} mm) given {FREQ_LOW} rainfall intensity',
     'units': 'probability (0-1)',
     'note': f'n_wet_timesteps ranges from 1 to {repeats}'
 }
@@ -418,7 +418,7 @@ ds_hist['gini_coefficient'].attrs = {
 
 ds_hist['n_events'].attrs = {
     'long_name': f'Number of wet {FREQ_LOW} events',
-    'description': f'Number of wet {FREQ_LOW} periods (>= {WET_VALUE_LOFREQ} mm) in each {FREQ_LOW} rainfall bin',
+    'description': f'Number of wet {FREQ_LOW} periods (> {WET_VALUE_LOFREQ} mm) in each {FREQ_LOW} rainfall bin',
     'units': 'count'
 }
 
