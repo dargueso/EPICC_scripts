@@ -222,7 +222,7 @@ def process_tile_numba_with_test(rain_present, rain_future, wet_threshold, perce
                     n_fut_above = len(fut_above)
                     
                     # Only test if we have enough samples
-                    if n_pres_above >= 10 and n_fut_above >= 10:
+                    if n_pres_above >= 5 and n_fut_above >= 5:
                         _, pvalue = mannwhitneyu_fast(pres_above, fut_above)
                         pvalues[ip, iy, ix] = pvalue
                         if not np.isnan(pvalue) and pvalue < alpha:
