@@ -23,7 +23,7 @@ PATH_OUT = '/home/dargueso/postprocessed/EPICC/'
 WRUN_PRESENT = "EPICC_2km_ERA5"
 WRUN_FUTURE = "EPICC_2km_ERA5_CMIP6anom"
 
-FREQ = 'D'
+FREQ = '1H'
 WET_THRESHOLD = 0.1
 PERCENTILES = [10, 20, 25, 40, 50, 60, 70, 75, 80, 85, 90, 95, 98, 99, 99.5, 99.9, 99.99, 100]
 ALPHA = 0.05
@@ -139,8 +139,8 @@ def process_tile_numba_percentiles_only(rain_present, rain_future, wet_threshold
             pres_ts = rain_present[:, iy, ix]
             fut_ts = rain_future[:, iy, ix]
             
-            pres_wet = pres_ts[pres_ts >= wet_threshold]
-            fut_wet = fut_ts[fut_ts >= wet_threshold]
+            pres_wet = pres_ts[pres_ts > wet_threshold]
+            fut_wet = fut_ts[fut_ts > wet_threshold]
             
             n_pres = len(pres_wet)
             n_fut = len(fut_wet)
@@ -186,8 +186,8 @@ def process_tile_numba_with_test(rain_present, rain_future, wet_threshold, perce
             fut_ts = rain_future[:, iy, ix]
             
             # Get all wet events
-            pres_wet = pres_ts[pres_ts >= wet_threshold]
-            fut_wet = fut_ts[fut_ts >= wet_threshold]
+            pres_wet = pres_ts[pres_ts > wet_threshold]
+            fut_wet = fut_ts[fut_ts > wet_threshold]
             
             n_pres = len(pres_wet)
             n_fut = len(fut_wet)
@@ -253,8 +253,8 @@ def process_tile_scipy(rain_present, rain_future, wet_threshold, percentiles, al
             fut_ts = rain_future[:, iy, ix]
             
             # Get all wet events
-            pres_wet = pres_ts[pres_ts >= wet_threshold]
-            fut_wet = fut_ts[fut_ts >= wet_threshold]
+            pres_wet = pres_ts[pres_ts > wet_threshold]
+            fut_wet = fut_ts[fut_ts > wet_threshold]
             
             n_pres = len(pres_wet)
             n_fut = len(fut_wet)
