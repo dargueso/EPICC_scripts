@@ -23,7 +23,7 @@ import numpy as np
 import epicc_config as cfg
 from glob import glob
 
-wrun = cfg.wrf_runs[0]
+wrun = cfg.wrf_runs[1]
 #wrun = 'EPICC_2km_ERA5_CMIP6anom'
 tile_size = 50
 
@@ -40,7 +40,11 @@ def main():
     """  Split files into tiles """
     filespatterns = [#f'{cfg.path_in}/{wrun}/split_files_tiles_50/Hourly_decomposition_NDI',
                      #f'{cfg.path_in}/{wrun}/split_files_tiles_50/Hourly_decomposition_top100_NDI',
-                     f'{cfg.path_in}/{wrun}/rainfall_probability_optimized_conditional',
+                     #f'{cfg.path_in}/{wrun}/rainfall_probability_optimized_conditional_10min',
+                     #f'{cfg.path_in}/{wrun}/UIB_10MIN_RAIN_2011-2020',
+                     #f'{cfg.path_in}/{wrun}/UIB_01H_RAIN_2011-2020',
+                     #f'{cfg.path_in}/{wrun}/UIB_DAY_RAIN_2011-2020',
+                    f'{cfg.path_in}/{wrun}/future_synthetic_quant_per_sample_10min',
                     #  f'{cfg.path_in}/{wrun}/split_files_tiles_50/Hourly_decomposition_NDI_DJF',
                     #  f'{cfg.path_in}/{wrun}/split_files_tiles_50/Hourly_decomposition_NDI_MAM',
                     #  f'{cfg.path_in}/{wrun}/split_files_tiles_50/Hourly_decomposition_NDI_JJA',
@@ -49,8 +53,8 @@ def main():
     for filespath in filespatterns:
       #filespath = f'{cfg.path_in}/{wrun}/split_files_tiles_50/Hourly_decomposition_NDI_SON'
 
-      filessuffix = f''
-      filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_01H_RAIN_20??-??.nc'))
+      filessuffix = f'_010buffer'
+      filesin = sorted(glob(f'{cfg.path_in}/{wrun}/RAIN/{cfg.patt_in}_01H_RAIN_20??-??.nc'))
       files_ref = xr.open_dataset(filesin[0])
       nlats = files_ref.sizes['y']
       nlons = files_ref.sizes['x']
