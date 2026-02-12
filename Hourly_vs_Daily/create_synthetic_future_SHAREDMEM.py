@@ -25,16 +25,18 @@ WRUN_PRESENT = "EPICC_2km_ERA5"
 WRUN_FUTURE = "EPICC_2km_ERA5_CMIP6anom"
 
 # Frequency configuration
-FREQ_HIGH = '1H'   # High frequency (e.g., '10MIN', '1H')
-FREQ_LOW = 'D'     # Low frequency (e.g., '1H', '3H', '6H', '12H', 'D')
+FREQ_HIGH = '10MIN'   # High frequency (e.g., '10MIN', '1H')
+FREQ_LOW = '01H'     # Low frequency (e.g., '1H', '3H', '6H', '12H', 'D')
 
 # Wet thresholds
 WET_VALUE_HIGH = 0.1  # mm per high-freq interval
-WET_VALUE_LOW = 1.0   # mm per low-freq interval
+#WET_VALUE_LOW = 1   # mm per low-freq interval
+WET_VALUE_LOW = 0.1   # mm per low-freq interval
 
 # Bins - adjust based on frequencies
 BINS_HIGH = np.arange(0, 101, 1)  # For hourly: 0-100mm in 1mm steps
-BINS_LOW = np.arange(0, 105, 5)   # For daily: 0-100mm in 5mm steps
+BINS_LOW = np.arange(0, 101, 1)   # For daily: 0-100mm in 5mm steps
+# BINS_LOW = np.arange(0, 105, 5)   # For daily: 0-100mm in 5mm steps
 
 # Quantiles to calculate from synthetic samples
 QUANTILES = np.array([0.1, 0.2, 0.25, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85,
@@ -50,28 +52,21 @@ BUFFER = 10
 N_SAMPLES = 1000
 N_PROCESSES = 32  # Adjust based on your system
 
-# Frequency mapping (10-min intervals per period)
-FREQ_TO_10MIN = {
-    '10MIN': 1,
-    '1H': 6,
-    '3H': 18,
-    '6H': 36,
-    '12H': 72,
-    'D': 144
-}
+if FREQ_HIGH == '10MIN':
+    FREQ_TO_HIGH = {
+        '10MIN': 1,
+        '01H': 6,
+        'DAY': 144  # 24 hours
+    }
+elif FREQ_HIGH == '01H':
+    FREQ_TO_HIGH = {
+        '01H': 1,
+        'DAY': 24  # 24 hours
+    }
 
-# Frequency name mapping for file patterns
-FREQ_TO_NAME = {
-    '10MIN': '10MIN',
-    '1H': '01H',
-    '3H': '3HOUR',
-    '6H': '6HOUR',
-    '12H': '12HOUR',
-    'D': 'DAY'
-}
 
-intervals_high = FREQ_TO_10MIN[FREQ_HIGH]
-intervals_low = FREQ_TO_10MIN[FREQ_LOW]
+intervals_high = FREQ_TO_HIGH[FREQ_HIGH]
+intervals_low = FREQ_TO_HIGH[FREQ_LOW]
 n_interval = intervals_low // intervals_high  # e.g., 24 for hourly given daily
 
 # =============================================================================
@@ -337,7 +332,7 @@ def main():
     
     # Load future low-frequency rainfall
     print(f"\n2. Loading future {FREQ_LOW} rainfall...")
-    freq_name_low = FREQ_TO_NAME[FREQ_LOW]
+    freq_name_low = FREQ_LOW
     future_file = f'{PATH_IN}/{WRUN_FUTURE}/UIB_{freq_name_low}_RAIN.zarr'
     
     try:
