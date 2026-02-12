@@ -277,11 +277,12 @@ def process_tile(tile_info):
     
     # Generate samples
     for sample in range(N_SAMPLES):
+        tile_seed = 123 + sample + iy_tile * 10000 + ix_tile
         sample_quantiles = generate_quantiles_for_tile(
             rain_tile, wet_cdf_tile, hour_cdf_tile, bin_idx_tile,
             BINS_HIGH.astype(np.float32), QUANTILES,
             iy0, iy1, ix0, ix1, n_interval, WET_VALUE_HIGH,
-            seed=123 + sample)
+            seed=tile_seed)
         
         all_samples[sample, :, :, :] = sample_quantiles
     
@@ -330,6 +331,37 @@ def main():
     prob_file = f'{PATH_IN}/{WRUN_PRESENT}/condprob_{FREQ_HIGH}_given_{FREQ_LOW}_full_domain.nc'
     ds_prob = xr.open_dataset(prob_file)
     
+    # VALIDATE BIN COMPATIBILITY
+    prob_bins_high = ds_prob.attrs.get(f'bin_edges_{FREQ_HIGH}')
+    prob_bins_low = ds_prob.attrs.get(f'bin_edges_{FREQ_LOW}')
+
+    if prob_bins_high is not None:
+        # Script 1 stores bins without the np.inf edge in attributes
+        expected_bins_high = BINS_HIGH[:-1]  # Remove inf for comparison
+        if not np.allclose(prob_bins_high, expected_bins_high):
+            raise ValueError(f"BINS_HIGH mismatch!\n"
+                            f"  Expected: {expected_bins_high[:5]}...\n"
+                            f"  Got: {prob_bins_high[:5]}...")
+        print(f"   ✓ High-frequency bins match ({len(prob_bins_high)} bins)")
+
+    if prob_bins_low is not None:
+        expected_bins_low = BINS_LOW[:-1]
+        if not np.allclose(prob_bins_low, expected_bins_low):
+            raise ValueError(f"BINS_LOW mismatch!\n"
+                            f"  Expected: {expected_bins_low}\n"
+                            f"  Got: {prob_bins_low}")
+        print(f"   ✓ Low-frequency bins match ({len(prob_bins_low)} bins)")
+
+    # VALIDATE THRESHOLDS
+    prob_wet_high = ds_prob.attrs.get('wet_threshold_high')
+    prob_wet_low = ds_prob.attrs.get('wet_threshold_low')
+
+    if prob_wet_high != WET_VALUE_HIGH:
+        raise ValueError(f"WET_VALUE_HIGH mismatch! Expected {prob_wet_high}, got {WET_VALUE_HIGH}")
+    if prob_wet_low != WET_VALUE_LOW:
+        raise ValueError(f"WET_VALUE_LOW mismatch! Expected {prob_wet_low}, got {WET_VALUE_LOW}")
+    print(f"   ✓ Wet thresholds match (high={WET_VALUE_HIGH}, low={WET_VALUE_LOW})")
+        
     # Load future low-frequency rainfall
     print(f"\n2. Loading future {FREQ_LOW} rainfall...")
     freq_name_low = FREQ_LOW
@@ -435,10 +467,81 @@ def main():
     # Setup checkpoint directory
     checkpoint_dir = f'{PATH_OUT}/{WRUN_FUTURE}/checkpoint_tiles'
     os.makedirs(checkpoint_dir, exist_ok=True)
-    
-    # Check for existing checkpoint tiles
+
+    # =============================================================================
+    # CHECKPOINT VALIDATION - Ensure config hasn't changed
+    # =============================================================================
+    config_checkpoint_file = f'{checkpoint_dir}/config.npz'
+
+    # Create current config fingerprint
+    current_config = {
+        'n_samples': N_SAMPLES,
+        'freq_high': FREQ_HIGH,
+        'freq_low': FREQ_LOW,
+        'wet_high': float(WET_VALUE_HIGH),
+        'wet_low': float(WET_VALUE_LOW),
+        'tile_size': TILE_SIZE,
+        'buffer': BUFFER,
+        'n_quantiles': len(QUANTILES),
+        'n_bootstrap': len(BOOTSTRAP_QUANTILES),
+        # Store arrays as strings for comparison
+        'bins_high_str': str(BINS_HIGH.tolist()),
+        'bins_low_str': str(BINS_LOW.tolist()),
+        'quantiles_str': str(QUANTILES.tolist()),
+        'bootstrap_quantiles_str': str(BOOTSTRAP_QUANTILES.tolist())
+    }
+
+    checkpoint_is_valid = True
+
+    if os.path.exists(config_checkpoint_file):
+        # Load saved config
+        saved_config = dict(np.load(config_checkpoint_file))
+        
+        # Compare configs
+        config_matches = True
+        mismatches = []
+        
+        for key in current_config:
+            saved_val = saved_config.get(key)
+            current_val = current_config[key]
+            
+            # Handle numpy scalar types
+            if isinstance(saved_val, np.ndarray):
+                saved_val = saved_val.item() if saved_val.size == 1 else str(saved_val.tolist())
+            
+            if saved_val != current_val:
+                config_matches = False
+                mismatches.append(f"      {key}: {saved_val} -> {current_val}")
+        
+        if not config_matches:
+            print(f"\n   ⚠ WARNING: Configuration has changed since checkpoints were created!")
+            print(f"   Mismatches detected:")
+            for mismatch in mismatches:
+                print(mismatch)
+            print(f"\n   Deleting old checkpoints and starting fresh...")
+            
+            # Delete all checkpoint files
+            for fname in os.listdir(checkpoint_dir):
+                fpath = os.path.join(checkpoint_dir, fname)
+                try:
+                    if os.path.isfile(fpath):
+                        os.unlink(fpath)
+                except Exception as e:
+                    print(f"   Warning: Could not delete {fname}: {e}")
+            
+            checkpoint_is_valid = False
+        else:
+            print(f"   ✓ Checkpoint configuration validated - resuming from checkpoints")
+
+    # Save current config (either new or validated)
+    np.savez(config_checkpoint_file, **current_config)
+
+    # =============================================================================
+    # Check for existing checkpoint tiles (only if config is valid)
+    # =============================================================================
     existing_tiles = set()
-    if os.path.exists(checkpoint_dir):
+
+    if checkpoint_is_valid and os.path.exists(checkpoint_dir):
         for fname in os.listdir(checkpoint_dir):
             if fname.startswith('tile_') and fname.endswith('.npy'):
                 parts = fname.replace('.npy', '').split('_')
