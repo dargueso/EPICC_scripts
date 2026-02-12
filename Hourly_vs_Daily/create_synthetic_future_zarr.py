@@ -23,10 +23,10 @@ PATH_IN = '/home/dargueso/postprocessed/EPICC/'
 PATH_OUT = '/home/dargueso/postprocessed/EPICC/'
 WRUN_PRESENT = "EPICC_2km_ERA5"
 WRUN_FUTURE = "EPICC_2km_ERA5_CMIP6anom"
-
+test_suffix = "_test_100x100"
 # Frequency configuration
-FREQ_HIGH = '10MIN'   # High frequency (e.g., '10MIN', '1H')
-FREQ_LOW = '01H'     # Low frequency (e.g., '1H', '3H', '6H', '12H', 'D')
+FREQ_HIGH = '01H'   # High frequency (e.g., '10MIN', '1H')
+FREQ_LOW = 'DAY'     # Low frequency (e.g., '1H', '3H', '6H', '12H', 'D')
 
 # Wet thresholds
 WET_VALUE_HIGH = 0.1  # mm per high-freq interval
@@ -50,7 +50,7 @@ BOOTSTRAP_QUANTILES = np.array([0.01, 0.025, 0.05, 0.1, 0.9, 0.95, 0.975, 0.99],
 TILE_SIZE = 50
 BUFFER = 10
 N_SAMPLES = 1000
-N_PROCESSES = 32  # Adjust based on your system
+N_PROCESSES = 4  # Adjust based on your system
 
 if FREQ_HIGH == '10MIN':
     FREQ_TO_HIGH = {
@@ -328,7 +328,7 @@ def main():
     
     # Load present-day probability distributions
     print("\n1. Loading probability distributions...")
-    prob_file = f'{PATH_IN}/{WRUN_PRESENT}/condprob_{FREQ_HIGH}_given_{FREQ_LOW}_full_domain.nc'
+    prob_file = f'{PATH_IN}/{WRUN_PRESENT}/condprob_{FREQ_HIGH}_given_{FREQ_LOW}{test_suffix}.nc'
     ds_prob = xr.open_dataset(prob_file)
     
     # VALIDATE BIN COMPATIBILITY
@@ -365,7 +365,7 @@ def main():
     # Load future low-frequency rainfall
     print(f"\n2. Loading future {FREQ_LOW} rainfall...")
     freq_name_low = FREQ_LOW
-    future_file = f'{PATH_IN}/{WRUN_FUTURE}/UIB_{freq_name_low}_RAIN.zarr'
+    future_file = f'{PATH_IN}/{WRUN_FUTURE}/UIB_{freq_name_low}_RAIN{test_suffix}.zarr'
     
     try:
         ds_future = xr.open_zarr(future_file, consolidated=True)
@@ -484,6 +484,8 @@ def main():
         'buffer': BUFFER,
         'n_quantiles': len(QUANTILES),
         'n_bootstrap': len(BOOTSTRAP_QUANTILES),
+        'ny': ny,  
+        'nx': nx,  
         # Store arrays as strings for comparison
         'bins_high_str': str(BINS_HIGH.tolist()),
         'bins_low_str': str(BINS_LOW.tolist()),
@@ -690,7 +692,7 @@ def main():
     )
     
     # Save
-    output_file = f'{PATH_OUT}/{WRUN_FUTURE}/synthetic_future_{FREQ_HIGH}_from_{FREQ_LOW}_confidence.nc'
+    output_file = f'{PATH_OUT}/{WRUN_FUTURE}/synthetic_future_{FREQ_HIGH}_from_{FREQ_LOW}_confidence{test_suffix}.nc'
     print(f"\n11. Saving to: {output_file}")
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     ds_output.to_netcdf(output_file)

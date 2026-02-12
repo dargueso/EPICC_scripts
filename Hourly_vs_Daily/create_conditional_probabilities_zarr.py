@@ -11,6 +11,7 @@ dask.config.set(scheduler='threads', num_workers=8)  # Reduced since we're using
 PATH_IN = '/home/dargueso/postprocessed/EPICC/'
 PATH_OUT = '/home/dargueso/postprocessed/EPICC/'
 WRUN = "EPICC_2km_ERA5"
+test_suffix = "_test_100x100"
 
 # Wet thresholds - values below these are considered "dry" and excluded
 WET_VALUE_HIFREQ = 0.1  # mm (for high frequency)
@@ -285,7 +286,7 @@ print(f"Creating Conditional Probability Histograms - P({FREQ_HIGH} | {FREQ_LOW}
 print("="*60)
 
 # Zarr file path
-zarr_path = f'{PATH_IN}/{WRUN}/UIB_{FREQ_HIGH}_RAIN.zarr'
+zarr_path = f'{PATH_IN}/{WRUN}/UIB_{FREQ_HIGH}_RAIN{test_suffix}.zarr'
 
 print(f"\nConfiguration:")
 print(f"High-freq bins ({FREQ_HIGH}): {len(BINS_HIGH)-1} bins")
@@ -439,7 +440,7 @@ ds_hist['n_events'].attrs = {
     'units': 'count'
 }
 
-output_file = f'{PATH_OUT}/{WRUN}/condprob_{FREQ_HIGH}_given_{FREQ_LOW}_full_domain.nc'
+output_file = f'{PATH_OUT}/{WRUN}/condprob_{FREQ_HIGH}_given_{FREQ_LOW}{test_suffix}.nc'
 os.makedirs(os.path.dirname(output_file), exist_ok=True)
 ds_hist.to_netcdf(output_file)
 
