@@ -521,6 +521,63 @@ def main():
         x_coords = np.arange(nx)
         extra_attrs = {}
     
+    # =============================================================================
+    # APPLY MULTIPLE TESTING CORRECTION (Benjamini-Hochberg FDR)
+    # =============================================================================
+    print(f"\n   Applying multiple testing correction (Benjamini-Hochberg FDR)...")
+    print(f"   Testing {len(PERCENTILES)} percentiles per grid point")
+    
+    # Apply FDR correction per grid point (across percentiles)
+    is_significant_fdr_out = np.zeros_like(is_significant_out, dtype=np.int8)
+    
+    n_corrected_points = 0
+    n_total_points = 0
+    total_sig_uncorrected = np.sum(is_significant_out)
+    
+    for iy in range(ny_out):
+        for ix in range(nx_out):
+            pvals_at_point = pvalues_out[:, iy, ix]
+            valid_mask = ~np.isnan(pvals_at_point)
+            
+            if np.sum(valid_mask) > 0:
+                n_total_points += 1
+                
+                # Get valid p-values
+                valid_pvals = pvals_at_point[valid_mask]
+                n_tests = len(valid_pvals)
+                
+                # Sort and apply BH procedure
+                sort_idx = np.argsort(valid_pvals)
+                sorted_pvals = valid_pvals[sort_idx]
+                
+                # BH critical values: p(i) <= (i/m) * alpha
+                bh_crit = (np.arange(1, n_tests + 1) / n_tests) * ALPHA
+                
+                # Find largest i where p(i) <= (i/m)*alpha
+                significant_bh = sorted_pvals <= bh_crit
+                
+                if np.any(significant_bh):
+                    max_sig_idx = np.max(np.where(significant_bh)[0])
+                    # All tests up to and including max_sig_idx are significant
+                    sig_tests = sort_idx[:max_sig_idx + 1]
+                    
+                    # Map back to percentile indices
+                    percentile_indices = np.where(valid_mask)[0]
+                    for sig_test in sig_tests:
+                        is_significant_fdr_out[percentile_indices[sig_test], iy, ix] = 1
+                    
+                    n_corrected_points += 1
+    
+    total_sig_fdr = np.sum(is_significant_fdr_out)
+    
+    print(f"   FDR correction complete:")
+    print(f"      Grid points tested: {n_total_points:,}")
+    print(f"      Significant tests (uncorrected): {total_sig_uncorrected:,}")
+    print(f"      Significant tests (FDR-corrected): {total_sig_fdr:,}")
+    print(f"      Reduction: {100*(1-total_sig_fdr/total_sig_uncorrected):.1f}%")
+    print(f"      Grid points with any significant change: {n_corrected_points:,}")
+    # =============================================================================
+    
     ds_output = xr.Dataset(
         data_vars=dict(
             percentiles_present=(("percentile", "y", "x"), percentiles_present_out),
@@ -529,6 +586,7 @@ def main():
             percentiles_change_pct=(("percentile", "y", "x"), percentiles_change_pct_out),
             pvalue=(("percentile", "y", "x"), pvalues_out),  # Now has percentile dimension
             is_significant=(("percentile", "y", "x"), is_significant_out),  # Now has percentile dimension
+            is_significant_fdr=(("percentile", "y", "x"), is_significant_fdr_out),  # FDR-corrected significance
             lat=(("y", "x"), lat_out),
             lon=(("y", "x"), lon_out),
         ),
@@ -563,7 +621,13 @@ def main():
     ds_output['is_significant'].attrs = {
         'long_name': 'Significant',
         'alpha': ALPHA,
-        'description': 'Independent test for each percentile (events above threshold)'
+        'description': 'Independent test for each percentile (events above threshold) - NO multiple testing correction'
+    }
+    ds_output['is_significant_fdr'].attrs = {
+        'long_name': 'Significant (FDR-corrected)',
+        'alpha': ALPHA,
+        'method': 'Benjamini-Hochberg',
+        'description': 'FDR correction applied across percentiles at each grid point to control false discovery rate'
     }
     
     suffix = TEST_TYPE.replace('-', '_')
@@ -589,17 +653,24 @@ def main():
     
     # Report statistics per percentile
     print(f"\n   Per-percentile statistics:")
+    print(f"   {'Pctl':>6} | {'Change':>8} | {'Uncorrected':>20} | {'FDR-corrected':>20}")
+    print(f"   {'-'*6}-+-{'-'*8}-+-{'-'*20}-+-{'-'*20}")
+    
     for i, p in enumerate(PERCENTILES):
-        n_sig_this_perc = np.sum(is_significant_out[i, :, :])
+        n_sig_uncorr = np.sum(is_significant_out[i, :, :])
+        n_sig_fdr = np.sum(is_significant_fdr_out[i, :, :])
         n_total_this_perc = np.sum(~np.isnan(pvalues_out[i, :, :]))
         mean_change = np.nanmean(percentiles_change_pct_out[i])
         
         if n_total_this_perc > 0:
-            sig_pct = 100 * n_sig_this_perc / n_total_this_perc
-            print(f"      P{p:5.1f}: {mean_change:+7.1f}% change, "
-                  f"{n_sig_this_perc:,}/{n_total_this_perc:,} significant ({sig_pct:.1f}%)")
+            sig_pct_uncorr = 100 * n_sig_uncorr / n_total_this_perc
+            sig_pct_fdr = 100 * n_sig_fdr / n_total_this_perc
+            
+            print(f"   P{p:5.1f} | {mean_change:+7.1f}% | "
+                  f"{n_sig_uncorr:5,}/{n_total_this_perc:,} ({sig_pct_uncorr:4.1f}%) | "
+                  f"{n_sig_fdr:5,}/{n_total_this_perc:,} ({sig_pct_fdr:4.1f}%)")
         else:
-            print(f"      P{p:5.1f}: {mean_change:+7.1f}% change")
+            print(f"   P{p:5.1f} | {mean_change:+7.1f}% | {'N/A':>20} | {'N/A':>20}")
     
     total_time = time.time() - total_start
     avg_io = np.mean(io_times)
