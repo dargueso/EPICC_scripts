@@ -238,7 +238,7 @@ def main():
     ds_synth = xr.open_dataset(synthetic_file)
     print(f"    Loaded: {synthetic_file}")
     print(f"    Bootstrap quantiles: {ds_synth.bootstrap_quantile.values}")
-    print(f"    Quantiles available: {ds_synth.quantile.values}")
+    print(f"    Quantiles available: {ds_synth.coords['quantile'].values}")
     
     # =========================================================================
     # STEP 2: ALIGN DATA
@@ -252,7 +252,7 @@ def main():
     ds_synth_median = ds_synth.sel(bootstrap_quantile=BOOTSTRAP_QUANTILE, method='nearest')
     
     # Convert synthetic quantiles (0-1) to percentiles (0-100) for matching
-    synthetic_percentiles = ds_synth_median.quantile.values * 100
+    synthetic_percentiles = ds_synth_median.coords['quantile'].values * 100
     
     # Find matching percentiles
     print(f"\n2b. Finding matching percentiles...")
@@ -307,7 +307,7 @@ def main():
         # Get synthetic data (match percentile value)
         # Find closest quantile in synthetic data
         target_quantile = perc / 100.0
-        synth_idx = np.argmin(np.abs(ds_synth_median.quantile.values - target_quantile))
+        synth_idx = np.argmin(np.abs(ds_synth_median.coords['quantile'].values - target_quantile))
         synthetic = ds_synth_median.precipitation.isel(quantile=synth_idx).values
         
         # DECOMPOSITION:
