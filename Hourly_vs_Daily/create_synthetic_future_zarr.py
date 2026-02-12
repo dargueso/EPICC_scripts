@@ -30,13 +30,13 @@ FREQ_LOW = '01H'     # Low frequency (e.g., '1H', '3H', '6H', '12H', 'D')
 
 # Wet thresholds
 WET_VALUE_HIGH = 0.1  # mm per high-freq interval
-#WET_VALUE_LOW = 1   # mm per low-freq interval
-WET_VALUE_LOW = 0.1   # mm per low-freq interval
+WET_VALUE_LOW = 1   # mm per low-freq interval
+#WET_VALUE_LOW = 0.1   # mm per low-freq interval
 
 # Bins - adjust based on frequencies
 BINS_HIGH = np.arange(0, 101, 1)  # For hourly: 0-100mm in 1mm steps
-BINS_LOW = np.arange(0, 101, 1)   # For daily: 0-100mm in 5mm steps
-# BINS_LOW = np.arange(0, 105, 5)   # For daily: 0-100mm in 5mm steps
+#BINS_LOW = np.arange(0, 101, 1)   # For daily: 0-100mm in 5mm steps
+BINS_LOW = np.arange(0, 105, 5)   # For daily: 0-100mm in 5mm steps
 
 # Quantiles to calculate from synthetic samples
 QUANTILES = np.array([0.1, 0.2, 0.25, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85,
