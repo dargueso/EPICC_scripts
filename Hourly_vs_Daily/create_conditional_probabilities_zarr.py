@@ -51,13 +51,18 @@ N_PROCESSES = 32  # Adjust based on your system
 #     'D': 144  # 24 hours
 # }
 
-FREQ_TO_ORIG = {
-    '1H': 1,
-    '3H': 3,
-    '6H': 6,
-    '12H': 12,
-    'D': 24  # 24 hours
-}
+if FREQ_HIGH == '10MIN':
+    FREQ_TO_ORIG = {
+        '10MIN': 1,
+        '01H': 6,
+        'DAY': 144  # 24 hours
+    }
+elif FREQ_HIGH == '01H':
+    FREQ_TO_ORIG = {
+        '01H': 1,
+        'DAY': 24  # 24 hours
+    }
+
 
 
 
@@ -280,7 +285,7 @@ print(f"Creating Conditional Probability Histograms - P({FREQ_HIGH} | {FREQ_LOW}
 print("="*60)
 
 # Zarr file path
-zarr_path = f'{PATH_IN}/{WRUN}/UIB_01H_RAIN.zarr'
+zarr_path = f'{PATH_IN}/{WRUN}/UIB_{FREQ_HIGH}_RAIN.zarr'
 
 print(f"\nConfiguration:")
 print(f"High-freq bins ({FREQ_HIGH}): {len(BINS_HIGH)-1} bins")
@@ -288,7 +293,7 @@ print(f"Low-freq bins ({FREQ_LOW}): {len(BINS_LOW)-1} bins")
 print(f"Max wet timesteps per {FREQ_LOW} period: {repeats}")
 print(f"Wet threshold ({FREQ_HIGH}): >= {WET_VALUE_HIFREQ} mm")
 print(f"Wet threshold ({FREQ_LOW}): >= {WET_VALUE_LOFREQ} mm")
-print(f"Aggregation: {intervals_high} x 01H -> {FREQ_HIGH}, {intervals_low} x 01H -> {FREQ_LOW}")
+print(f"Aggregation: {intervals_high} x {FREQ_HIGH} -> {FREQ_HIGH}, {intervals_low} x {FREQ_HIGH} -> {FREQ_LOW}")
 print(f"Parallel processes: {N_PROCESSES}")
 # Open zarr once to get dimensions
 print("\n1. Opening Zarr dataset...")
