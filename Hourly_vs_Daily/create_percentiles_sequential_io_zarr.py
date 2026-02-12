@@ -311,8 +311,8 @@ def main():
     
 
 
-    zarr_path_present = f'{PATH_IN}/{WRUN_PRESENT}/UIB_{freq_name}_RAIN_test{test_suffix}.zarr'
-    zarr_path_future = f'{PATH_IN}/{WRUN_FUTURE}/UIB_{freq_name}_RAIN_test{test_suffix}.zarr'
+    zarr_path_present = f'{PATH_IN}/{WRUN_PRESENT}/UIB_{freq_name}_RAIN{test_suffix}.zarr'
+    zarr_path_future = f'{PATH_IN}/{WRUN_FUTURE}/UIB_{freq_name}_RAIN{test_suffix}.zarr'
     
     print(f"\n1. Opening Zarr datasets...")
     t0 = time.time()
@@ -632,9 +632,9 @@ def main():
     
     suffix = TEST_TYPE.replace('-', '_')
     if SINGLE_TILE_MODE:
-        output_file = f'{PATH_OUT}/{WRUN_PRESENT}/percentiles_and_significance_{FREQ}_{suffix}_tile_{SINGLE_TILE_Y:03d}y_{SINGLE_TILE_X:03d}x.nc'
+        output_file = f'{PATH_OUT}/{WRUN_PRESENT}/percentiles_and_significance_{freq_name}_{suffix}_tile_{SINGLE_TILE_Y:03d}y_{SINGLE_TILE_X:03d}x.nc'
     else:
-        output_file = f'{PATH_OUT}/{WRUN_PRESENT}/percentiles_and_significance_{FREQ}_{suffix}_seqio{test_suffix}.nc'
+        output_file = f'{PATH_OUT}/{WRUN_PRESENT}/percentiles_and_significance_{freq_name}_{suffix}_seqio{test_suffix}.nc'
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     ds_output.to_netcdf(output_file)
     
