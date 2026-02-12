@@ -24,14 +24,15 @@ import numpy as np
 import epicc_config as cfg
 from glob import glob
 import time
+import os
 import subprocess as subprocess
 from joblib import Parallel, delayed
 
 
 wrun = cfg.wrf_runs[1]
-tile_size = 50
+tile_size = 10
 freq = '01H'
-buffer=10 
+buffer=0 
 ###########################################################
 ###########################################################
 
@@ -39,7 +40,7 @@ def main():
 
     """  Split files into tiles """
 
-    filesin = sorted(glob(f'{cfg.path_in}/{wrun}/{cfg.patt_in}_{freq}_RAIN_20??-??.nc'))
+    filesin = sorted(glob(f'{cfg.path_in}/{wrun}/RAIN/{cfg.patt_in}_{freq}_RAIN_20??-??.nc'))
     files_ref = xr.open_dataset(filesin[0])
     nlats = files_ref.sizes['y']
     nlons = files_ref.sizes['x']
@@ -71,6 +72,9 @@ def split_files(fin,nlons,nlats,tile_size, buffer=0):
         else:
             fout = fin.replace(".nc",f'_{nnlat:03d}y-{nnlon:03d}x_{buffer:03d}buffer.nc')
 
+        if os.path.exists(fout):
+            print (f'File {nnlat:03d}y-{nnlon:03d}x exists. Skipping...')
+            continue
         print("nnlat, nnlon:", nnlat, nnlon)
         print("stlon, stlat before buffer:", stlon, stlat)
 
