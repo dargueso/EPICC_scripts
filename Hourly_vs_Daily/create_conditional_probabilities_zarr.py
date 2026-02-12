@@ -21,8 +21,8 @@ WET_VALUE_LOFREQ = 1.0  # mm (for low frequency)
 #####################################################################
 
 # Frequency pair to compare
-FREQ_HIGH = '1H'      # Options: '10MIN', '1H', '3H', '6H', '12H'
-FREQ_LOW = 'D'        # Options: '1H', '3H', '6H', '12H', 'D' (daily)
+FREQ_HIGH = '01H'      # Options: '10MIN', '01H'
+FREQ_LOW = 'DAY'        # Options: '01H', 'DAY' (daily)
 
 # Bins for each frequency (will be used for both axes)
 BINS_HIGH = np.arange(0, 100, 1)  # For hourly: 0-100mm in 1mm steps
