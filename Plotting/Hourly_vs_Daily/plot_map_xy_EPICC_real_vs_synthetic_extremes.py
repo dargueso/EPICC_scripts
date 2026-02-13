@@ -93,12 +93,12 @@ sig_levs = np.array([-0.5, 0.5, 1.5])
 
 #Loading percentiles
 
-filein = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/percentiles_and_significance_10MIN_mann_whitney_seqio.nc'
+filein = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/percentiles_and_significance_1H_mann_whitney_seqio.nc'
 fin = xr.open_dataset(filein).sel(percentile=qtile).squeeze()
 
 #Loading SYN confidence intervals
 
-filein_syn = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5_CMIP6anom/synthetic_future_10MIN_from_1H_confidence.nc'
+filein_syn = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5/synthetic_future_01H_from_DAY_confidence.nc'
 fin_syn = xr.open_dataset(filein_syn).sel(quantile=qtile/100.).squeeze()
 
 fin_syn_all = xr.open_dataset(filein_syn).squeeze()
@@ -313,5 +313,5 @@ print(('Percentage of significant pixels:',
        np.sum(sig_var*to_np(med_mask['combined_mask'].values==2))/
        np.sum(to_np(med_mask['combined_mask'].values==2))*100))
 
-plt.savefig(f'/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/map_and_quantiles_10MIN_precipitation_q{qtile}th_cl{confidence_level}_{buffer:03d}buffer.png', 
+plt.savefig(f'/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/map_and_quantiles_01H_precipitation_q{qtile}th_cl{confidence_level}_{buffer:03d}buffer.png', 
                 dpi=300, bbox_inches='tight', facecolor='white')
