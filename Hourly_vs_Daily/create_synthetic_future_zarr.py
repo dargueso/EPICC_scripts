@@ -5,6 +5,7 @@ Uses shared memory for zero-copy data access across workers.
 FIXED: Correct buffer handling + FAST multiprocessing via shared memory
 """
 import os
+import sys
 import time
 import numpy as np
 import xarray as xr
@@ -44,7 +45,7 @@ QUANTILES = np.array([0.1, 0.2, 0.25, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85,
                      dtype=np.float32)
 
 # Bootstrap confidence levels to compute across samples
-BOOTSTRAP_QUANTILES = np.array([0.01, 0.025, 0.05, 0.1, 0.9, 0.95, 0.975, 0.99], dtype=np.float32)
+BOOTSTRAP_QUANTILES = np.array([0.01, 0.025, 0.05, 0.1, 0.25, 0.5,0.75, 0.9, 0.95, 0.975, 0.99], dtype=np.float32)
 
 # Processing parameters
 TILE_SIZE = 50
@@ -207,9 +208,23 @@ def generate_quantiles_for_tile(rain_arr, wet_cdf, hour_cdf, bin_idx, hr_edges,
 # TILE PROCESSING FUNCTION - SHARED MEMORY VERSION
 # =============================================================================
 
+def process_tile_safe(tile_info):
+    """Wrapper to catch and report errors from workers."""
+    try:
+        return process_tile(tile_info)
+    except Exception as e:
+        import traceback
+        iy_tile, ix_tile = tile_info[0], tile_info[1]
+        error_msg = f"\n{'='*60}\nERROR in tile {iy_tile:03d}_{ix_tile:03d}:\n{traceback.format_exc()}\n{'='*60}\n"
+        print(error_msg, flush=True)
+        return None
+
 def process_tile(tile_info):
     """Process a single tile - accesses data from shared memory."""
     (iy_tile, ix_tile, TILE_SIZE, config, checkpoint_dir, shm_info) = tile_info
+    
+    # Debug output
+    print(f"\n   [WORKER] Starting tile {iy_tile:03d}_{ix_tile:03d}", flush=True)
     
     # Unpack config
     BUFFER = config['buffer']
@@ -559,7 +574,11 @@ def main():
         print(f"   Found {len(existing_tiles)} existing checkpoint tiles - will resume")
     
     print(f"\n7. Processing {total_tiles} tiles ({ny_tiles} x {nx_tiles})...")
-    print(f"   Using {N_PROCESSES} processes")
+    
+    # Adjust process count to actual work (don't use 32 processes for 4 tiles)
+    n_processes_actual = min(N_PROCESSES, total_tiles)
+    
+    print(f"   Using {n_processes_actual} processes (adjusted from {N_PROCESSES})")
     print(f"   Generating {N_SAMPLES} samples per tile")
     
     # Create config dict
@@ -589,8 +608,35 @@ def main():
         print(f"   Skipping {skipped_count} already completed tiles")
     print(f"   Processing {len(tile_tasks)} remaining tiles")
     
+    # =============================================================================
+    # PRE-COMPILE NUMBA FUNCTIONS - Prevents silent hangs in worker processes
+    # =============================================================================
+    print("\n   Pre-compiling numba functions...")
+    
+    # Create small test data to force compilation
+    test_rain = np.random.rand(100, 10, 10).astype(np.float32)
+    test_bin = np.random.randint(0, 10, (100, 10, 10), dtype=np.int16)
+    test_wet_cdf = np.random.rand(10, 24, 10, 10).astype(np.float32)
+    test_hour_cdf = np.random.rand(10, 100, 10, 10).astype(np.float32)
+    test_bins = BINS_HIGH[:20].astype(np.float32)
+    test_quantiles = QUANTILES[:3]
+    
+    # Force compilation of the main numba function
+    print("   Compiling _process_cell_for_quantiles...", end='', flush=True)
+    rng_test = np.random.Generator(np.random.PCG64(42))
+    _ = _process_cell_for_quantiles(
+        test_rain, test_bin, test_wet_cdf, test_hour_cdf, test_bins,
+        0.1, 0, 0, rng_test, test_quantiles, 6
+    )
+    print(" done")
+    
+    # Clean up test data
+    del test_rain, test_bin, test_wet_cdf, test_hour_cdf, test_bins, test_quantiles, rng_test, _
+    print("   Numba functions ready")
+    # =============================================================================
+    
     # Process tiles in parallel with progress tracking
-    print(f"   Starting parallel processing at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"\n   Starting parallel processing at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     completed = [skipped_count]
     
     def progress_callback(result):
@@ -602,21 +648,41 @@ def main():
         print(f"   Completed: {completed[0]:4d}/{total_tiles} tiles "
               f"({100*completed[0]/total_tiles:5.1f}%) | "
               f"Rate: {tiles_per_min:.2f} tiles/min | "
-              f"ETA: {eta_min:.1f} min")
+              f"ETA: {eta_min:.1f} min", flush=True)
     
     try:
         results_list = []
         if len(tile_tasks) > 0:
-            with Pool(processes=N_PROCESSES) as pool:
+            with Pool(processes=n_processes_actual) as pool:
+                print(f"   Pool created with {n_processes_actual} workers", flush=True)
+                
                 async_results = []
-                for tile_task in tile_tasks:
-                    result = pool.apply_async(process_tile, args=(tile_task,), 
-                                            callback=lambda r: progress_callback(r))
+                for i, tile_task in enumerate(tile_tasks):
+                    print(f"   Submitting tile {i+1}/{len(tile_tasks)}...", flush=True)
+                    result = pool.apply_async(
+                        process_tile_safe,  # Use the safe wrapper
+                        args=(tile_task,), 
+                        callback=lambda r: progress_callback(r),
+                        error_callback=lambda e: print(f"\n   ERROR CALLBACK: {e}\n", flush=True)
+                    )
                     async_results.append(result)
                 
-                # Wait for all tasks to complete
-                for r in async_results:
-                    results_list.append(r.get())
+                print(f"   All {len(tile_tasks)} tasks submitted. Waiting for completion...", flush=True)
+                sys.stdout.flush()
+                
+                # Wait for all tasks to complete with timeout
+                for i, r in enumerate(async_results):
+                    try:
+                        result = r.get(timeout=3600)  # 1 hour timeout per tile
+                        results_list.append(result)
+                    except Exception as e:
+                        print(f"\n   Tile {i} failed or timed out: {e}\n", flush=True)
+    
+    except KeyboardInterrupt:
+        print("\n   Interrupted by user!")
+        pool.terminate()
+        pool.join()
+        raise
     
     finally:
         # Clean up shared memory
