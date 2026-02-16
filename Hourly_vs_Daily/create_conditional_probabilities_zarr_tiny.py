@@ -154,46 +154,58 @@ print(f"Zeros in hist_2d_intensity: {n_zeros_intensity}/{hist_2d_intensity.size}
 #####################################################################
 
 # Function to sample hourly from daily
-def sample_hourly_from_daily(daily_value, hist_2d_n_wet, hist_2d_intensity, BINS_LOW, BINS_HIGH, n_bootstrap=1000):
-    """Sample possible hourly structures for a given daily rainfall amount."""
-    bin_idx = np.digitize(daily_value, BINS_LOW) - 1
-    bin_idx = min(bin_idx, nbins_low - 1)
+def sample_hourly_from_daily(daily_value, hist_2d_n_wet, hist_2d_intensity, BINS_LOW, BINS_HIGH, 
+                              n_bootstrap=1000, daily_noise=0.0):
+    """
+    Sample with optional noise on daily value.
     
-    p_n_wet = hist_2d_n_wet[:, bin_idx, 0, 0]
-    p_intensity = hist_2d_intensity[:, bin_idx, 0, 0]
+    daily_noise: Standard deviation of noise to add to daily_value (default 0.0 = no noise)
+                 If >0, adds random variation to match observational uncertainty
+    """
     
     bootstrap_samples = []
     for _ in range(n_bootstrap):
+        # Add noise to daily value if requested
+        if daily_noise > 0:
+            daily_noisy = daily_value + np.random.normal(0, daily_noise)
+            daily_noisy = max(daily_noisy, WET_VALUE_LOFREQ)  # Keep above wet threshold
+        else:
+            daily_noisy = daily_value
+        
+        # Use noisy value for binning and sampling
+        bin_idx = np.digitize(daily_noisy, BINS_LOW) - 1
+        bin_idx = min(bin_idx, nbins_low - 1)
+        
+        p_n_wet = hist_2d_n_wet[:, bin_idx, 0, 0]
+        p_intensity = hist_2d_intensity[:, bin_idx, 0, 0]
+        
         n_wet = np.random.choice(np.arange(1, repeats + 1), p=p_n_wet / p_n_wet.sum())
         
-        # Sample bin indices based on probability
-        bin_indices = np.random.choice(
-            nbins_high,
-            size=n_wet,
-            p=p_intensity / p_intensity.sum()
-        )
+        hourly = np.zeros(24)
         
-        # Sample random values WITHIN each bin
+        if n_wet == 1:
+            hourly[np.random.randint(24)] = daily_noisy  # Use noisy value
+            bootstrap_samples.append(hourly)
+            continue
+        
+        bin_indices = np.random.choice(nbins_high, size=n_wet, p=p_intensity / p_intensity.sum())
+        
         intensities = np.zeros(n_wet)
         for i, idx in enumerate(bin_indices):
-            lower = BINS_HIGH[idx]
-            upper = BINS_HIGH[idx + 1]
-            # Handle infinity in last bin
+            lower, upper = BINS_HIGH[idx], BINS_HIGH[idx + 1]
             if np.isinf(upper):
-                intensities[i] = lower + np.random.exponential(scale=10)  # Exponential tail for values above last bin
+                intensities[i] = lower + np.random.exponential(scale=10)
             else:
                 intensities[i] = np.random.uniform(lower, upper)
         
-        scale_factor = daily_value / intensities.sum()
+        scale_factor = daily_noisy / intensities.sum()  # Scale to noisy value
         intensities_scaled = intensities * scale_factor
         
-        hourly = np.zeros(24)
         wet_positions = np.random.choice(24, size=n_wet, replace=False)
         hourly[wet_positions] = intensities_scaled
         bootstrap_samples.append(hourly)
     
     return np.array(bootstrap_samples)
-
 
 
 # Function to get hourly indices for a day
@@ -482,7 +494,7 @@ for i, p in enumerate(percentiles_to_check):
 print("\n=== SCALING BIAS DIAGNOSTIC ===")
 test_daily = 15.0
 samples = sample_hourly_from_daily(test_daily, hist_2d_n_wet, hist_2d_intensity, 
-                                    BINS_LOW, BINS_HIGH, n_bootstrap=1000)
+                                    BINS_LOW, BINS_HIGH, n_bootstrap=1000,daily_noise=0.5)
 print(f"For {test_daily}mm daily:")
 print(f"Bootstrap max values - Mean: {samples.max(axis=1).mean():.2f}mm, "
       f"Max: {samples.max():.2f}mm")
@@ -497,4 +509,162 @@ if similar_days.sum() > 0:
         obs_maxes.append(rain_high_wet_hwet_clean[start_idx:end_idx].max())
     print(f"Observed max - Mean: {np.mean(obs_maxes):.2f}mm, Max: {np.max(obs_maxes):.2f}mm")
 
+
+
+#####################################################################
+# ALTERNATIVE APPROACH: Direct max_hourly modeling
+#####################################################################
+
+print("\n" + "="*80)
+print("ALTERNATIVE METHOD: P(max_hourly | daily) - No full distribution")
+print("="*80)
+
+# 1. Extract max hourly for each day from observations
+max_hourly_obs = []
+for day_idx in range(len(daily_rain_wet_clean)):
+    start_idx, end_idx = get_hourly_indices_for_day(day_idx, n_wet_hours_clean)
+    max_hourly_obs.append(rain_high_wet_hwet_clean[start_idx:end_idx].max())
+
+max_hourly_obs = np.array(max_hourly_obs)
+
+# 2. Build histogram P(max_hourly | daily)
+BINS_MAX_HOURLY = np.arange(0, 50, 0.5)  # Fine bins for max hourly
+BINS_MAX_HOURLY = np.append(BINS_MAX_HOURLY, np.inf)
+
+hist_2d_max, _, _ = np.histogram2d(max_hourly_obs, daily_rain_wet_clean, 
+                                    bins=[BINS_MAX_HOURLY, BINS_LOW])
+
+# Normalize to probabilities
+hist_2d_max_prob = np.zeros_like(hist_2d_max, dtype=np.float32)
+for j in range(len(BINS_LOW)-1):
+    col_sum = hist_2d_max[:, j].sum()
+    if col_sum > 0:
+        hist_2d_max_prob[:, j] = hist_2d_max[:, j] / col_sum
+
+# 3. Generate synthetic max hourly for all days
+synthetic_max_hourly_all = []
+
+print("Generating synthetic max hourly for all days...")
+for day_idx in range(len(daily_rain_wet_clean)):
+    if day_idx % 10000 == 0:
+        print(f"  Day {day_idx}/{len(daily_rain_wet_clean)}")
+    
+    daily_val = daily_rain_wet_clean[day_idx]
+    
+    # Add noise
+    if True:  # Use noise like before
+        daily_noisy = daily_val + np.random.normal(0, 0.5)
+        daily_noisy = max(daily_noisy, WET_VALUE_LOFREQ)
+    else:
+        daily_noisy = daily_val
+    
+    # Find bin
+    bin_idx = np.digitize(daily_noisy, BINS_LOW) - 1
+    bin_idx = min(bin_idx, len(BINS_LOW)-2)
+    
+    # Sample max hourly
+    p_max = hist_2d_max_prob[:, bin_idx]
+    if p_max.sum() > 0:
+        max_bin = np.random.choice(len(BINS_MAX_HOURLY)-1, p=p_max/p_max.sum())
+        lower, upper = BINS_MAX_HOURLY[max_bin], BINS_MAX_HOURLY[max_bin+1]
+        if np.isinf(upper):
+            sampled_max = lower + np.random.exponential(scale=5)
+        else:
+            sampled_max = np.random.uniform(lower, upper)
+    else:
+        sampled_max = np.nan
+    
+    synthetic_max_hourly_all.append(sampled_max)
+
+synthetic_max_hourly_all = np.array(synthetic_max_hourly_all)
+synthetic_max_hourly_all = synthetic_max_hourly_all[~np.isnan(synthetic_max_hourly_all)]
+
+# 4. Compare percentiles - FIX: compare daily maxima, not all hours
+print("\n=== DIRECT MAX_HOURLY METHOD - PERCENTILE COMPARISON ===")
+print("Comparing DAILY MAXIMA distributions")
+print(f"{'Percentile':<12} {'Observed':<12} {'Direct Method':<15} {'Difference'}")
+print("-" * 70)
+
+# Get observed daily maxima (not all hours!)
+obs_daily_max = max_hourly_obs  # Already calculated above
+
+for p in percentiles_to_check:
+    p_obs = np.percentile(obs_daily_max, p)  # ← Changed this
+    p_direct = np.percentile(synthetic_max_hourly_all, p)
+    diff = p_direct - p_obs
+    
+    print(f"{p:<12.1f} {p_obs:<12.2f} {p_direct:<15.2f} {diff:+.2f}mm")
+
+print("\nBias comparison:")
+for p in [99, 99.5, 99.9]:
+    p_obs = np.percentile(obs_daily_max, p)
+    p_direct = np.percentile(synthetic_max_hourly_all, p)
+    bias_direct = (p_direct - p_obs) / p_obs * 100
+    print(f"P{p}: Direct method bias = {bias_direct:+.1f}%")
+    
+#####################################################################
+# Bootstrap uncertainty for direct max_hourly method
+#####################################################################
+
+print("\nGenerating bootstrap samples for direct max_hourly method...")
+n_bootstrap_members = 100
+
+percentiles_direct_bootstrap = {p: [] for p in percentiles_to_check}
+
+for boot_idx in range(n_bootstrap_members):
+    if boot_idx % 10 == 0:
+        print(f"  Bootstrap member {boot_idx}/{n_bootstrap_members}")
+    
+    synthetic_max_hourly = []
+    
+    for day_idx in range(len(daily_rain_wet_clean)):
+        daily_val = daily_rain_wet_clean[day_idx]
+        
+        # Add noise
+        daily_noisy = daily_val + np.random.normal(0, 0.5)
+        daily_noisy = max(daily_noisy, WET_VALUE_LOFREQ)
+        
+        # Find bin
+        bin_idx = np.digitize(daily_noisy, BINS_LOW) - 1
+        bin_idx = min(bin_idx, len(BINS_LOW)-2)
+        
+        # Sample max hourly
+        p_max = hist_2d_max_prob[:, bin_idx]
+        if p_max.sum() > 0:
+            max_bin = np.random.choice(len(BINS_MAX_HOURLY)-1, p=p_max/p_max.sum())
+            lower, upper = BINS_MAX_HOURLY[max_bin], BINS_MAX_HOURLY[max_bin+1]
+            if np.isinf(upper):
+                sampled_max = lower + np.random.exponential(scale=5)
+            else:
+                sampled_max = np.random.uniform(lower, upper)
+        else:
+            sampled_max = np.nan
+        
+        synthetic_max_hourly.append(sampled_max)
+    
+    synthetic_max_hourly = np.array(synthetic_max_hourly)
+    synthetic_max_hourly = synthetic_max_hourly[~np.isnan(synthetic_max_hourly)]
+    
+    # Calculate percentiles for this bootstrap member
+    for p in percentiles_to_check:
+        percentiles_direct_bootstrap[p].append(np.percentile(synthetic_max_hourly, p))
+
+# Get 95% CI for each percentile
+percentiles_direct_ci_low = [np.percentile(percentiles_direct_bootstrap[p], 2.5) for p in percentiles_to_check]
+percentiles_direct_ci_high = [np.percentile(percentiles_direct_bootstrap[p], 97.5) for p in percentiles_to_check]
+percentiles_direct_mean = [np.mean(percentiles_direct_bootstrap[p]) for p in percentiles_to_check]
+
+# Observed daily maxima
+obs_daily_max = max_hourly_obs
+percentiles_obs_daily_max = [np.percentile(obs_daily_max, p) for p in percentiles_to_check]
+
+# Print comparison with CI
+print("\n=== DIRECT MAX_HOURLY - WITH BOOTSTRAP CI ===")
+print(f"{'Percentile':<12} {'Observed':<12} {'Direct Mean':<15} {'95% CI':<25} {'In Range?'}")
+print("-" * 90)
+for i, p in enumerate(percentiles_to_check):
+    in_range = percentiles_direct_ci_low[i] <= percentiles_obs_daily_max[i] <= percentiles_direct_ci_high[i]
+    print(f"{p:<12.1f} {percentiles_obs_daily_max[i]:<12.2f} {percentiles_direct_mean[i]:<15.2f} "
+          f"[{percentiles_direct_ci_low[i]:.2f}, {percentiles_direct_ci_high[i]:.2f}]    {in_range}")
+    
 import pdb; pdb.set_trace()  # fmt: skip
