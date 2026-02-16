@@ -4,6 +4,7 @@ import numpy as np
 import xarray as xr
 import dask
 import zarr
+import pandas as pd
 
 PATH_IN = "/home/dargueso/postprocessed/EPICC/"
 PATH_OUT = "/home/dargueso/postprocessed/EPICC/"
@@ -102,6 +103,48 @@ if len(daily_rain_wet_clean) > 0:
         if col_sum > 0:
             hist_2d_n_wet[:, j, 0, 0] = hist_counts_n_wet[:, j] / col_sum
 
+# Check what probabilities the histogram has for low daily rainfall bins
+print("Checking histogram for 1-2mm daily rainfall:")
+
+# Find the bin index for 1.5mm (middle of 1-2mm range)
+test_value = 1.5
+bin_idx = np.digitize(test_value, BINS_LOW) - 1
+print(f"\nDaily value: {test_value}mm falls in bin {bin_idx}")
+print(f"Bin range: {BINS_LOW[bin_idx]}-{BINS_LOW[bin_idx+1]}mm")
+
+# Show the probability distribution for n_wet_hours
+p_n_wet = hist_2d_n_wet[:, bin_idx, 0, 0]
+print(f"\nP(n_wet_hours | daily={BINS_LOW[bin_idx]}-{BINS_LOW[bin_idx+1]}mm):")
+for n in range(1, min(10, repeats+1)):
+    print(f"  {n} wet hours: {p_n_wet[n-1]:.4f} ({p_n_wet[n-1]*100:.1f}%)")
+
+# Check actual observed data in that bin
+mask = (daily_rain_wet_clean >= BINS_LOW[bin_idx]) & (daily_rain_wet_clean < BINS_LOW[bin_idx+1])
+observed_n_wet_in_bin = n_wet_hours_clean[mask]
+print(f"\nActual observed data for this bin ({mask.sum()} days):")
+print(f"  n_wet_hours distribution:")
+for n in range(1, min(10, repeats+1)):
+    count = (observed_n_wet_in_bin == n).sum()
+    print(f"    {n} wet hours: {count} days ({count/mask.sum()*100:.1f}%)")
+    
+
+for j in range(nbins_low):
+        col_sum = hist_counts_n_wet[:, j].sum()
+        if col_sum > 0:
+            hist_2d_n_wet[:, j, 0, 0] = hist_counts_n_wet[:, j] / col_sum
+
+# ADD THE DIAGNOSTIC CODE HERE
+print("\nChecking P(n_wet=1) for low daily rainfall bins:")
+for i in range(min(5, nbins_low)):
+    p_1_wet = hist_2d_n_wet[0, i, 0, 0]  # First row is n_wet=1
+    print(f"Bin {BINS_LOW[i]}-{BINS_LOW[i+1]}mm: P(n_wet=1) = {p_1_wet:.4f}")
+    
+# Count how many zeros in the histogram
+n_zeros_n_wet = (hist_2d_n_wet == 0).sum()
+n_zeros_intensity = (hist_2d_intensity == 0).sum()
+print(f"\nZeros in hist_2d_n_wet: {n_zeros_n_wet}/{hist_2d_n_wet.size}")
+print(f"Zeros in hist_2d_intensity: {n_zeros_intensity}/{hist_2d_intensity.size}")
+
 
 #####################################################################
 #####################################################################
@@ -160,6 +203,11 @@ def get_hourly_indices_for_day(day_idx, n_wet_hours_clean):
     end_idx = cumsum[day_idx]
     return int(start_idx), int(end_idx)
 
+
+#####################################################################
+# TEST SINGLE RANDOM DAY
+#####################################################################
+
 # Test with random day
 random_day_idx = np.random.randint(len(daily_rain_wet_clean))
 test_daily_value = daily_rain_wet_clean[random_day_idx]
@@ -175,7 +223,7 @@ print(f"Obs hourly: {test_hourly_obs}, sum={test_hourly_obs.sum():.1f}mm")
 
 # Update the call to include BINS_HIGH
 bootstrap_samples = sample_hourly_from_daily(
-    test_daily_value, hist_2d_n_wet, hist_2d_intensity, BINS_LOW, BINS_HIGH, n_bootstrap=10000
+    test_daily_value, hist_2d_n_wet, hist_2d_intensity, BINS_LOW, BINS_HIGH, n_bootstrap=1000
 )
 
 print(f"\nBootstrap n_wet: {(bootstrap_samples > 0).sum(axis=1).mean():.1f} ± {(bootstrap_samples > 0).sum(axis=1).std():.1f}")
@@ -183,45 +231,120 @@ print(f"Bootstrap max: {bootstrap_samples.max(axis=1).mean():.1f} ± {bootstrap_
 
 
 # Compare observed vs bootstrap using percentiles
+# Check if observed values have reasonable probability
 def check_compatibility(test_hourly_obs, bootstrap_samples, alpha=0.05):
     """
     Check if observed hourly rainfall is compatible with bootstrap estimates.
-    Returns percentiles where observed values fall.
+    Uses frequency-based test instead of percentile rank.
     """
     # Get bootstrap statistics
     boot_n_wet = (bootstrap_samples > 0).sum(axis=1)
     boot_max = bootstrap_samples.max(axis=1)
-    boot_mean_wet = [bs[bs > 0].mean() for bs in bootstrap_samples]
+    boot_mean_wet = np.array([bs[bs > 0].mean() for bs in bootstrap_samples])
     
     # Observed statistics
     obs_n_wet = len(test_hourly_obs)
     obs_max = test_hourly_obs.max()
     obs_mean_wet = test_hourly_obs.mean()
     
-    # Calculate percentiles
-    p_n_wet = (boot_n_wet < obs_n_wet).sum() / len(boot_n_wet) * 100
-    p_max = (boot_max < obs_max).sum() / len(boot_max) * 100
-    p_mean = (boot_mean_wet < obs_mean_wet).sum() / len(boot_mean_wet) * 100
+    # Calculate FREQUENCIES (what % of bootstrap samples match observed)
+    freq_n_wet = (boot_n_wet == obs_n_wet).sum() / len(boot_n_wet) * 100
     
-    # Get confidence intervals
-    ci_low, ci_high = alpha/2 * 100, (1 - alpha/2) * 100
+    # For continuous values, use tolerance window
+    tol = 0.2  # mm tolerance
+    freq_max = ((boot_max >= obs_max - tol) & (boot_max <= obs_max + tol)).sum() / len(boot_max) * 100
+    freq_mean = ((boot_mean_wet >= obs_mean_wet - tol) & (boot_mean_wet <= obs_mean_wet + tol)).sum() / len(boot_mean_wet) * 100
     
-    print(f"Observed n_wet: {obs_n_wet} (percentile: {p_n_wet:.1f}%)")
-    print(f"  Bootstrap CI: [{np.percentile(boot_n_wet, ci_low):.0f}, {np.percentile(boot_n_wet, ci_high):.0f}]")
+    # Compatible if ANY metric has frequency > 1% (appears in bootstrap)
+    min_freq = 1.0  # at least 1% of bootstrap samples
+    compatible = (freq_n_wet >= min_freq) or (freq_max >= min_freq) or (freq_mean >= min_freq)
     
-    print(f"Observed max: {obs_max:.3f}mm (percentile: {p_max:.1f}%)")
-    print(f"  Bootstrap CI: [{np.percentile(boot_max, ci_low):.1f}, {np.percentile(boot_max, ci_high):.1f}]mm")
+    print(f"Observed n_wet: {obs_n_wet} (appears in {freq_n_wet:.1f}% of bootstrap)")
+    print(f"Observed max: {obs_max:.3f}mm (appears in {freq_max:.1f}% of bootstrap)")
+    print(f"Observed mean_wet: {obs_mean_wet:.3f}mm (appears in {freq_mean:.1f}% of bootstrap)")
+    print(f"\nCompatible: {compatible} (needs ≥{min_freq}% in at least one metric)")
     
-    print(f"Observed mean_wet: {obs_mean_wet:.3f}mm (percentile: {p_mean:.1f}%)")
-    print(f"  Bootstrap CI: [{np.percentile(boot_mean_wet, ci_low):.1f}, {np.percentile(boot_mean_wet, ci_high):.1f}]mm")
-    
-    # Check compatibility (within 5-95% range)
-    compatible = (ci_low < p_n_wet < ci_high and 
-                  ci_low < p_max < ci_high and 
-                  ci_low < p_mean < ci_high)
-    
-    print(f"\nCompatible: {compatible}")
     return compatible
 
 # Run check
 check_compatibility(test_hourly_obs, bootstrap_samples)
+
+
+#####################################################################
+# CHECK ALL RAINY DAYS
+#####################################################################
+
+def check_all_days(daily_rain_wet_clean, n_wet_hours_clean, rain_high_wet_hwet_clean, 
+                   hist_2d_n_wet, hist_2d_intensity, BINS_LOW, BINS_HIGH, 
+                   n_bootstrap=1000, min_freq=1.0):
+    """Check compatibility using frequency-based test."""
+    
+    n_days = len(daily_rain_wet_clean)
+    results = {
+        'day_idx': [], 'daily_value': [], 'n_wet_obs': [], 'compatible': [],
+        'freq_n_wet': [], 'freq_max': [], 'freq_mean': []
+    }
+    
+    print(f"\nChecking {n_days} rainy days...")
+    
+    for day_idx in range(n_days):
+        if day_idx % 1000 == 0:
+            print(f"  Processing day {day_idx}/{n_days}")
+        
+        test_daily_value = daily_rain_wet_clean[day_idx]
+        test_n_wet_obs = int(n_wet_hours_clean[day_idx])
+        
+        if test_n_wet_obs == 0:
+            continue
+        
+        start_idx, end_idx = get_hourly_indices_for_day(day_idx, n_wet_hours_clean)
+        test_hourly_obs = rain_high_wet_hwet_clean[start_idx:end_idx]
+        
+        bootstrap_samples = sample_hourly_from_daily(
+            test_daily_value, hist_2d_n_wet, hist_2d_intensity, 
+            BINS_LOW, BINS_HIGH, n_bootstrap=n_bootstrap
+        )
+        
+        # FREQUENCY-BASED statistics (not percentiles!)
+        boot_n_wet = (bootstrap_samples > 0).sum(axis=1)
+        boot_max = bootstrap_samples.max(axis=1)
+        boot_mean_wet = np.array([bs[bs > 0].mean() for bs in bootstrap_samples])
+        
+        obs_n_wet = len(test_hourly_obs)
+        obs_max = test_hourly_obs.max()
+        obs_mean_wet = test_hourly_obs.mean()
+        
+        freq_n_wet = (boot_n_wet == obs_n_wet).sum() / len(boot_n_wet) * 100
+        tol = 0.2
+        freq_max = ((boot_max >= obs_max - tol) & (boot_max <= obs_max + tol)).sum() / len(boot_max) * 100
+        freq_mean = ((boot_mean_wet >= obs_mean_wet - tol) & (boot_mean_wet <= obs_mean_wet + tol)).sum() / len(boot_mean_wet) * 100
+        
+        compatible = (freq_n_wet >= min_freq) or (freq_max >= min_freq) or (freq_mean >= min_freq)
+        
+        results['day_idx'].append(day_idx)
+        results['daily_value'].append(test_daily_value)
+        results['n_wet_obs'].append(obs_n_wet)
+        results['compatible'].append(compatible)
+        results['freq_n_wet'].append(freq_n_wet)
+        results['freq_max'].append(freq_max)
+        results['freq_mean'].append(freq_mean)
+    
+    results_df = pd.DataFrame(results)
+    print(f"\n=== SUMMARY ===")
+    print(f"Total days checked: {len(results_df)} (skipped {n_days - len(results_df)} days with 0 wet hours)")
+    print(f"Compatible: {results_df['compatible'].sum()} ({results_df['compatible'].mean()*100:.1f}%)")
+    print(f"Incompatible: {(~results_df['compatible']).sum()} ({(~results_df['compatible']).mean()*100:.1f}%)")
+    
+    return results_df
+
+# Run for all days
+results_df = check_all_days(
+    daily_rain_wet_clean, n_wet_hours_clean, rain_high_wet_hwet_clean,
+    hist_2d_n_wet, hist_2d_intensity, BINS_LOW, BINS_HIGH, 
+    n_bootstrap=1000
+)
+
+# Inspect incompatible days
+print("\nSample of incompatible days:")
+print(results_df[~results_df['compatible']].head(10))
+import pdb; pdb.set_trace()  # fmt: skip

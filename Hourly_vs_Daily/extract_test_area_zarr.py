@@ -21,14 +21,16 @@ PATH_OUT = '/home/dargueso/postprocessed/EPICC/'
 WRUN = "EPICC_2km_ERA5"
 
 # Frequency to extract (change as needed)
-FREQ = '01H'  # Options: '10MIN', '01H', 'DAY'
+FREQ = '10MIN'  # Options: '10MIN', '01H', 'DAY'
 
 # Target location
 TARGET_LAT = 39.639
 TARGET_LON = 2.647
 
 # Extraction size
-GRID_SIZE = 100  # 100x100 grid
+GRID_SIZE = 101  # 101x101 grid (use odd number for true centering)
+                 # Odd sizes (101, 99, etc.) can be perfectly centered on the target point
+                 # Even sizes (100, 102, etc.) will be offset by half a grid cell
 
 # Chunking for output (same as original)
 TIME_CHUNK = 8760
@@ -84,13 +86,26 @@ print(f"   Closest grid point: y={center_y}, x={center_x}")
 print(f"   Actual: lat={lat[center_y, center_x]:.4f}, lon={lon[center_y, center_x]:.4f}")
 print(f"   Distance: {distances[center_y, center_x]:.6f} degrees")
 
+# Check if grid size is odd or even
+if GRID_SIZE % 2 == 0:
+    print(f"\n   NOTE: Even grid size ({GRID_SIZE}x{GRID_SIZE}) cannot be truly centered.")
+    print(f"         For true centering, use an odd grid size (e.g., {GRID_SIZE-1} or {GRID_SIZE+1})")
+
 # Calculate extraction bounds (centered on target point)
 half_size = GRID_SIZE // 2
 
-y_start = max(0, center_y - half_size)
-y_end = min(len(ds.y), center_y + half_size)
-x_start = max(0, center_x - half_size)
-x_end = min(len(ds.x), center_x + half_size)
+if GRID_SIZE % 2 == 1:
+    # Odd grid size - can be truly centered
+    y_start = max(0, center_y - half_size)
+    y_end = min(len(ds.y), center_y + half_size + 1)  # +1 to include center + half_size
+    x_start = max(0, center_x - half_size)
+    x_end = min(len(ds.x), center_x + half_size + 1)
+else:
+    # Even grid size - cannot be truly centered (center falls between grid points)
+    y_start = max(0, center_y - half_size)
+    y_end = min(len(ds.y), center_y + half_size)
+    x_start = max(0, center_x - half_size)
+    x_end = min(len(ds.x), center_x + half_size)
 
 # Adjust to ensure we get exactly GRID_SIZE if possible
 actual_y_size = y_end - y_start
@@ -104,6 +119,18 @@ if actual_x_size < GRID_SIZE:
 print(f"\n3. Extracting subset...")
 print(f"   y range: [{y_start}, {y_end}) = {actual_y_size} points")
 print(f"   x range: [{x_start}, {x_end}) = {actual_x_size} points")
+
+# Calculate where the center point will be in the extracted grid
+center_y_in_subset = center_y - y_start
+center_x_in_subset = center_x - x_start
+print(f"   Center point in extracted grid: y={center_y_in_subset}, x={center_x_in_subset}")
+
+if GRID_SIZE % 2 == 1:
+    expected_center = GRID_SIZE // 2
+    if center_y_in_subset == expected_center and center_x_in_subset == expected_center:
+        print(f"   ✓ Perfectly centered at [{expected_center}, {expected_center}]")
+    else:
+        print(f"   ⚠ Center offset from expected [{expected_center}, {expected_center}] due to domain edge")
 
 # Extract the subset
 ds_subset = ds.isel(
