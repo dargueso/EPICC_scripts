@@ -38,6 +38,7 @@ zarr_path = f"{PATH_IN}/{WRUN}/UIB_{FREQ_HIGH}_RAIN{test_suffix}.zarr"
 
 ds = xr.open_zarr(zarr_path, consolidated=False, zarr_format=2)
 rain_hour = ds.RAIN
+print(f"Original data shape: {rain_hour.shape}, time range: {rain_hour.time.min().values} to {rain_hour.time.max().values}")
 
 # 1. Daily rainfall from hourly, >= 1mm only (else NaN)
 daily_rain = rain_hour.resample(time="1D").sum()
@@ -347,4 +348,153 @@ results_df = check_all_days(
 # Inspect incompatible days
 print("\nSample of incompatible days:")
 print(results_df[~results_df['compatible']].head(10))
+
+#####################################################################
+# Test 99.9th percentile preservation
+#####################################################################
+
+# 1. Observed 99.9th percentile of wet hours
+p999_observed = np.percentile(rain_high_wet_hwet_clean, 99.9)
+
+print(f"Observed 99.9th percentile: {p999_observed:.2f}mm")
+
+# 2. Generate large synthetic dataset and calculate p99.9 for each bootstrap
+print("\nGenerating synthetic data for all days...")
+n_bootstrap_members = 1000  # Number of complete datasets to generate
+
+p999_bootstrap = []
+
+for boot_idx in range(n_bootstrap_members):
+    if boot_idx % 10 == 0:
+        print(f"  Bootstrap member {boot_idx}/{n_bootstrap_members}")
+    
+    synthetic_hourly_all = []
+    
+    # Generate synthetic hourly for all days
+    for day_idx in range(len(daily_rain_wet_clean)):
+        daily_val = daily_rain_wet_clean[day_idx]
+        
+        # Generate one realization
+        synth = sample_hourly_from_daily(
+            daily_val, hist_2d_n_wet, hist_2d_intensity, 
+            BINS_LOW, BINS_HIGH, n_bootstrap=1
+        )[0]  # Take first (and only) sample
+        
+        # Extract wet hours
+        wet_hours = synth[synth > 0]
+        synthetic_hourly_all.extend(wet_hours)
+    
+    # Calculate p99.9 for this bootstrap member
+    p999_bootstrap.append(np.percentile(synthetic_hourly_all, 99.9))
+
+p999_bootstrap = np.array(p999_bootstrap)
+
+# 3. Calculate 2.5-97.5 percentile range of bootstrap p99.9 values
+ci_low = np.percentile(p999_bootstrap, 2.5)
+ci_high = np.percentile(p999_bootstrap, 97.5)
+
+print(f"\n=== RESULTS ===")
+print(f"Observed p99.9: {p999_observed:.2f}mm")
+print(f"Bootstrap p99.9 - Mean: {p999_bootstrap.mean():.2f}mm, Std: {p999_bootstrap.std():.2f}mm")
+print(f"Bootstrap p99.9 - 95% CI: [{ci_low:.2f}, {ci_high:.2f}]mm")
+
+in_range = ci_low <= p999_observed <= ci_high
+print(f"\nObserved within 95% CI: {in_range}")
+print(f"Bias: {(p999_bootstrap.mean() - p999_observed):.2f}mm ({(p999_bootstrap.mean() - p999_observed)/p999_observed*100:.1f}%)")
+
+import matplotlib.pyplot as plt
+
+#####################################################################
+# Compare multiple percentiles: Observed vs Bootstrap
+#####################################################################
+
+percentiles_to_check = [90, 95, 98, 99, 99.5, 99.9]
+
+# 1. Calculate observed percentiles
+percentiles_observed = [np.percentile(rain_high_wet_hwet_clean, p) for p in percentiles_to_check]
+
+print("Calculating bootstrap percentile ranges...")
+
+# 2. Calculate same percentiles for each bootstrap member
+percentiles_bootstrap = {p: [] for p in percentiles_to_check}
+
+for boot_idx in range(n_bootstrap_members):
+    if boot_idx % 10 == 0:
+        print(f"  Bootstrap member {boot_idx}/{n_bootstrap_members}")
+    
+    synthetic_hourly_all = []
+    
+    for day_idx in range(len(daily_rain_wet_clean)):
+        daily_val = daily_rain_wet_clean[day_idx]
+        synth = sample_hourly_from_daily(
+            daily_val, hist_2d_n_wet, hist_2d_intensity, 
+            BINS_LOW, BINS_HIGH, n_bootstrap=1
+        )[0]
+        wet_hours = synth[synth > 0]
+        synthetic_hourly_all.extend(wet_hours)
+    
+    # Calculate all percentiles for this bootstrap member
+    for p in percentiles_to_check:
+        percentiles_bootstrap[p].append(np.percentile(synthetic_hourly_all, p))
+
+# 3. Get 95% CI for each percentile
+percentiles_ci_low = [np.percentile(percentiles_bootstrap[p], 2.5) for p in percentiles_to_check]
+percentiles_ci_high = [np.percentile(percentiles_bootstrap[p], 97.5) for p in percentiles_to_check]
+percentiles_mean = [np.mean(percentiles_bootstrap[p]) for p in percentiles_to_check]
+
+# 4. Plot
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Bootstrap range as shaded area
+ax.fill_between(percentiles_to_check, percentiles_ci_low, percentiles_ci_high, 
+                alpha=0.3, color='blue', label='Bootstrap 95% CI')
+
+# Bootstrap mean
+ax.plot(percentiles_to_check, percentiles_mean, 'b--', linewidth=2, label='Bootstrap mean')
+
+# Observed
+ax.plot(percentiles_to_check, percentiles_observed, 'ro-', linewidth=2, 
+        markersize=8, label='Observed')
+
+ax.set_xlabel('Percentile', fontsize=12)
+ax.set_ylabel('Hourly rainfall (mm)', fontsize=12)
+ax.set_title('Observed vs Bootstrap: Wet Hour Intensity Percentiles', fontsize=14)
+ax.legend(fontsize=10)
+ax.grid(True, alpha=0.3)
+ax.set_xticks(percentiles_to_check)
+
+plt.tight_layout()
+plt.savefig('percentiles_comparison.png', dpi=300, bbox_inches='tight')
+#plt.show()
+
+# Print summary
+print("\n=== PERCENTILE COMPARISON ===")
+print(f"{'Percentile':<12} {'Observed':<12} {'Bootstrap Mean':<15} {'95% CI':<25} {'In Range?'}")
+print("-" * 80)
+for i, p in enumerate(percentiles_to_check):
+    in_range = percentiles_ci_low[i] <= percentiles_observed[i] <= percentiles_ci_high[i]
+    print(f"{p:<12.1f} {percentiles_observed[i]:<12.2f} {percentiles_mean[i]:<15.2f} "
+          f"[{percentiles_ci_low[i]:.2f}, {percentiles_ci_high[i]:.2f}]    {in_range}")
+
+
+
+# ADD DIAGNOSTIC HERE
+print("\n=== SCALING BIAS DIAGNOSTIC ===")
+test_daily = 15.0
+samples = sample_hourly_from_daily(test_daily, hist_2d_n_wet, hist_2d_intensity, 
+                                    BINS_LOW, BINS_HIGH, n_bootstrap=1000)
+print(f"For {test_daily}mm daily:")
+print(f"Bootstrap max values - Mean: {samples.max(axis=1).mean():.2f}mm, "
+      f"Max: {samples.max():.2f}mm")
+
+# Check what the observed max is for similar daily values
+similar_days = (daily_rain_wet_clean >= 14) & (daily_rain_wet_clean <= 16)
+print(f"Observed for {test_daily}±1mm days: {similar_days.sum()} days")
+if similar_days.sum() > 0:
+    obs_maxes = []
+    for day_idx in np.where(similar_days)[0]:
+        start_idx, end_idx = get_hourly_indices_for_day(day_idx, n_wet_hours_clean)
+        obs_maxes.append(rain_high_wet_hwet_clean[start_idx:end_idx].max())
+    print(f"Observed max - Mean: {np.mean(obs_maxes):.2f}mm, Max: {np.max(obs_maxes):.2f}mm")
+
 import pdb; pdb.set_trace()  # fmt: skip
