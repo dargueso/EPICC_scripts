@@ -9,7 +9,7 @@ import pandas as pd
 PATH_IN = "/home/dargueso/postprocessed/EPICC/"
 PATH_OUT = "/home/dargueso/postprocessed/EPICC/"
 WRUN = "EPICC_2km_ERA5"
-test_suffix = "_test_21x21"
+test_suffix = "_test_3x3"
 
 
 # Wet thresholds - values below these are considered "dry" and excluded
