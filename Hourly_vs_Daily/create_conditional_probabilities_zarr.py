@@ -11,7 +11,7 @@ dask.config.set(scheduler='threads', num_workers=8)  # Reduced since we're using
 PATH_IN = '/home/dargueso/postprocessed/EPICC/'
 PATH_OUT = '/home/dargueso/postprocessed/EPICC/'
 WRUN = "EPICC_2km_ERA5"
-test_suffix = "_test_100x100"
+test_suffix = "_test_3x3"
 
 # Wet thresholds - values below these are considered "dry" and excluded
 WET_VALUE_HIFREQ = 0.1  # mm (for high frequency)
@@ -42,16 +42,6 @@ N_PROCESSES = 32  # Adjust based on your system
 # FREQUENCY CONVERSION MAPPING
 #####################################################################
 
-# Map frequency strings to number of 10-min intervals
-# {
-#     '10MIN': 1,
-#     '1H': 6,
-#     '3H': 18,
-#     '6H': 36,
-#     '12H': 72,
-#     'D': 144  # 24 hours
-# }
-
 if FREQ_HIGH == '10MIN':
     FREQ_TO_ORIG = {
         '10MIN': 1,
@@ -63,8 +53,6 @@ elif FREQ_HIGH == '01H':
         '01H': 1,
         'DAY': 24  # 24 hours
     }
-
-
 
 
 # Validate frequency choices
@@ -380,7 +368,14 @@ bin_centers_low = np.append(bin_centers_low, BINS_LOW[-2] + 5)
 
 n_wet_values = np.arange(1, repeats + 1)
 
-# Save to netCDF
+
+
+#####################################################################
+#####################################################################
+# SAVE FILES TO NETCDF #
+#####################################################################
+#####################################################################
+
 print("\n4. Saving to NetCDF...")
 t0 = time.time()
 
