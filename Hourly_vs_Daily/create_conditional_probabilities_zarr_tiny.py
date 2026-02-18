@@ -9,7 +9,7 @@ import pandas as pd
 PATH_IN = "/home/dargueso/postprocessed/EPICC/"
 PATH_OUT = "/home/dargueso/postprocessed/EPICC/"
 WRUN = "EPICC_2km_ERA5"
-test_suffix = "_test_3x3"
+test_suffix = "_test_1x1"
 
 
 # Wet thresholds - values below these are considered "dry" and excluded
@@ -69,16 +69,19 @@ rain_high_wet_hwet = hourly_rain_wet_hours_wet_days.values.flatten(order='F')
 rain_low_wet_clean = rain_low_wet[~np.isnan(rain_high_wet_hwet)]
 rain_high_wet_hwet_clean = rain_high_wet_hwet[~np.isnan(rain_high_wet_hwet)]
 
+
+
 ####################################################################
 # HISTOGRAM 1: P(intensity_high | intensity_low)
 ####################################################################
 hist_2d_intensity = np.zeros((nbins_high, nbins_low, 1, 1), dtype=np.float32)
-if len(rain_high_wet) > 0:
-    hist_counts_intensity, _, _ = np.histogram2d(rain_high_wet, rain_low_wet, bins=[BINS_HIGH, BINS_LOW])
+if len(rain_high_wet_hwet_clean) > 0:
+    hist_counts_intensity, _, _ = np.histogram2d(rain_high_wet_hwet_clean, rain_low_wet_clean, bins=[BINS_HIGH, BINS_LOW])
 for j in range(nbins_low):
     col_sum = hist_counts_intensity[:, j].sum()
     if col_sum > 0:
         hist_2d_intensity[:, j, 0, 0] = hist_counts_intensity[:, j] / col_sum
+
 
 
 ####################################################################
