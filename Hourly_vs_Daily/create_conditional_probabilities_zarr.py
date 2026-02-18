@@ -7,11 +7,12 @@ from multiprocessing import Pool, cpu_count
 
 # Configure dask
 dask.config.set(scheduler='threads', num_workers=8)  # Reduced since we're using multiprocessing
+#dask.config.set(scheduler='synchronous')  # Run everything in serial
 
 PATH_IN = '/home/dargueso/postprocessed/EPICC/'
 PATH_OUT = '/home/dargueso/postprocessed/EPICC/'
 WRUN = "EPICC_2km_ERA5"
-test_suffix = "_test_3x3"
+test_suffix = ""
 
 # Wet thresholds - values below these are considered "dry" and excluded
 WET_VALUE_HIFREQ = 0.1  # mm (for high frequency)
@@ -138,7 +139,7 @@ def process_tile(tile_info):
     repeats = config['repeats']
     ny_full = config['ny_full']
     nx_full = config['nx_full']
-    
+
     # Define tile bounds
     y_start = iy_tile * tile_size
     y_end = min(y_start + tile_size, ny_full)  # Don't exceed domain
@@ -157,32 +158,34 @@ def process_tile(tile_info):
         ds_tile = ds.isel(y=slice(y_start, y_end), x=slice(x_start, x_end))
         ds_tile_loaded = ds_tile.load()
         
-        # Get orig data
         rain_orig = ds_tile_loaded.RAIN.values
-        
-        # Calculate number of complete intervals for low frequency
+
+        # 1. Calculate number of complete intervals for low frequency
         n_intervals_low = len(ds_tile_loaded.time) // intervals_low
         n_timesteps_use = n_intervals_low * intervals_low
-        rain_orig_trimmed = rain_orig[:n_timesteps_use]
-        #Set all values below wet threshold to zero
-        rain_orig_trimmed[rain_orig_trimmed < WET_VALUE_HIFREQ] = 0.0
+        rain_orig = rain_orig[:, :n_timesteps_use]
 
-        # Resample to high frequency
-        n_intervals_high = n_timesteps_use // intervals_high
-        rain_high = rain_orig_trimmed.reshape(n_intervals_high, intervals_high, actual_ny, actual_nx).sum(axis=1)
+        # 2. Reshape to (n_intervals_low, intervals_low, ny, nx) for easier processing
+        rain_hifreq = rain_orig.reshape(n_intervals_low, intervals_low, actual_ny, actual_nx)
+        rain_lofreq = rain_hifreq.sum(axis=1)
 
+        # 3. Set low-freq values to zero if below wet threshold
+        rain_lofreq_wet = rain_lofreq.copy()
+        rain_lofreq_wet[rain_lofreq_wet < WET_VALUE_LOFREQ] = 0.0
 
-        # Resample to low frequency
-        rain_low = rain_orig_trimmed.reshape(n_intervals_low, intervals_low, actual_ny, actual_nx).sum(axis=1)
-        
-        # Keep high-freq data in low-freq blocks
-        rain_high_blocks = rain_high.reshape(n_intervals_low, repeats, actual_ny, actual_nx)
-        
+        # 4. Set high-freq values to zero if corresponding low-freq block is dry
+        rain_hifreq = np.where(rain_lofreq_wet[:, np.newaxis, :, :] > 0, rain_hifreq,0)
+
+        # 5. Get only the wet hours in wet days for intensity histogram
+        rain_hifreq_wet = rain_hifreq.copy()
+        rain_hifreq_wet[rain_hifreq_wet < WET_VALUE_HIFREQ] = 0.0
+
         # Initialize arrays
         nbins_high = len(BINS_HIGH) - 1
         nbins_low = len(BINS_LOW) - 1
         
         hist_2d_intensity = np.zeros((nbins_high, nbins_low, actual_ny, actual_nx), dtype=np.float32)
+        hist_2d_max_intensity = np.zeros((nbins_high, nbins_low, actual_ny, actual_nx), dtype=np.float32)
         hist_2d_n_wet = np.zeros((repeats, nbins_low, actual_ny, actual_nx), dtype=np.float32)
         gini_by_bin = np.full((nbins_low, actual_ny, actual_nx), np.nan, dtype=np.float32)
         n_events_by_bin = np.zeros((nbins_low, actual_ny, actual_nx), dtype=np.int32)
@@ -191,12 +194,14 @@ def process_tile(tile_info):
         for iy in range(actual_ny):
             for ix in range(actual_nx):
                 # Get timeseries for this grid point
-                rain_high_point = rain_high[:, iy, ix]
-                rain_low_point = np.repeat(rain_low[:, iy, ix], repeats)
+                rain_high_point = rain_hifreq_wet[:, :, iy, ix].flatten()
+                rain_low_point = np.repeat(rain_lofreq_wet[:, iy, ix], repeats)
                 
-                rain_high_blocks_point = rain_high_blocks[:, :, iy, ix]
-                rain_low_blocks_point = rain_low[:, iy, ix]
+
+                rain_high_blocks_point = rain_hifreq_wet[:, :, iy, ix]
+                rain_low_blocks_point = rain_lofreq_wet[:, iy, ix]
                 
+            
                 # Trim to same length
                 min_len = min(len(rain_high_point), len(rain_low_point))
                 rain_high_point = rain_high_point[:min_len]
@@ -206,7 +211,7 @@ def process_tile(tile_info):
                 wet_mask_daily = rain_low_point >= WET_VALUE_LOFREQ
                 wet_mask_hourly = rain_high_point >= WET_VALUE_HIFREQ
                 wet_mask = wet_mask_daily & wet_mask_hourly
-                
+
                 rain_high_wet = rain_high_point[wet_mask]
                 rain_low_wet = rain_low_point[wet_mask]
                 
@@ -246,13 +251,13 @@ def process_tile(tile_info):
                         col_sum = hist_counts_n_wet[:, j].sum()
                         if col_sum > 0:
                             hist_2d_n_wet[:, j, iy, ix] = hist_counts_n_wet[:, j] / col_sum
-                
+
                 ####################################################################
                 # GINI COEFFICIENT & N_EVENTS
                 ####################################################################
                 if len(rain_low_blocks_wet) > 0:
                     gini_per_day = np.array([gini_coefficient(rain_high_blocks_wet[i, :]) 
-                                             for i in range(len(rain_low_blocks_wet))])
+                                                for i in range(len(rain_low_blocks_wet))])
                     
                     for j in range(nbins_low):
                         in_bin = (rain_low_blocks_wet >= BINS_LOW[j]) & (rain_low_blocks_wet < BINS_LOW[j+1])
@@ -261,9 +266,19 @@ def process_tile(tile_info):
                         if n_in_bin > 0:
                             gini_by_bin[j, iy, ix] = np.nanmean(gini_per_day[in_bin])
                             n_events_by_bin[j, iy, ix] = n_in_bin
-        
-        return (iy_tile, ix_tile, hist_2d_intensity, hist_2d_n_wet, gini_by_bin, n_events_by_bin)
+
+                ####################################################################
+                # HISTOGRAM 3: P(hourly max intensity | daily intensity) 
+                ####################################################################
+                if len(rain_high_wet) > 0:
+                    hist_2d_max_intensity[:, :, iy, ix], _, _ = np.histogram2d(
+                        rain_high_blocks_wet.max(axis=1),
+                        rain_low_blocks_wet,
+                        bins=[BINS_HIGH, BINS_LOW]
+                    )
     
+        return (iy_tile, ix_tile, hist_2d_intensity, hist_2d_n_wet, gini_by_bin, n_events_by_bin, hist_2d_max_intensity)
+
     except Exception as e:
         print(f"Error processing tile {tile_id}: {e}")
         return None
@@ -305,12 +320,15 @@ nbins_high = len(BINS_HIGH) - 1
 nbins_low = len(BINS_LOW) - 1
 
 hist_2d_intensity_full = np.zeros((nbins_high, nbins_low, len(ds_full.y), len(ds_full.x)), dtype=np.float32)
+hist_2d_max_intensity_full = np.zeros((nbins_high, nbins_low, len(ds_full.y), len(ds_full.x)), dtype=np.float32)
 hist_2d_n_wet_full = np.zeros((repeats, nbins_low, len(ds_full.y), len(ds_full.x)), dtype=np.float32)
 gini_by_bin_full = np.full((nbins_low, len(ds_full.y), len(ds_full.x)), np.nan, dtype=np.float32)
 n_events_by_bin_full = np.zeros((nbins_low, len(ds_full.y), len(ds_full.x)), dtype=np.int32)
 
 # Create list of tile tasks
 config = {
+    'FREQ_HIGH': FREQ_HIGH,
+    'FREQ_LOW': FREQ_LOW,
     'BINS_HIGH': BINS_HIGH,
     'BINS_LOW': BINS_LOW,
     'WET_VALUE_HIFREQ': WET_VALUE_HIFREQ,
@@ -334,12 +352,19 @@ print(f"   Starting parallel processing with {N_PROCESSES} workers...")
 with Pool(processes=N_PROCESSES) as pool:
     results = pool.map(process_tile, tile_tasks)
 
+# results = []
+# for item in tile_tasks:
+#     result = process_tile(item)
+#     results.append(result)
+    
+
+
 # Combine results
 print("\n3. Combining tile results...")
 processed_count = 0
 for result in results:
     if result is not None:
-        iy_tile, ix_tile, hist_intensity, hist_n_wet, gini, n_events = result
+        iy_tile, ix_tile, hist_intensity, hist_n_wet, gini, n_events, hist_max_intensity = result
         
         y_start = iy_tile * tile_size
         y_end = y_start + tile_size
@@ -347,6 +372,7 @@ for result in results:
         x_end = x_start + tile_size
         
         hist_2d_intensity_full[:, :, y_start:y_end, x_start:x_end] = hist_intensity
+        hist_2d_max_intensity_full[:, :, y_start:y_end, x_start:x_end] = hist_max_intensity
         hist_2d_n_wet_full[:, :, y_start:y_end, x_start:x_end] = hist_n_wet
         gini_by_bin_full[:, y_start:y_end, x_start:x_end] = gini
         n_events_by_bin_full[:, y_start:y_end, x_start:x_end] = n_events
@@ -382,6 +408,7 @@ t0 = time.time()
 ds_hist = xr.Dataset(
     {
         'cond_prob_intensity': ([f'bin_{FREQ_HIGH}', f'bin_{FREQ_LOW}', 'y', 'x'], hist_2d_intensity_full),
+        'cond_prob_max_intensity': ([f'bin_{FREQ_HIGH}', f'bin_{FREQ_LOW}', 'y', 'x'], hist_2d_max_intensity_full),
         'cond_prob_n_wet': (['n_wet_timesteps', f'bin_{FREQ_LOW}', 'y', 'x'], hist_2d_n_wet_full),
         'gini_coefficient': ([f'bin_{FREQ_LOW}', 'y', 'x'], gini_by_bin_full),
         'n_events': ([f'bin_{FREQ_LOW}', 'y', 'x'], n_events_by_bin_full)
