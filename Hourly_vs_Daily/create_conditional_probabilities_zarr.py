@@ -154,7 +154,7 @@ def process_tile(tile_info):
     
     try:
         # Open zarr and extract tile
-        ds = xr.open_zarr(zarr_path, consolidated=True)
+        ds = xr.open_zarr(zarr_path, consolidated=False)
         ds_tile = ds.isel(y=slice(y_start, y_end), x=slice(x_start, x_end))
         ds_tile_loaded = ds_tile.load()
         
@@ -271,12 +271,16 @@ def process_tile(tile_info):
                 # HISTOGRAM 3: P(hourly max intensity | daily intensity) 
                 ####################################################################
                 if len(rain_high_wet) > 0:
-                    hist_2d_max_intensity[:, :, iy, ix], _, _ = np.histogram2d(
+                    hist_counts_max_intensity, _, _ = np.histogram2d(
                         rain_high_blocks_wet.max(axis=1),
                         rain_low_blocks_wet,
                         bins=[BINS_HIGH, BINS_LOW]
                     )
-    
+                    for j in range(nbins_low):
+                        col_max_sum = hist_counts_max_intensity[:, j].sum()
+                        if col_max_sum > 0:
+                            hist_2d_max_intensity[:, j, iy, ix] = hist_counts_max_intensity[:, j] / col_max_sum
+
         return (iy_tile, ix_tile, hist_2d_intensity, hist_2d_n_wet, gini_by_bin, n_events_by_bin, hist_2d_max_intensity)
 
     except Exception as e:
