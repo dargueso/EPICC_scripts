@@ -35,9 +35,15 @@ FREQ_LOW = 'DAY'     # Low frequency (e.g., '1H', '3H', '6H', '12H', 'D')
 WET_VALUE_HIGH = 0.1  # mm per high-freq interval
 WET_VALUE_LOW = 1   # mm per low-freq interval
 
-# Bins - adjust based on frequencies
-BINS_HIGH = np.arange(0, 101, 1)  # For hourly: 0-100mm in 1mm steps
-BINS_LOW = np.arange(0, 105, 5)   # For daily: 0-100mm in 5mm steps
+# Bins for each frequency - must match those used in create_conditional_probabilities
+BINS_HIGH = np.arange(0, 100, 1)  # For hourly: 0-100mm in 1mm steps
+BINS_LOW = np.arange(0, 100, 5)   # For daily: 0-100mm in 5mm steps
+# Add infinity as the last bin edge to catch all values above max
+BINS_HIGH = np.append(BINS_HIGH, np.inf)
+BINS_LOW = np.append(BINS_LOW, np.inf)
+
+# Scale for exponential sampling in the open-ended (inf) bin
+EXP_SCALE = 5.0
 
 # Quantiles to calculate from synthetic samples
 QUANTILES = np.array([0.1, 0.2, 0.25, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85,
@@ -111,9 +117,18 @@ def _calculate_quantiles_streaming(values_array, quantiles, thresh):
 
 
 @njit(cache=True)
+def _sample_from_bin(lo, hi, rng_state, exp_scale):
+    """Sample a value from a bin. Uses exponential for open-ended (inf) bins."""
+    if np.isinf(hi):
+        return lo + rng_state.exponential(exp_scale)
+    else:
+        return lo + (hi - lo) * rng_state.random()
+
+
+@njit(cache=True)
 def _process_cell_for_quantiles(rain, bin_idx, wet_cdf, hour_cdf, max_cdf,
                                 hr_edges, thresh, iy, ix, rng_state, 
-                                quantiles, n_interval):
+                                quantiles, n_interval, exp_scale):
     """
     Process a single cell for one bootstrap sample.
     Sampling logic: sample n_wet, sample max_hourly from max_cdf,
@@ -153,7 +168,7 @@ def _process_cell_for_quantiles(rain, bin_idx, wet_cdf, hour_cdf, max_cdf,
             max_bin = n_bins_high - 1
         lo = hr_edges[max_bin]
         hi = hr_edges[max_bin + 1]
-        max_hourly = lo + (hi - lo) * rng_state.random()
+        max_hourly = _sample_from_bin(lo, hi, rng_state, exp_scale)
         # Clamp
         if max_hourly > R:
             max_hourly = R
@@ -212,7 +227,7 @@ def _process_cell_for_quantiles(rain, bin_idx, wet_cdf, hour_cdf, max_cdf,
                 idx = n_bins_high - 1
             lo = hr_edges[idx]
             hi = hr_edges[idx + 1]
-            val = lo + (hi - lo) * rng_state.random()
+            val = _sample_from_bin(lo, hi, rng_state, exp_scale)
             intensities[k] = val
             if val < min_val:
                 min_val = val
@@ -259,7 +274,7 @@ def _process_cell_for_quantiles(rain, bin_idx, wet_cdf, hour_cdf, max_cdf,
 
 def generate_quantiles_for_tile(rain_arr, wet_cdf, hour_cdf, max_cdf, bin_idx, hr_edges,
                                 quantiles, iy0, iy1, ix0, ix1, n_interval, 
-                                thresh, seed):
+                                thresh, exp_scale, seed):
     """Generate quantiles for a tile region. Returns (hourly, max_hourly) arrays."""
     rng = np.random.Generator(np.random.PCG64(seed))
     
@@ -274,7 +289,7 @@ def generate_quantiles_for_tile(rain_arr, wet_cdf, hour_cdf, max_cdf, bin_idx, h
         for j, ix in enumerate(range(ix0, ix1)):
             hq, mq = _process_cell_for_quantiles(
                 rain_arr, bin_idx, wet_cdf, hour_cdf, max_cdf, hr_edges, 
-                thresh, iy, ix, rng, quantiles, n_interval)
+                thresh, iy, ix, rng, quantiles, n_interval, exp_scale)
             result_hourly[:, i, j] = hq
             result_max[:, i, j] = mq
     
@@ -307,6 +322,7 @@ def process_tile(tile_info):
     BOOTSTRAP_QUANTILES = config['bootstrap_quantiles']
     BINS_HIGH = config['bins_high']
     WET_VALUE_HIGH = config['wet_value_high']
+    EXP_SCALE = config['exp_scale']
     n_interval = config['n_interval']
     N_SAMPLES = config['n_samples']
     ny_tiles = config['ny_tiles']
@@ -377,7 +393,7 @@ def process_tile(tile_info):
         hourly_q, max_q = generate_quantiles_for_tile(
             rain_tile, wet_cdf_tile, hour_cdf_tile, max_cdf_tile, bin_idx_tile,
             BINS_HIGH.astype(np.float32), QUANTILES,
-            iy0, iy1, ix0, ix1, n_interval, WET_VALUE_HIGH,
+            iy0, iy1, ix0, ix1, n_interval, WET_VALUE_HIGH, EXP_SCALE,
             seed=tile_seed)
         
         all_hourly[sample, :, :, :] = hourly_q
@@ -595,6 +611,7 @@ def main():
         'bootstrap_quantiles': BOOTSTRAP_QUANTILES,
         'bins_high': BINS_HIGH,
         'wet_value_high': WET_VALUE_HIGH,
+        'exp_scale': EXP_SCALE,
         'n_interval': n_interval,
         'n_samples': N_SAMPLES,
         'ny_tiles': ny_tiles,
@@ -617,14 +634,14 @@ def main():
     test_wet_cdf = np.random.rand(5, 24, 5, 5).astype(np.float32)
     test_hour_cdf = np.random.rand(5, 100, 5, 5).astype(np.float32)
     test_max_cdf = np.random.rand(5, 100, 5, 5).astype(np.float32)
-    test_bins = BINS_HIGH[:20].astype(np.float32)
+    test_bins = np.append(BINS_HIGH[:20], np.inf).astype(np.float32)
     test_quantiles = QUANTILES[:3]
 
     print("   Compiling _process_cell_for_quantiles...", end='', flush=True)
     rng_test = np.random.Generator(np.random.PCG64(42))
     _ = _process_cell_for_quantiles(
         test_rain, test_bin, test_wet_cdf, test_hour_cdf, test_max_cdf,
-        test_bins, 0.1, 0, 0, rng_test, test_quantiles, 6
+        test_bins, 0.1, 0, 0, rng_test, test_quantiles, 6, EXP_SCALE
     )
     print(" done")
     del test_rain, test_bin, test_wet_cdf, test_hour_cdf, test_max_cdf, test_bins, test_quantiles, rng_test, _
