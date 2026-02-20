@@ -25,7 +25,7 @@ warnings.filterwarnings('ignore')
 PATH_IN = '/home/dargueso/postprocessed/EPICC/'
 PATH_OUT = '/home/dargueso/postprocessed/EPICC/'
 WRUN_PRESENT = "EPICC_2km_ERA5"
-WRUN_FUTURE = "EPICC_2km_ERA5"
+WRUN_FUTURE = "EPICC_2km_ERA5_CMIP6anom"
 test_suffix = ""
 # Frequency configuration
 FREQ_HIGH = '01H'   # High frequency (e.g., '10MIN', '1H')
