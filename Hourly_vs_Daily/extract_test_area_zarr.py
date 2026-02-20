@@ -21,14 +21,16 @@ PATH_OUT = '/home/dargueso/postprocessed/EPICC/'
 WRUN = "EPICC_2km_ERA5"
 
 # Frequency to extract (change as needed)
-FREQ = '10MIN'  # Options: '10MIN', '01H', 'DAY'
+FREQ = 'DAY'  # Options: '10MIN', '01H', 'DAY'
+
+loc_lats = {'Mallorca': 39.639, 'Barcelona': 41.385, 'Valencia': 39.469,'Rosiglione': 44.55}
+loc_lons = {'Mallorca': 2.647, 'Barcelona': 2.173, 'Valencia': -0.376,'Rosiglione': 8.64}
 
 # Target location
-TARGET_LAT = 39.639
-TARGET_LON = 2.647
-
+TARGET_LAT = loc_lats['Mallorca']
+TARGET_LON = loc_lons['Mallorca']
 # Extraction size
-GRID_SIZE = 101  # 101x101 grid (use odd number for true centering)
+GRID_SIZE = 3  # 101x101 grid (use odd number for true centering)
                  # Odd sizes (101, 99, etc.) can be perfectly centered on the target point
                  # Even sizes (100, 102, etc.) will be offset by half a grid cell
 
