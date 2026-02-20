@@ -23,8 +23,8 @@ warnings.filterwarnings('ignore')
 PATH_IN = '/home/dargueso/postprocessed/EPICC/'
 PATH_OUT = '/home/dargueso/postprocessed/EPICC/'
 WRUN_PRESENT = "EPICC_2km_ERA5"
-WRUN_FUTURE = "EPICC_2km_ERA5_CMIP6anom"
-test_suffix = "_test_100x100"
+WRUN_FUTURE = "EPICC_2km_ERA5"
+test_suffix = "_test_21x21"
 # Frequency configuration
 FREQ_HIGH = '01H'   # High frequency (e.g., '10MIN', '1H')
 FREQ_LOW = 'DAY'     # Low frequency (e.g., '1H', '3H', '6H', '12H', 'D')
@@ -45,7 +45,7 @@ QUANTILES = np.array([0.1, 0.2, 0.25, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85,
                      dtype=np.float32)
 
 # Bootstrap confidence levels to compute across samples
-BOOTSTRAP_QUANTILES = np.array([0.01, 0.025, 0.05, 0.1, 0.25, 0.5,0.75, 0.9, 0.95, 0.975, 0.99], dtype=np.float32)
+BOOTSTRAP_QUANTILES = np.array([0.01, 0.025, 0.05, 0.1, 0.9, 0.95, 0.975, 0.99], dtype=np.float32)
 
 # Processing parameters
 TILE_SIZE = 50
@@ -383,7 +383,7 @@ def main():
     future_file = f'{PATH_IN}/{WRUN_FUTURE}/UIB_{freq_name_low}_RAIN{test_suffix}.zarr'
     
     try:
-        ds_future = xr.open_zarr(future_file, consolidated=True)
+        ds_future = xr.open_zarr(future_file, consolidated=False)
     except FileNotFoundError:
         print(f"   ERROR: Could not find {future_file}")
         print(f"   Please ensure your {FREQ_LOW} rainfall data is available")
@@ -402,45 +402,54 @@ def main():
     print("\n3. Computing bin indices...")
     bin_idx = (np.digitize(rain_low_freq, BINS_LOW) - 1).astype(np.int16)
     
+    
     # Prepare probability distributions
     print("\n4. Preparing probability distributions...")
-    wet_dist = ds_prob.cond_prob_n_wet.values.copy()
-    hour_dist = ds_prob.cond_prob_intensity.values.copy()
+    n_wet_dist = ds_prob.cond_prob_n_wet.values.copy()
+    intens_dist = ds_prob.cond_prob_intensity.values.copy()
+    max_int_dist = ds_prob.cond_prob_max_intensity.values.copy()
     n_events = ds_prob.n_events.values.copy()
     
     ds_prob.close()
     ds_future.close()
     
     # Convert to proper format and handle NaNs
-    wet_dist = np.nan_to_num(wet_dist, nan=0.0)
-    hour_dist = np.nan_to_num(hour_dist, nan=0.0)
+    n_wet_dist = np.nan_to_num(n_wet_dist, nan=0.0)
+    intens_dist = np.nan_to_num(intens_dist, nan=0.0)
+    max_int_dist = np.nan_to_num(max_int_dist, nan=0.0)
     n_events = np.nan_to_num(n_events, nan=0.0)
-    
+
     # Transpose to match expected format
-    wet_dist = np.transpose(wet_dist, (1, 0, 2, 3))
-    hour_dist = np.transpose(hour_dist, (1, 0, 2, 3))
+    n_wet_dist = np.transpose(n_wet_dist, (1, 0, 2, 3))
+    intens_dist = np.transpose(intens_dist, (1, 0, 2, 3))
+    max_int_dist = np.transpose(max_int_dist, (1, 0, 2, 3))
     
     # Apply smoothing with buffer
     print("\n5. Applying spatial smoothing...")
-    wet_weighted = wet_dist * n_events[:, np.newaxis, :, :]
-    hour_weighted = hour_dist * n_events[:, np.newaxis, :, :]
+    wet_weighted = n_wet_dist * n_events[:, np.newaxis, :, :]
+    intens_weighted = intens_dist * n_events[:, np.newaxis, :, :]
+    max_int_weighted = max_int_dist * n_events[:, np.newaxis, :, :]
+
     
     comp_samp = _window_sum(n_events, BUFFER)
     comp_wet = _window_sum(wet_weighted, BUFFER)
-    comp_hour = _window_sum(hour_weighted, BUFFER)
+    comp_hour = _window_sum(intens_weighted, BUFFER)
+    comp_max = _window_sum(max_int_weighted, BUFFER)
     
     # Safe division
     nonzero_mask = comp_samp != 0
     comp_wet = np.where(nonzero_mask[:, None], comp_wet / comp_samp[:, None], 0.0)
     comp_hour = np.where(nonzero_mask[:, None], comp_hour / comp_samp[:, None], 0.0)
+    comp_max = np.where(nonzero_mask[:, None], comp_max / comp_samp[:, None], 0.0)
     
     # Create CDFs
     wet_cdf = np.cumsum(comp_wet, axis=1).astype(np.float32, order="C")
     hour_cdf = np.cumsum(comp_hour, axis=1).astype(np.float32, order="C")
+    max_cdf = np.cumsum(comp_max, axis=1).astype(np.float32, order="C")
     
     # Cleanup
-    del wet_dist, hour_dist, n_events, wet_weighted, hour_weighted
-    del comp_samp, comp_wet, comp_hour, nonzero_mask
+    del wet_weighted, intens_weighted, max_int_weighted, n_events
+    del comp_samp, comp_wet, comp_hour, comp_max, nonzero_mask
     
     # Create shared memory blocks
     print("\n6. Creating shared memory blocks...")
@@ -448,16 +457,19 @@ def main():
     shm_bin = shared_memory.SharedMemory(create=True, size=bin_idx.nbytes)
     shm_wet = shared_memory.SharedMemory(create=True, size=wet_cdf.nbytes)
     shm_hour = shared_memory.SharedMemory(create=True, size=hour_cdf.nbytes)
+    shm_max = shared_memory.SharedMemory(create=True, size=max_cdf.nbytes)
     
     # Copy data to shared memory
     shm_rain_arr = np.ndarray(rain_low_freq.shape, dtype=np.float32, buffer=shm_rain.buf)
     shm_bin_arr = np.ndarray(bin_idx.shape, dtype=np.int16, buffer=shm_bin.buf)
     shm_wet_arr = np.ndarray(wet_cdf.shape, dtype=np.float32, buffer=shm_wet.buf)
     shm_hour_arr = np.ndarray(hour_cdf.shape, dtype=np.float32, buffer=shm_hour.buf)
+    shm_max_arr = np.ndarray(max_cdf.shape, dtype=np.float32, buffer=shm_max.buf)
     
     shm_rain_arr[:] = rain_low_freq[:]
     shm_bin_arr[:] = bin_idx[:]
     shm_wet_arr[:] = wet_cdf[:]
+    shm_max_arr[:] = max_cdf[:]
     shm_hour_arr[:] = hour_cdf[:]
     
     shm_info = {
@@ -465,14 +477,16 @@ def main():
         'bin_name': shm_bin.name,
         'wet_name': shm_wet.name,
         'hour_name': shm_hour.name,
+        'max_name': shm_max.name,
         'rain_shape': rain_low_freq.shape,
         'bin_shape': bin_idx.shape,
         'wet_shape': wet_cdf.shape,
-        'hour_shape': hour_cdf.shape
+        'hour_shape': hour_cdf.shape,
+        'max_shape': max_cdf.shape
     }
     
     # Can now delete original arrays
-    del rain_low_freq, bin_idx, wet_cdf, hour_cdf
+    del rain_low_freq, bin_idx, wet_cdf, hour_cdf, max_cdf
     
     # Calculate tiles
     ny_tiles = (ny + TILE_SIZE - 1) // TILE_SIZE
@@ -618,6 +632,7 @@ def main():
     test_bin = np.random.randint(0, 10, (100, 10, 10), dtype=np.int16)
     test_wet_cdf = np.random.rand(10, 24, 10, 10).astype(np.float32)
     test_hour_cdf = np.random.rand(10, 100, 10, 10).astype(np.float32)
+    test_max_cdf = np.random.rand(10, 100, 10, 10).astype(np.float32)
     test_bins = BINS_HIGH[:20].astype(np.float32)
     test_quantiles = QUANTILES[:3]
     
@@ -625,13 +640,13 @@ def main():
     print("   Compiling _process_cell_for_quantiles...", end='', flush=True)
     rng_test = np.random.Generator(np.random.PCG64(42))
     _ = _process_cell_for_quantiles(
-        test_rain, test_bin, test_wet_cdf, test_hour_cdf, test_bins,
+        test_rain, test_bin, test_wet_cdf, test_hour_cdf, test_max_cdf, test_bins,
         0.1, 0, 0, rng_test, test_quantiles, 6
     )
     print(" done")
     
     # Clean up test data
-    del test_rain, test_bin, test_wet_cdf, test_hour_cdf, test_bins, test_quantiles, rng_test, _
+    del test_rain, test_bin, test_wet_cdf, test_hour_cdf, test_max_cdf, test_bins, test_quantiles, rng_test, _
     print("   Numba functions ready")
     # =============================================================================
     
@@ -691,10 +706,12 @@ def main():
         shm_bin.close()
         shm_wet.close()
         shm_hour.close()
+        shm_max.close()
         shm_rain.unlink()
         shm_bin.unlink()
         shm_wet.unlink()
         shm_hour.unlink()
+        shm_max.unlink()
     
     # Load all results (new + checkpointed)
     print("\n8. Loading all tile results (including checkpoints)...")
