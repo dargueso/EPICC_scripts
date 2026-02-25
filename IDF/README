@@ -1,0 +1,17 @@
+""" This folder /home/yseut/characterize_extremes/colab_IDF_dani/ aims 
+to compute IDF curves on one gridpoint using the POT (Peak over threshold) method """
+
+*extract_rain_one_point.py* 
+	1. opens interactive map: click to choose the gridpoint
+	2. extract 10 minute rain data on this point for all monthly file from 2011 to 2020
+	3. concatenate all months and save in *rainfall_data_2011_2020_{x_ind}x_{y_ind}y.pkl*
+	4. *rainfall_data_2011_2020_835x_520y.pkl* is xarray of 10 min rain 2011-2020 in one point of genoa gulf
+
+*plot_rain_timeseries.py* (verification)
+	1. read pickle
+	2. plot map with selected point
+	3. plot time serie of 10min rain in the selected point
+
+*IDF_one_point.ipynb*
+	NOTEBOOK OF FULL PROCESS TO COMPUTE IDF
+	

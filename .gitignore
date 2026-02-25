@@ -47,3 +47,5 @@ Plotting/HrlExt/Changes_IFD_accum_EPICC.png
 Plotting/HrlExt/Changes_IFD_resampled.png
 General_Maps/WRF/geo_em.d01.EPICC_2km_ERA5_HVC_GWD.nc
 OBS/AEMET_climatologies/Data_records/*
+/IDF/EPICC_2km_ERA5
+/IDF/EPICC_2km_ERA5_CMIP6anom
