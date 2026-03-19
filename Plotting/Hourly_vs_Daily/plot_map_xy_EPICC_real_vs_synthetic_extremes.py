@@ -72,9 +72,9 @@ subregs = np.zeros_like(lm_is.values)
 #####################################################################
 
 
-qtile = 99
+qtile = 90
 confidence_level = 0.975
-buffer = 10
+buffer = 0
 
 mylevels=np.arange(0, 45, 5)
 cmap = sns.color_palette("icefire", as_cmap=True)
@@ -107,7 +107,7 @@ qtiles= fin_syn_all['quantile'].values
 cl_hi = round(confidence_level,3)
 cl_lo = round(1 - cl_hi, 3)
 
-data = [fin['percentiles_present'].values, fin['percentiles_future'].values, fin_syn.precipitation.sel(bootstrap_quantile=confidence_level).squeeze()]
+data = [fin['percentiles_present'].values, fin['percentiles_future'].values, fin_syn.hourly_intensity.sel(bootstrap_quantile=confidence_level).squeeze()]
 
 diff = data[1]- data[0]
 sig = data[1]- data[2]
@@ -136,8 +136,8 @@ gs_row1 = gs_main[1].subgridspec(1, 4, wspace=0.1)
 #####################################################################
 #####################################################################
 
-zarr_path_present = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5//UIB_01H_RAIN.zarr'
-zarr_path_future = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5_CMIP6anom/UIB_01H_RAIN.zarr'
+zarr_path_present = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5/UIB_01H_RAIN.zarr'
+zarr_path_future = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5/UIB_01H_RAIN.zarr'
 
 try:
     ds_present = xr.open_zarr(zarr_path_present, consolidated=True)
@@ -215,14 +215,14 @@ for loc in range(len(locs_names)):
             color='#2E86AB', linewidth=1, marker='o', markersize=2)
     ax.plot(qtiles, fin_fut_qtiles, label='Future observations', 
             color="#E50C0C", linewidth=1, marker='s', markersize=2)
-    ax.plot(qtiles, fin_syn.sel(bootstrap_quantile=cl_hi).precipitation.squeeze(), 
+    ax.plot(qtiles, fin_syn.sel(bootstrap_quantile=cl_hi).hourly_intensity.squeeze(), 
             label='Future synthetic', color='#F18F01', linewidth=0.5, 
             linestyle='--', marker=None)
-    ax.plot(qtiles, fin_syn.sel(bootstrap_quantile=cl_lo).precipitation.squeeze(), 
+    ax.plot(qtiles, fin_syn.sel(bootstrap_quantile=cl_lo).hourly_intensity.squeeze(), 
             color='#F18F01', linewidth=0.5, 
             linestyle='--', marker=None)
-    ax.fill_between(qtiles, fin_syn.sel(bootstrap_quantile=cl_lo).precipitation.squeeze(), 
-                    fin_syn.sel(bootstrap_quantile=cl_hi).precipitation.squeeze(), 
+    ax.fill_between(qtiles, fin_syn.sel(bootstrap_quantile=cl_lo).hourly_intensity.squeeze(), 
+                    fin_syn.sel(bootstrap_quantile=cl_hi).hourly_intensity.squeeze(), 
                     color='#F18F01', alpha=0.2)
 
 
