@@ -313,3 +313,120 @@ This is essential for:
 
 The key innovation is the SYNTHETIC dataset - it's your "control experiment"
 that lets you isolate causal factors.
+
+---
+
+## Why the Hourly Sampler Overestimates Extremes — and How Analog Resampling Fixes It
+
+### The problem: independent sampling breaks a physical constraint
+
+When building the synthetic hourly time series we need, for each wet day with
+daily total R, to distribute R across some number of wet hours.  The original
+approach (Method A) draws the two key quantities independently from marginal
+conditional distributions:
+
+1. **n_wet** (number of wet hours in the day) — sampled from `P(n_wet | daily bin)`
+2. **hourly intensities** — n_wet values sampled independently from `P(intensity | daily bin)`
+
+Then the intensities are scaled so they sum exactly to R.
+
+This sounds reasonable, but it violates a fundamental physical constraint:
+
+> **Within any fixed daily total R, n_wet and mean hourly intensity are
+> negatively correlated.**
+
+If a day has R = 20 mm concentrated in 2 hours, each hour averages 10 mm.
+If the same 20 mm is spread over 10 hours, each hour averages 2 mm.
+Higher n_wet ⟹ lower mean intensity, because the sum is constrained to R.
+
+The conditional intensity distribution `P(intensity | daily bin)` is the
+**marginal** average over all n_wet values in that bin.  It reflects a mixture
+of low-n_wet (high intensity) and high-n_wet (low intensity) days.  When a
+synthetic day samples a large n_wet (say, 18 hours) and then draws its
+intensities from this marginal distribution — which includes contributions
+from 2-hour events — the sampled intensities are far too high for an 18-hour
+rain event.  The required scale factor (R / sum_of_intensities) can become
+much less than 1 on average, but has a heavy right tail on days where the
+independently sampled intensities happen to be low, producing
+disproportionately large scaling events that inflate the upper quantiles.
+
+**Why larger buffers expose rather than hide the bias:**
+With more pooled pixels the bootstrap confidence intervals become narrower,
+making the systematic overestimation visible as a clear gap between the
+synthetic-present CI and observed-present percentiles.
+
+### Why proportional scaling does not fix it
+
+Replacing the old shift-then-scale (which enforced a minimum of WET_VALUE_HIGH
+per wet hour) with simple proportional scaling (`intensities *= R / sum`)
+removes the floor constraint but does not restore the broken correlation.
+The root cause is in the *sampling step*, not the scaling step.
+
+### The analog resampling solution (Method C)
+
+Instead of sampling n_wet and intensities from parametric marginal
+distributions, Method C retrieves a complete observed 24-hour profile from
+the same daily bin:
+
+1. For a synthetic wet day with daily total R in bin b, pick a uniformly
+   random observed day from the library of profiles stored for bin b.
+2. Let R_analog be the daily total of that observed day (also in bin b).
+3. Scale every hourly value by R / R_analog and use the resulting profile.
+
+**Why this is correct:**
+
+- The analog day is a real event: its n_wet and internal intensity distribution
+  are mutually consistent by construction — they both come from the same
+  observed 24-hour period.
+- The scaling factor R / R_analog stays close to 1 within a 5 mm bin
+  (maximum factor ≈ 2 for the [5,10) mm bin), so the structure of the
+  profile is barely distorted.
+- The n_wet / intensity negative correlation is preserved exactly:
+  a day with many wet hours produces many moderate-intensity hours after
+  scaling; a day with few wet hours produces fewer but more intense hours.
+- The method is fully non-parametric: it makes no assumptions about the
+  shape of the intensity distribution within a day.
+
+**The only assumption** is that days in the same 5 mm daily-total bin have
+exchangeable within-day structures — i.e., a day with R = 7 mm is a
+plausible template for a day with R = 9 mm after a ×(9/7) scaling.  Given
+the narrow bin width (5 mm) this is a mild and physically reasonable
+assumption.
+
+### Population mismatch — a second source of apparent overestimation
+
+Even with correct analog resampling, the synthetic can appear to overestimate
+if the **observed** and **synthetic** hourly percentiles are computed from
+different populations.
+
+The synthetic only generates wet hours for days classified as wet (daily ≥
+WET_VALUE_LOW = 1 mm).  If the observed percentiles are computed from all
+wet hours regardless of daily total — including drizzle hours from days with
+0 < daily < 1 mm — then two effects arise:
+
+1. The observed sample includes many low-intensity hours from "dry" days that
+   are absent in the synthetic.
+2. These additional low-intensity values swell the denominator of the
+   high-quantile computation, pushing the observed P99/P99.5 **down**
+   relative to what the synthetic sees.
+
+The result looks like synthetic overestimation, but it is actually a
+**mismatched comparison**: the synthetic is correct, but the observed
+benchmark includes a different (larger, lower-intensity) population.
+
+**Fix**: Restrict observed hourly percentiles to hours from days where
+daily ≥ WET_VALUE_LOW (identical filtering to the synthetic input).  The
+daily-max comparison (Method B) was already correct — it filtered to
+daily ≥ WET_VALUE_LOW AND n_wet ≥ 1 — which explains why Method B validated
+well while Method A/C appeared to overestimate before this fix was applied.
+
+### Summary comparison
+
+| Property | Method A (parametric) | Method C (analog) |
+|---|---|---|
+| n_wet / intensity correlation | **Broken** — sampled independently | **Preserved** — same observed day |
+| Scale factors R/sum(intensities) | Right-skewed, can be >> 1 | Bounded near 1 within bin |
+| Upper quantile bias | **Systematic overestimation** | Unbiased by construction |
+| Requires parametric CDF | Yes (wet_cdf, hour_cdf) | No |
+| Requires profile library | No | Yes (stored in Step 4) |
+| Computational cost | Moderate (CDF inversion loop) | Similar (random index + multiply) |
