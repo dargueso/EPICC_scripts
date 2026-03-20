@@ -30,7 +30,7 @@ LOCATIONS = ['Mallorca', 'Catania', 'Turis', 'Rosiglione',
              'Ardeche', 'Corte', "L'Aquila", 'Pyrenees']
 
 # buf=0 will be skipped gracefully if the npz has not been generated yet
-BUFFERS = [0, 1, 3, 5, 10]
+BUFFERS = [0, 1, 3, 5, 10, 15, 20]
 
 PATH_NPZ = '/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/testing_data/'
 PATH_OUT = '/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/'
@@ -38,8 +38,8 @@ PATH_OUT = '/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/'
 os.makedirs(PATH_OUT, exist_ok=True)
 
 # Visual properties per buffer — fixed offsets so bars don't overlap
-MARKERS     = {0: 'D', 1: 'o', 3: 's', 5: '^', 10: 'P'}
-BUF_OFFSETS = {0: -0.24, 1: -0.12, 3: 0.0, 5: 0.12, 10: 0.24}
+MARKERS     = {0: 'D', 1: 'o', 3: 's', 5: '^', 10: 'P', 15:'*',20:'d'}
+BUF_OFFSETS = {0: -0.24, 1: -0.12, 3: 0.0, 5: 0.12, 10: 0.24, 15:0.36, 20:0.48}
 
 # Sequential colormap — one colour per buffer
 CMAP = plt.get_cmap('plasma')
