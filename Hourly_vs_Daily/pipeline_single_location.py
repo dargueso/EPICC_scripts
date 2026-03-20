@@ -41,10 +41,14 @@ WRUN_PRESENT = 'EPICC_2km_ERA5'
 WRUN_FUTURE  = 'EPICC_2km_ERA5_CMIP6anom'
 
 # Named locations (same as extract_test_area_zarr.py)
-loc_lats = {'Mallorca': 39.639, 'Barcelona': 41.385, 'Valencia':  39.469,
-            'Rosiglione': 44.55, 'Catania':   37.51}
-loc_lons = {'Mallorca':  2.647, 'Barcelona':  2.173, 'Valencia':  -0.376,
-            'Rosiglione': 8.64, 'Catania':   15.08}
+loc_lats = {'Mallorca':   39.6353, 'Barcelona': 41.385,  'Valencia':   39.469,
+            'Rosiglione': 44.5584, 'Catania':   37.5055, 'Turis':      39.3867,
+            'Pyrenees':   41.9771, 'Ardeche':   44.7585, 'Corte':      42.3002,
+            "L'Aquila":   42.3577}
+loc_lons = {'Mallorca':   2.6360,  'Barcelona':  2.173,  'Valencia':   -0.376,
+            'Rosiglione': 8.6722,  'Catania':   15.0935, 'Turis':      -0.6195,
+            'Pyrenees':   2.8245,  'Ardeche':    4.5673, 'Corte':       9.1565,
+            "L'Aquila":  13.4068}
 
 LOCATION = 'Catania'   # key from loc_lats / loc_lons
 
@@ -1128,8 +1132,8 @@ print("  Generating attribution figure (future obs vs synthetic future) ...")
 fig2, axes2 = plt.subplots(1, 2, figsize=(14, 6))
 
 for ax, obs_pres, obs_fut, ci, ylabel in [
-    (axes2[0], obs_pres_h,  obs_fut_h,  fut_c_h_ci,  '1-hour precipitation (mm)'),
-    (axes2[1], obs_pres_dm, obs_fut_dm, fut_mx_ci,   'Daily-max 1-hour precipitation (mm)'),
+    (axes2[0], obs_pres_h_buf,  obs_fut_h_buf,  fut_c_h_ci_buf,  '1-hour precipitation (mm)'),
+    (axes2[1], obs_pres_dm_buf, obs_fut_dm_buf, fut_mx_ci_buf,   'Daily-max 1-hour precipitation (mm)'),
 ]:
     _plot_panel(ax,
                 obs_pres, obs_fut,
