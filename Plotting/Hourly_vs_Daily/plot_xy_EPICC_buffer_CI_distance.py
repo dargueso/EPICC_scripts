@@ -12,7 +12,17 @@
             vertical error bars that span obs−CI_hi to obs−CI_lo.
             If the error bar crosses y=0 the difference is within the CI and
             cannot be considered significant.
-            One figure per location, 2×2 subplots (present/future × hourly/daily-max).
+            One figure per location, 2×2 subplots.
+
+            FREQ = 'hourly'  (default)
+              Rows: present / future
+              Cols: hourly intensity (Method C) / daily-max (Method B)
+              NPZ : {loc}_buf{N}.npz
+
+            FREQ = '10min'
+              Rows: present / future
+              Cols: 10-min from daily (Method D) / 10-min from hourly (Method E)
+              NPZ : {loc}_buf{N}_10min.npz
 '''
 
 import numpy as np
@@ -25,6 +35,10 @@ mpl.rcParams["font.size"] = 12
 ###########################################################################
 # Configuration
 ###########################################################################
+
+# Set to 'hourly' for the original 1H pipeline plots,
+#         '10min'  for the 10-min pipeline plots.
+FREQ = '10min'
 
 LOCATIONS = ['Mallorca', 'Catania', 'Turis', 'Rosiglione',
              'Ardeche', 'Corte', "L'Aquila", 'Pyrenees']
@@ -82,50 +96,57 @@ def diff_and_errs(obs, ci):
 ###########################################################################
 
 for location in LOCATIONS:
-    print(f"\nProcessing: {location}")
+    print(f"\nProcessing: {location}  [FREQ={FREQ}]")
 
-    # Per-buffer: store (diff, err_lo, err_hi) tuples
-    data_pres_h  = {}
-    data_fut_h   = {}
-    data_pres_dm = {}
-    data_fut_dm  = {}
-
+    data = {key: {} for key in ('A', 'B', 'C', 'D')}   # A/B/C/D → per-buffer tuples
     plot_quantiles      = None
     bootstrap_quantiles = None
 
     for buf in BUFFERS:
-        fname = os.path.join(PATH_NPZ, f'{location}_buf{buf}.npz')
+
+        if FREQ == 'hourly':
+            fname = os.path.join(PATH_NPZ, f'{location}_buf{buf}.npz')
+        else:
+            fname = os.path.join(PATH_NPZ, f'{location}_buf{buf}_10min.npz')
+
         if not os.path.exists(fname):
             print(f"  Missing: {fname} — skipping buffer {buf}")
             continue
 
         d = np.load(fname)
+        plot_quantiles      = d['plot_quantiles']
+        bootstrap_quantiles = d['bootstrap_quantiles']
+        bq                  = bootstrap_quantiles
 
-        plot_quantiles      = d['plot_quantiles']       # (6,)
-        bootstrap_quantiles = d['bootstrap_quantiles']  # (3,) [0.025, 0.5, 0.975]
+        if FREQ == 'hourly':
+            obs_A = d['obs_pres_h_buf']
+            obs_B = d['obs_fut_h_buf']
+            obs_C = d['obs_pres_dm_buf']
+            obs_D = d['obs_fut_dm_buf']
+            ci_A  = ci_from_boot(d['syn_pres_c_h_boot_buf'],  bq)
+            ci_B  = ci_from_boot(d['syn_fut_c_h_boot_buf'],   bq)
+            ci_C  = ci_from_boot(d['syn_pres_mx_boot_buf'],   bq)
+            ci_D  = ci_from_boot(d['syn_fut_mx_boot_buf'],    bq)
 
-        obs_pres_h_buf  = d['obs_pres_h_buf']
-        obs_fut_h_buf   = d['obs_fut_h_buf']
-        obs_pres_dm_buf = d['obs_pres_dm_buf']
-        obs_fut_dm_buf  = d['obs_fut_dm_buf']
+        else:  # 10min
+            obs_A = d['obs_pres_10m_buf']
+            obs_B = d['obs_fut_10m_buf']
+            obs_C = d['obs_pres_10m_buf']   # same obs for both methods
+            obs_D = d['obs_fut_10m_buf']
+            ci_A  = ci_from_boot(d['D_pres_boot_buf'], bq)   # Method D present
+            ci_B  = ci_from_boot(d['D_fut_boot_buf'],  bq)   # Method D future
+            ci_C  = ci_from_boot(d['E_pres_boot_buf'], bq)   # Method E present
+            ci_D  = ci_from_boot(d['E_fut_boot_buf'],  bq)   # Method E future
 
-        bq = bootstrap_quantiles
-
-        ci_pres_h  = ci_from_boot(d['syn_pres_c_h_boot_buf'], bq)
-        ci_fut_h   = ci_from_boot(d['syn_fut_c_h_boot_buf'],  bq)
-        ci_pres_dm = ci_from_boot(d['syn_pres_mx_boot_buf'],  bq)
-        ci_fut_dm  = ci_from_boot(d['syn_fut_mx_boot_buf'],   bq)
-
-        data_pres_h[buf]  = diff_and_errs(obs_pres_h_buf,  ci_pres_h)
-        data_fut_h[buf]   = diff_and_errs(obs_fut_h_buf,   ci_fut_h)
-        data_pres_dm[buf] = diff_and_errs(obs_pres_dm_buf, ci_pres_dm)
-        data_fut_dm[buf]  = diff_and_errs(obs_fut_dm_buf,  ci_fut_dm)
+        data['A'][buf] = diff_and_errs(obs_A, ci_A)
+        data['B'][buf] = diff_and_errs(obs_B, ci_B)
+        data['C'][buf] = diff_and_errs(obs_C, ci_C)
+        data['D'][buf] = diff_and_errs(obs_D, ci_D)
 
     if plot_quantiles is None:
         print(f"  No data found for {location} — skipping.")
         continue
 
-    # X-axis: integer indices with per-buffer offsets
     x_labels = [f"P{int(q * 100)}" if q * 100 == int(q * 100)
                 else f"P{q * 100:.1f}"
                 for q in plot_quantiles]
@@ -138,50 +159,50 @@ for location in LOCATIONS:
     fig, axes = plt.subplots(2, 2, figsize=(13, 9), sharey=False)
     fig.suptitle(location, fontsize=15, fontweight='bold', y=1.01)
 
-    panel_info = [
-        (axes[0, 0], data_pres_h,  'Present — Hourly intensity (Method C)'),
-        (axes[0, 1], data_fut_h,   'Future — Hourly intensity (Method C)'),
-        (axes[1, 0], data_pres_dm, 'Present — Daily-max (Method B)'),
-        (axes[1, 1], data_fut_dm,  'Future — Daily-max (Method B)'),
-    ]
+    if FREQ == 'hourly':
+        panel_info = [
+            (axes[0, 0], data['A'], 'Present — Hourly intensity (Method C)'),
+            (axes[0, 1], data['B'], 'Future  — Hourly intensity (Method C)'),
+            (axes[1, 0], data['C'], 'Present — Daily-max (Method B)'),
+            (axes[1, 1], data['D'], 'Future  — Daily-max (Method B)'),
+        ]
+    else:
+        panel_info = [
+            (axes[0, 0], data['A'], 'Present — 10-min from daily (Method D)'),
+            (axes[0, 1], data['B'], 'Future  — 10-min from daily (Method D)'),
+            (axes[1, 0], data['C'], 'Present — 10-min from hourly (Method E)'),
+            (axes[1, 1], data['D'], 'Future  — 10-min from hourly (Method E)'),
+        ]
 
     for ax, data_dict, title in panel_info:
-        # y=0 reference — crosses here mean obs is within the CI
         ax.axhline(0, color='black', linewidth=1.8, linestyle='--', zorder=3)
 
         for buf in BUFFERS:
             if buf not in data_dict:
                 continue
-
             diff, err_lo, err_hi = data_dict[buf]
             xpos = x_idx + BUF_OFFSETS[buf]
-
             ax.errorbar(xpos, diff,
                         yerr=[err_lo, err_hi],
                         fmt=MARKERS[buf],
                         color=BUF_COLORS[buf],
-                        markersize=6,
-                        linewidth=1.5,
-                        elinewidth=1.5,
-                        capsize=4,
-                        capthick=1.5,
-                        label=f'Buffer {buf}',
-                        zorder=4)
+                        markersize=6, linewidth=1.5,
+                        elinewidth=1.5, capsize=4, capthick=1.5,
+                        label=f'Buffer {buf}', zorder=4)
 
         ax.set_xticks(x_idx)
         ax.set_xticklabels(x_labels, fontsize=10)
         ax.set_xlabel('Quantile', fontsize=11, fontweight='bold')
-        ax.set_ylabel('Obs − synthetic median (mm)', fontsize=11, fontweight='bold')
+        ax.set_ylabel('Obs − synthetic median (mm/h)', fontsize=11, fontweight='bold')
         ax.set_title(title, fontsize=11, fontweight='bold')
         ax.grid(True, linestyle=':', linewidth=0.5, alpha=0.7)
         ax.set_axisbelow(True)
         ax.tick_params(axis='both', which='major', labelsize=10)
-
         ax.legend(frameon=True, fancybox=True, shadow=True,
                   fontsize=9, loc='upper left')
 
     fig.tight_layout()
-    outfile = os.path.join(PATH_OUT, f'buffer_CI_distance_{location}.png')
+    outfile = os.path.join(PATH_OUT, f'buffer_CI_distance_{FREQ}_{location}.png')
     fig.savefig(outfile, dpi=150, bbox_inches='tight', facecolor='white')
     print(f"  Saved: {outfile}")
     plt.close(fig)
