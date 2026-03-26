@@ -18,6 +18,7 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.ticker import ScalarFormatter
+from joblib import Parallel, delayed
 
 mpl.rcParams["font.size"] = 13
 
@@ -42,7 +43,7 @@ loc_lons = {'Mallorca':   2.6360,  'Barcelona':  2.173,  'Valencia':   -0.376,
             "L'Aquila":  13.4068}
 
 LOCATIONS = ['Mallorca', 'Catania', 'Turis','Rosiglione','Ardeche','Corte',"L'Aquila", 'Pyrenees']   # locations to run
-BUFFERS   = [1, 3, 5, 10]                 # buffer sizes (grid cells)
+BUFFERS   = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20]              # buffer sizes (grid cells; 0 = center pixel only)
 
 WET_VALUE_HIGH = 0.1   # mm/h
 WET_VALUE_LOW  = 1.0   # mm/d
@@ -58,6 +59,8 @@ N_INTERVAL          = 24
 
 # Set True to also run Method A (slow, overestimates, kept for diagnostics only)
 RUN_METHOD_A = False
+
+N_JOBS = -1   # parallel workers for bootstrap (-1 = all cores, 1 = sequential)
 
 os.makedirs(PATH_OUT, exist_ok=True)
 os.makedirs(os.path.join(PATH_OUT, 'testing_data'), exist_ok=True)
@@ -297,74 +300,62 @@ def run_single(location, buffer):
           f"{len(fut_wet_1h_buf):,} fut wet hrs")
 
     # ------------------------------------------------------------------
-    # STEP 4 — Conditional probabilities + analog profile library
-    # (single pass over pixels for both)
+    # STEP 4 — Conditional probabilities (vectorized) + analog library
     # ------------------------------------------------------------------
     nbins_high = len(BINS_HIGH) - 1
-
-    hist_intensity  = np.zeros((nbins_high, nbins_low), dtype=np.float64)
-    hist_n_wet      = np.zeros((N_INTERVAL,  nbins_low), dtype=np.float64)
-    hist_max_intens = np.zeros((nbins_high, nbins_low), dtype=np.float64)
-    n_days_all_by_bin     = np.zeros(nbins_low, dtype=np.int32)
-    n_days_wet_hrs_by_bin = np.zeros(nbins_low, dtype=np.int32)
     n_wet_bins = np.arange(0.5, N_INTERVAL + 1.5, 1)
 
-    profiles_by_bin = [[] for _ in range(nbins_low)]
-
+    # --- Vectorized histogram accumulation ---
+    subsection("Building conditional probability histograms (vectorized)")
     t0 = time.time()
-    for iy in range(ny_reg):
-        for ix in range(nx_reg):
-            rain_h_blk = blk_pres[:, :, iy, ix]
-            rain_d     = daily_pres[:, iy, ix]
-            wet_mask   = rain_d >= WET_VALUE_LOW
-            if wet_mask.sum() == 0:
-                continue
 
-            rain_h_wet = rain_h_blk[wet_mask, :].copy()
-            rain_d_wet = rain_d[wet_mask]
-            rain_h_wet[rain_h_wet < WET_VALUE_HIGH] = 0.0
+    wet_day_mask    = daily_pres >= WET_VALUE_LOW           # (n_days, ny, nx)
+    wet_day_mask_4d = wet_day_mask[:, np.newaxis, :, :]     # (n_days, 1, ny, nx)
 
-            n_wet         = (rain_h_wet > WET_VALUE_HIGH).sum(axis=1)
-            has_wet_hours = n_wet > 0
+    # Zero out dry-day hours and below-threshold hours in one shot
+    rain_h_clipped = np.where(
+        wet_day_mask_4d & (blk_pres >= WET_VALUE_HIGH),
+        blk_pres, 0.0).astype(np.float32)                   # (n_days, 24, ny, nx)
 
-            if has_wet_hours.sum() > 0:
-                rain_h_sub = rain_h_wet[has_wet_hours, :]
-                rain_d_sub = rain_d_wet[has_wet_hours]
+    # n_wet per pixel-day; valid = wet day with at least one wet hour
+    n_wet_all          = (rain_h_clipped > WET_VALUE_HIGH).sum(axis=1)  # (n_days, ny, nx)
+    has_wet_hours_mask = wet_day_mask & (n_wet_all > 0)                  # (n_days, ny, nx)
 
-                h_flat     = rain_h_sub.flatten()
-                d_rep      = np.repeat(rain_d_sub, N_INTERVAL)
-                wet_mask_h = h_flat >= WET_VALUE_HIGH
-                if wet_mask_h.sum() > 0:
-                    counts, _, _ = np.histogram2d(
-                        h_flat[wet_mask_h], d_rep[wet_mask_h],
-                        bins=[BINS_HIGH, BINS_LOW])
-                    hist_intensity += counts
+    # Broadcast daily totals to hourly shape for histogram 1
+    d_rep_4d = np.repeat(
+        daily_pres[:, np.newaxis, :, :].astype(np.float64),
+        N_INTERVAL, axis=1)                                 # (n_days, 24, ny, nx)
 
-                counts_nw, _, _ = np.histogram2d(
-                    n_wet[has_wet_hours], rain_d_sub,
-                    bins=[n_wet_bins, BINS_LOW])
-                hist_n_wet += counts_nw
+    # Histogram 1: P(hourly intensity | daily total)
+    h_flat = rain_h_clipped.reshape(-1).astype(np.float64)
+    d_flat = d_rep_4d.reshape(-1)
+    wet_h  = h_flat >= WET_VALUE_HIGH
+    hist_intensity, _, _ = np.histogram2d(
+        h_flat[wet_h], d_flat[wet_h], bins=[BINS_HIGH, BINS_LOW])
+    del d_rep_4d, h_flat, d_flat, wet_h
 
-                day_max = rain_h_sub.max(axis=1)
-                counts_mx, _, _ = np.histogram2d(
-                    day_max, rain_d_sub, bins=[BINS_HIGH, BINS_LOW])
-                hist_max_intens += counts_mx
+    # Histograms 2 & 3 share the same set of valid pixel-days
+    d_valid = daily_pres[has_wet_hours_mask].astype(np.float64)   # 1-D
 
-                for k in range(len(rain_d_sub)):
-                    b = min(int(np.searchsorted(BINS_LOW[1:],
-                                                float(rain_d_sub[k]))),
-                            nbins_low - 1)
-                    profiles_by_bin[b].append(
-                        (rain_h_sub[k].copy(), float(rain_d_sub[k])))
+    # Histogram 2: P(n_wet | daily total)
+    hist_n_wet, _, _ = np.histogram2d(
+        n_wet_all[has_wet_hours_mask].astype(np.float64), d_valid,
+        bins=[n_wet_bins, BINS_LOW])
 
-            for j in range(nbins_low):
-                in_bin         = ((rain_d_wet >= BINS_LOW[j]) &
-                                  (rain_d_wet <  BINS_LOW[j + 1]))
-                in_bin_wet_hrs = in_bin & has_wet_hours
-                n_days_all_by_bin[j]     += int(in_bin.sum())
-                n_days_wet_hrs_by_bin[j] += int(in_bin_wet_hrs.sum())
+    # Histogram 3: P(daily-max | daily total)
+    day_max_all = rain_h_clipped.max(axis=1)                      # (n_days, ny, nx)
+    hist_max_intens, _, _ = np.histogram2d(
+        day_max_all[has_wet_hours_mask].astype(np.float64), d_valid,
+        bins=[BINS_HIGH, BINS_LOW])
 
-    print(f"  Condprob + library time: {elapsed(t0)}")
+    # Count events per daily bin
+    n_days_all_by_bin, _ = np.histogram(
+        daily_pres[wet_day_mask].astype(np.float64), bins=BINS_LOW)
+    n_days_wet_hrs_by_bin, _ = np.histogram(d_valid, bins=BINS_LOW)
+    n_days_all_by_bin     = n_days_all_by_bin.astype(np.int32)
+    n_days_wet_hrs_by_bin = n_days_wet_hrs_by_bin.astype(np.int32)
+
+    print(f"  Histogram accumulation: {elapsed(t0)}")
 
     # Normalize → PDFs → CDFs
     intens_pdf  = np.zeros_like(hist_intensity)
@@ -386,7 +377,41 @@ def run_single(location, buffer):
         n_days_all_by_bin > 0,
         n_days_wet_hrs_by_bin / n_days_all_by_bin, 0.0).astype(np.float32)
 
-    profile_counts = [len(profiles_by_bin[j]) for j in range(nbins_low)]
+    # --- Analog profile library ---
+    # The nested loop is kept to preserve insertion order (same random analog
+    # selected per seed as in the original code → identical bootstrap results).
+    subsection("Building analog profile library")
+    t0 = time.time()
+    profiles_by_bin = [[] for _ in range(nbins_low)]
+    b_all = np.searchsorted(BINS_LOW[1:], daily_pres).clip(0, nbins_low - 1)  # (n_days, ny, nx)
+
+    for iy in range(ny_reg):
+        for ix in range(nx_reg):
+            valid_mask = has_wet_hours_mask[:, iy, ix]
+            if not valid_mask.any():
+                continue
+            for k in np.where(valid_mask)[0]:
+                b = int(b_all[k, iy, ix])
+                profiles_by_bin[b].append(
+                    (rain_h_clipped[k, :, iy, ix].copy(),
+                     float(daily_pres[k, iy, ix])))
+
+    # Convert lists → numpy arrays for fast indexed access in bootstrap
+    profiles_arrays = []
+    profiles_totals = []
+    for b in range(nbins_low):
+        if profiles_by_bin[b]:
+            profiles_arrays.append(
+                np.array([p for p, _ in profiles_by_bin[b]], dtype=np.float32))
+            profiles_totals.append(
+                np.array([R for _, R in profiles_by_bin[b]], dtype=np.float32))
+        else:
+            profiles_arrays.append(np.empty((0, N_INTERVAL), dtype=np.float32))
+            profiles_totals.append(np.empty(0, dtype=np.float32))
+    del profiles_by_bin
+
+    profile_counts = [len(profiles_arrays[j]) for j in range(nbins_low)]
+    print(f"  Library built: {elapsed(t0)}")
     print(f"  Total analog profiles : {sum(profile_counts):,}  "
           f"(bins with ≥1 profile: "
           f"{sum(1 for c in profile_counts if c > 0)}/{nbins_low})")
@@ -452,16 +477,15 @@ def run_single(location, buffer):
         return hourly_q_boot, max_q_boot
 
     def generate_synthetic_max_quantiles(rain_daily_1d, label, seed_base):
-        """Method B — direct daily-max sampler."""
-        max_q_boot = np.full((N_SAMPLES, n_q), np.nan, dtype=np.float32)
-        print(f"\n  [Method B — {label}]  "
-              f"Wet days: {int((rain_daily_1d > 0).sum())}")
+        """Method B — direct daily-max sampler, parallelized over samples."""
+        print(f"\n  [Method B — {label}]  Wet days: {len(rain_daily_1d)}")
         t0_loop = time.time()
-        for sample in range(N_SAMPLES):
+
+        def _one_sample(sample):
             rng = np.random.default_rng(seed_base + sample)
             temp_max = []
             for R in rain_daily_1d:
-                if R <= 0.0 or not np.isfinite(R):
+                if not np.isfinite(R):
                     continue
                 b = min(int(np.searchsorted(BINS_LOW[1:], R)),
                         max_cdf.shape[0] - 1)
@@ -481,59 +505,64 @@ def run_single(location, buffer):
                 arr_m = np.array(temp_max, dtype=np.float32)
                 wet_m = arr_m[arr_m > WET_VALUE_HIGH]
                 if len(wet_m) > 0:
-                    max_q_boot[sample, :] = np.percentile(wet_m, pq100)
-            _progress(sample, t0_loop)
+                    return np.percentile(wet_m, pq100).astype(np.float32)
+            return np.full(n_q, np.nan, dtype=np.float32)
+
+        results   = Parallel(n_jobs=N_JOBS)(
+            delayed(_one_sample)(s) for s in range(N_SAMPLES))
+        max_q_boot = np.array(results, dtype=np.float32)
+        print(f"  Total time: {elapsed(t0_loop)}")
         return max_q_boot
 
     def generate_analog_quantiles(rain_daily_1d, label, seed_base):
-        """Method C — analog resampling."""
-        hourly_q_boot = np.full((N_SAMPLES, n_q), np.nan, dtype=np.float32)
-        max_q_boot    = np.full((N_SAMPLES, n_q), np.nan, dtype=np.float32)
-        print(f"\n  [Method C — {label}]  "
-              f"Wet days: {int((rain_daily_1d > 0).sum())}")
+        """Method C — analog resampling, parallelized over samples."""
+        print(f"\n  [Method C — {label}]  Wet days: {len(rain_daily_1d)}")
         t0_loop = time.time()
-        for sample in range(N_SAMPLES):
+
+        def _one_sample(sample):
             rng = np.random.default_rng(seed_base + sample)
             temp_hourly, temp_max = [], []
             for R in rain_daily_1d:
-                if R <= 0.0 or not np.isfinite(R):
-                    continue
-                b = min(int(np.searchsorted(BINS_LOW[1:], R)),
-                        nbins_low - 1)
+                b = min(int(np.searchsorted(BINS_LOW[1:], R)), nbins_low - 1)
                 if rng.random() >= p_has_wet_hours[b]:
                     continue
-                analogs = profiles_by_bin[b]
-                if len(analogs) == 0:
+                n_analogs = len(profiles_arrays[b])
+                if n_analogs == 0:
                     continue
-                analog_profile, R_analog = analogs[
-                    rng.integers(0, len(analogs))]
+                idx      = rng.integers(0, n_analogs)
+                R_analog = float(profiles_totals[b][idx])
                 if R_analog <= 0.0:
                     continue
-                scaled = analog_profile * (R / R_analog)
+                scaled = profiles_arrays[b][idx] * (R / R_analog)
                 temp_max.append(float(scaled.max()))
                 temp_hourly.extend(scaled[scaled > WET_VALUE_HIGH].tolist())
-            if temp_hourly:
-                hourly_q_boot[sample, :] = np.percentile(
-                    np.array(temp_hourly, dtype=np.float32), pq100)
+            h_row = (np.percentile(np.array(temp_hourly, dtype=np.float32), pq100)
+                     if temp_hourly else np.full(n_q, np.nan, dtype=np.float32))
             if temp_max:
                 arr_m = np.array(temp_max, dtype=np.float32)
                 wet_m = arr_m[arr_m > WET_VALUE_HIGH]
-                if len(wet_m) > 0:
-                    max_q_boot[sample, :] = np.percentile(wet_m, pq100)
-            _progress(sample, t0_loop)
+                m_row = (np.percentile(wet_m, pq100)
+                         if len(wet_m) > 0 else np.full(n_q, np.nan, dtype=np.float32))
+            else:
+                m_row = np.full(n_q, np.nan, dtype=np.float32)
+            return h_row.astype(np.float32), m_row.astype(np.float32)
+
+        results       = Parallel(n_jobs=N_JOBS)(
+            delayed(_one_sample)(s) for s in range(N_SAMPLES))
+        hourly_q_boot = np.array([r[0] for r in results], dtype=np.float32)
+        max_q_boot    = np.array([r[1] for r in results], dtype=np.float32)
+        print(f"  Total time: {elapsed(t0_loop)}")
         return hourly_q_boot, max_q_boot
 
     # ------------------------------------------------------------------
     # STEP 5 & 6 — Bootstrap
     # ------------------------------------------------------------------
-    pres_daily_input     = np.where(
-        pres_day_ctr >= WET_VALUE_LOW, pres_day_ctr, 0.0)
-    fut_daily_input      = np.where(
-        fut_day_ctr  >= WET_VALUE_LOW, fut_day_ctr,  0.0)
-    pres_daily_buf_input = np.where(
-        daily_pres   >= WET_VALUE_LOW, daily_pres,   0.0).reshape(-1)
-    fut_daily_buf_input  = np.where(
-        daily_fut    >= WET_VALUE_LOW, daily_fut,    0.0).reshape(-1)
+    # Pre-filter to wet days only — dry days make no rng calls in the bootstrap
+    # inner loop so removing them gives identical results with fewer iterations.
+    pres_daily_input     = pres_day_ctr[pres_day_ctr >= WET_VALUE_LOW]
+    fut_daily_input      = fut_day_ctr[ fut_day_ctr  >= WET_VALUE_LOW]
+    pres_daily_buf_input = daily_pres[daily_pres >= WET_VALUE_LOW].reshape(-1)
+    fut_daily_buf_input  = daily_fut[ daily_fut  >= WET_VALUE_LOW].reshape(-1)
 
     subsection("Bootstrap sampling")
 
@@ -614,6 +643,13 @@ def run_single(location, buffer):
                 f'{location}, {buf_str}')
     _add_ci(axes1[1, 0], fut_c_h_ci_buf, COL_C_FUT,
             'Method C (analog) — synthetic future')
+    if buffer > 0:
+        axes1[1, 0].plot(q_axis, obs_pres_h, color='#2E86AB', linewidth=1.0,
+                         linestyle=':', marker='^', markersize=4, alpha=0.7,
+                         label='Present observed (center pixel)')
+        axes1[1, 0].plot(q_axis, obs_fut_h,  color='#E50C0C', linewidth=1.0,
+                         linestyle=':', marker='v', markersize=4, alpha=0.7,
+                         label='Future observed (center pixel)')
     _dedup_legend(axes1[1, 0], fontsize=8, loc='upper left', frameon=True)
 
     _plot_panel(axes1[1, 1],
@@ -626,6 +662,13 @@ def run_single(location, buffer):
                 f'{location}, {buf_str}')
     _add_ci(axes1[1, 1], fut_mx_ci_buf, COL_C_FUT,
             'Method B — synthetic future')
+    if buffer > 0:
+        axes1[1, 1].plot(q_axis, obs_pres_dm, color='#2E86AB', linewidth=1.0,
+                         linestyle=':', marker='^', markersize=4, alpha=0.7,
+                         label='Present observed (center pixel)')
+        axes1[1, 1].plot(q_axis, obs_fut_dm,  color='#E50C0C', linewidth=1.0,
+                         linestyle=':', marker='v', markersize=4, alpha=0.7,
+                         label='Future observed (center pixel)')
     _dedup_legend(axes1[1, 1], fontsize=8, loc='upper left', frameon=True)
 
     fig1.suptitle(
@@ -641,10 +684,12 @@ def run_single(location, buffer):
 
     # Attribution figure (1×2)
     fig2, axes2 = plt.subplots(1, 2, figsize=(14, 6))
-    for ax, obs_pres, obs_fut, ci, ylabel in [
-        (axes2[0], obs_pres_h_buf,  obs_fut_h_buf,  fut_c_h_ci_buf,
+    for ax, obs_pres, obs_fut, obs_pres_ctr, obs_fut_ctr, ci, ylabel in [
+        (axes2[0], obs_pres_h_buf,  obs_fut_h_buf,
+         obs_pres_h,  obs_fut_h,  fut_c_h_ci_buf,
          '1-hour precipitation (mm)'),
-        (axes2[1], obs_pres_dm_buf, obs_fut_dm_buf, fut_mx_ci_buf,
+        (axes2[1], obs_pres_dm_buf, obs_fut_dm_buf,
+         obs_pres_dm, obs_fut_dm, fut_mx_ci_buf,
          'Daily-max 1-hour precipitation (mm)'),
     ]:
         _plot_panel(ax, obs_pres, obs_fut,
@@ -652,6 +697,15 @@ def run_single(location, buffer):
                     'Synthetic future (median)', ylabel,
                     f'{ylabel.split("(")[0].strip()} — attribution\n'
                     f'{location}, {buf_str}')
+        if buffer > 0:
+            ax.plot(q_axis, obs_pres_ctr, color='#2E86AB', linewidth=1.0,
+                    linestyle=':', marker='^', markersize=4, alpha=0.7,
+                    label='Present observed (center pixel)')
+            ax.plot(q_axis, obs_fut_ctr,  color='#E50C0C', linewidth=1.0,
+                    linestyle=':', marker='v', markersize=4, alpha=0.7,
+                    label='Future observed (center pixel)')
+            _dedup_legend(ax, fontsize=9, loc='upper left', frameon=True,
+                          fancybox=True, shadow=True)
         idx_99 = np.searchsorted(q_axis, 0.99)
         if idx_99 < len(q_axis) and np.isclose(q_axis[idx_99], 0.99,
                                                  atol=0.001):
