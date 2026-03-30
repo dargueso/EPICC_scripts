@@ -234,30 +234,17 @@ def build_analog_library(blk_nbr, daily_nbr):
     has_wet_hours = wet_day_mask & (n_wet_all > 0)
     b_all         = np.searchsorted(BINS_LOW[1:], daily_nbr).clip(0, nbins_low - 1)
 
-    n_days, ny_nbr, nx_nbr = daily_nbr.shape
-    profiles_by_bin = [[] for _ in range(nbins_low)]
-
-    for iy in range(ny_nbr):
-        for ix in range(nx_nbr):
-            valid_mask = has_wet_hours[:, iy, ix]
-            if not valid_mask.any():
-                continue
-            for k in np.where(valid_mask)[0]:
-                b = int(b_all[k, iy, ix])
-                profiles_by_bin[b].append(
-                    (rain_clipped[k, :, iy, ix].copy(),
-                     float(daily_nbr[k, iy, ix])))
+    # Vectorized extraction: find all (day, iy, ix) triples with valid wet days
+    days_i, iy_i, ix_i = np.where(has_wet_hours)           # each shape (N_valid,)
+    profs  = rain_clipped[days_i, :, iy_i, ix_i]           # (N_valid, N_INTERVAL)
+    tots   = daily_nbr[days_i, iy_i, ix_i].astype(np.float32)
+    b_vec  = b_all[days_i, iy_i, ix_i]
 
     profiles_arrays, profiles_totals = [], []
     for b in range(nbins_low):
-        if profiles_by_bin[b]:
-            profiles_arrays.append(
-                np.array([p for p, _ in profiles_by_bin[b]], dtype=np.float32))
-            profiles_totals.append(
-                np.array([R for _, R in profiles_by_bin[b]], dtype=np.float32))
-        else:
-            profiles_arrays.append(np.empty((0, N_INTERVAL), dtype=np.float32))
-            profiles_totals.append(np.empty(0, dtype=np.float32))
+        mask = b_vec == b
+        profiles_arrays.append(profs[mask].copy())
+        profiles_totals.append(tots[mask].copy())
     return profiles_arrays, profiles_totals
 
 
