@@ -256,31 +256,53 @@ def _method_c_one_sample(rain_daily_1d, profiles_arrays, profiles_totals,
                           nbins_low, p_has_wet, rng):
     """One Method C bootstrap sample → (hourly_q, dmax_q)."""
     pq100 = PLOT_QUANTILES * 100.0
-    temp_hourly, temp_max = [], []
-    for R in rain_daily_1d:
-        b = min(int(np.searchsorted(BINS_LOW[1:], R)), nbins_low - 1)
-        if rng.random() >= p_has_wet[b]:
-            continue
-        n_analogs = len(profiles_arrays[b])
-        if n_analogs == 0:
-            continue
-        idx      = rng.integers(0, n_analogs)
-        R_analog = float(profiles_totals[b][idx])
-        if R_analog <= 0.0:
-            continue
-        scaled = profiles_arrays[b][idx] * (R / R_analog)
-        temp_max.append(float(scaled.max()))
-        temp_hourly.extend(scaled[scaled > WET_VALUE_HIGH].tolist())
+    nan_row = np.full(len(pq100), np.nan, np.float32)
 
-    h_row = (np.percentile(np.array(temp_hourly, np.float32), pq100).astype(np.float32)
-             if temp_hourly else np.full(len(pq100), np.nan, np.float32))
-    if temp_max:
-        wet_m = np.array(temp_max, np.float32)
-        wet_m = wet_m[wet_m > WET_VALUE_HIGH]
-        m_row = (np.percentile(wet_m, pq100).astype(np.float32)
-                 if len(wet_m) > 0 else np.full(len(pq100), np.nan, np.float32))
-    else:
-        m_row = np.full(len(pq100), np.nan, np.float32)
+    # --- Step 1: vectorized bin assignment and wet-day filter ---
+    bins = np.searchsorted(BINS_LOW[1:], rain_daily_1d).clip(0, nbins_low - 1)
+    n_analogs_arr = np.array([len(pa) for pa in profiles_arrays], dtype=np.int64)
+    has_analogs   = n_analogs_arr[bins] > 0
+    rand_wet      = rng.random(len(rain_daily_1d))
+    keep          = (rand_wet < p_has_wet[bins]) & has_analogs
+
+    valid_R    = rain_daily_1d[keep]
+    valid_bins = bins[keep]
+    n_valid    = len(valid_R)
+    if n_valid == 0:
+        return nan_row, nan_row
+
+    # --- Step 2: draw analog indices (one random float per valid day, scaled to int) ---
+    rand_f   = rng.random(n_valid)
+    idx_arr  = (rand_f * n_analogs_arr[valid_bins]).astype(np.int64)
+    # clip to guard against floating-point edge where rand_f==1.0
+    idx_arr  = np.minimum(idx_arr, n_analogs_arr[valid_bins] - 1)
+
+    # --- Step 3: batch-extract profiles and totals using per-bin fancy indexing ---
+    all_profiles = np.empty((n_valid, N_INTERVAL), dtype=np.float32)
+    all_R_analog = np.empty(n_valid,               dtype=np.float32)
+    for b in range(nbins_low):
+        mask_b = valid_bins == b
+        if not mask_b.any():
+            continue
+        all_profiles[mask_b] = profiles_arrays[b][idx_arr[mask_b]]
+        all_R_analog[mask_b] = profiles_totals[b][idx_arr[mask_b]]
+
+    # --- Step 4: scale profiles, compute hourly values and daily max ---
+    good = all_R_analog > 0.0
+    if not good.any():
+        return nan_row, nan_row
+    scaled = all_profiles[good] * (valid_R[good] / all_R_analog[good])[:, np.newaxis]
+    # (n_good, N_INTERVAL)
+
+    dmax     = scaled.max(axis=1)
+    wet_dmax = dmax[dmax > WET_VALUE_HIGH]
+    m_row    = (np.percentile(wet_dmax, pq100).astype(np.float32)
+                if len(wet_dmax) > 0 else nan_row)
+
+    wet_vals = scaled[scaled > WET_VALUE_HIGH]
+    h_row    = (np.percentile(wet_vals, pq100).astype(np.float32)
+                if len(wet_vals) > 0 else nan_row)
+
     return h_row, m_row
 
 
