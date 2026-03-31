@@ -72,7 +72,8 @@ EXP_SCALE = 5.0
 PLOT_QUANTILES      = np.array([0.90, 0.95, 0.98, 0.99, 0.995, 0.999])
 BOOTSTRAP_QUANTILES = np.array([0.025, 0.5, 0.975])
 
-SAVE_CONDPROB = True   # write buffer-pooled condprob histograms
+SAVE_CONDPROB  = True   # write buffer-pooled condprob histograms
+RUN_METHOD_B   = False   # compute daily-max CIs via Method B; set False to skip and save ~50% bootstrap time
 
 # =============================================================================
 # MODULE-LEVEL GLOBALS  (set per tile before fork; read-only in workers)
@@ -105,14 +106,7 @@ def elapsed(t0):
 
 def ci_from_boot(q_boot, bq):
     """(N_SAMPLES, n_q) → (3, n_q)  rows: [lo, median, hi]"""
-    n_q = q_boot.shape[1]
-    out = np.full((3, n_q), np.nan, dtype=np.float32)
-    for iq in range(n_q):
-        v = q_boot[:, iq]
-        v = v[~np.isnan(v)]
-        if len(v):
-            out[:, iq] = np.quantile(v, bq)
-    return out
+    return np.nanquantile(q_boot, bq, axis=0).astype(np.float32)
 
 
 def _sample_bin(lo, hi, rng):
@@ -189,19 +183,12 @@ def build_histograms(blk_nbr, daily_nbr):
     n_events = n_all_by_bin.astype(np.int32)
 
     # Normalize columns → PDFs
-    intens_pdf = np.zeros_like(hist_intensity, dtype=np.float32)
-    n_wet_pdf  = np.zeros_like(hist_n_wet,     dtype=np.float32)
-    max_pdf    = np.zeros_like(hist_max,        dtype=np.float32)
-    for j in range(nbins_low):
-        si = hist_intensity[:, j].sum()
-        if si > 0:
-            intens_pdf[:, j] = (hist_intensity[:, j] / si).astype(np.float32)
-        sn = hist_n_wet[:, j].sum()
-        if sn > 0:
-            n_wet_pdf[:, j]  = (hist_n_wet[:, j]     / sn).astype(np.float32)
-        sm = hist_max[:, j].sum()
-        if sm > 0:
-            max_pdf[:, j]    = (hist_max[:, j]        / sm).astype(np.float32)
+    col_si    = hist_intensity.sum(axis=0, keepdims=True)
+    col_sn    = hist_n_wet.sum(   axis=0, keepdims=True)
+    col_sm    = hist_max.sum(     axis=0, keepdims=True)
+    intens_pdf = np.where(col_si > 0, hist_intensity / col_si, 0).astype(np.float32)
+    n_wet_pdf  = np.where(col_sn > 0, hist_n_wet     / col_sn, 0).astype(np.float32)
+    max_pdf    = np.where(col_sm > 0, hist_max        / col_sm, 0).astype(np.float32)
 
     # PDFs → CDFs
     wet_cdf  = np.cumsum(n_wet_pdf.T,  axis=1).astype(np.float32)   # (nbins_low, 24)
@@ -348,6 +335,7 @@ def process_pixel(args):
     buf     = meta['buffer']
     y0      = meta['y0'];   x0  = meta['x0']
     y0h     = meta['y0h'];  x0h = meta['x0h']
+    run_b   = meta['run_method_b']
 
     blk_p    = _BLK_PRES    # (n_days_p, 24, ny_h, nx_h)
     blk_f    = _BLK_FUT     # (n_days_f, 24, ny_h, nx_h)
@@ -391,19 +379,22 @@ def process_pixel(args):
     obs_fut_h = (np.percentile(fut_wet_1h_buf, pq100).astype(np.float32)
                  if len(fut_wet_1h_buf) > 0 else np.full(n_q, np.nan, np.float32))
 
-    # Present daily-max (buffer-pooled)
-    dmax_pres_all = blk_nbr.max(axis=1)
-    nwet_pres_all = (blk_nbr > WET_VALUE_HIGH).sum(axis=1)
-    dmax_mask_p   = (daily_nbr >= WET_VALUE_LOW) & (nwet_pres_all > 0)
-    obs_pres_dm   = (np.percentile(dmax_pres_all[dmax_mask_p], pq100).astype(np.float32)
-                     if dmax_mask_p.sum() > 0 else np.full(n_q, np.nan, np.float32))
+    if run_b:
+        # Present daily-max (buffer-pooled)
+        dmax_pres_all = blk_nbr.max(axis=1)
+        nwet_pres_all = (blk_nbr > WET_VALUE_HIGH).sum(axis=1)
+        dmax_mask_p   = (daily_nbr >= WET_VALUE_LOW) & (nwet_pres_all > 0)
+        obs_pres_dm   = (np.percentile(dmax_pres_all[dmax_mask_p], pq100).astype(np.float32)
+                         if dmax_mask_p.sum() > 0 else np.full(n_q, np.nan, np.float32))
 
-    # Future daily-max (buffer-pooled)
-    dmax_fut_all = blk_f_nbr.max(axis=1)
-    nwet_fut_all = (blk_f_nbr > WET_VALUE_HIGH).sum(axis=1)
-    dmax_mask_f  = (daily_f_nbr >= WET_VALUE_LOW) & (nwet_fut_all > 0)
-    obs_fut_dm   = (np.percentile(dmax_fut_all[dmax_mask_f], pq100).astype(np.float32)
-                    if dmax_mask_f.sum() > 0 else np.full(n_q, np.nan, np.float32))
+        # Future daily-max (buffer-pooled)
+        dmax_fut_all = blk_f_nbr.max(axis=1)
+        nwet_fut_all = (blk_f_nbr > WET_VALUE_HIGH).sum(axis=1)
+        dmax_mask_f  = (daily_f_nbr >= WET_VALUE_LOW) & (nwet_fut_all > 0)
+        obs_fut_dm   = (np.percentile(dmax_fut_all[dmax_mask_f], pq100).astype(np.float32)
+                        if dmax_mask_f.sum() > 0 else np.full(n_q, np.nan, np.float32))
+    else:
+        obs_pres_dm = obs_fut_dm = np.full(n_q, np.nan, np.float32)
 
     # ------------------------------------------------------------------
     # CONDITIONAL PROBABILITY HISTOGRAMS + CDFs
@@ -426,10 +417,11 @@ def process_pixel(args):
     # Deterministic per-pixel seed to ensure reproducibility
     seed_base = int(42 + (y0 + iy_inner) * 100003 + (x0 + ix_inner))
 
-    c_pres_h_boot  = np.full((N_SAMPLES, n_q), np.nan, np.float32)
-    c_fut_h_boot   = np.full((N_SAMPLES, n_q), np.nan, np.float32)
-    b_pres_dm_boot = np.full((N_SAMPLES, n_q), np.nan, np.float32)
-    b_fut_dm_boot  = np.full((N_SAMPLES, n_q), np.nan, np.float32)
+    c_pres_h_boot = np.full((N_SAMPLES, n_q), np.nan, np.float32)
+    c_fut_h_boot  = np.full((N_SAMPLES, n_q), np.nan, np.float32)
+    if run_b:
+        b_pres_dm_boot = np.full((N_SAMPLES, n_q), np.nan, np.float32)
+        b_fut_dm_boot  = np.full((N_SAMPLES, n_q), np.nan, np.float32)
 
     for s in range(N_SAMPLES):
         # Method C — present
@@ -444,22 +436,26 @@ def process_pixel(args):
                                      nbins_low, p_has_wet, rng)
         c_fut_h_boot[s] = h
 
-        # Method B — present
-        rng = np.random.default_rng(seed_base + 2_000_000 + s)
-        b_pres_dm_boot[s] = _method_b_one_sample(pres_in, max_cdf, p_has_wet,
-                                                  nbins_low, rng)
-
-        # Method B — future
-        rng = np.random.default_rng(seed_base + 3_000_000 + s)
-        b_fut_dm_boot[s] = _method_b_one_sample(fut_in, max_cdf, p_has_wet,
-                                                 nbins_low, rng)
+        if run_b:
+            # Method B — present
+            rng = np.random.default_rng(seed_base + 2_000_000 + s)
+            b_pres_dm_boot[s] = _method_b_one_sample(pres_in, max_cdf, p_has_wet,
+                                                      nbins_low, rng)
+            # Method B — future
+            rng = np.random.default_rng(seed_base + 3_000_000 + s)
+            b_fut_dm_boot[s] = _method_b_one_sample(fut_in, max_cdf, p_has_wet,
+                                                     nbins_low, rng)
 
     # Bootstrap CIs
     bq = BOOTSTRAP_QUANTILES
-    ci_C_pres_h  = ci_from_boot(c_pres_h_boot,  bq)   # (3, n_q)
-    ci_C_fut_h   = ci_from_boot(c_fut_h_boot,   bq)
-    ci_B_pres_dm = ci_from_boot(b_pres_dm_boot, bq)
-    ci_B_fut_dm  = ci_from_boot(b_fut_dm_boot,  bq)
+    ci_C_pres_h = ci_from_boot(c_pres_h_boot, bq)   # (3, n_q)
+    ci_C_fut_h  = ci_from_boot(c_fut_h_boot,  bq)
+    if run_b:
+        ci_B_pres_dm = ci_from_boot(b_pres_dm_boot, bq)
+        ci_B_fut_dm  = ci_from_boot(b_fut_dm_boot,  bq)
+    else:
+        nan3 = np.full((len(bq), n_q), np.nan, np.float32)
+        ci_B_pres_dm = ci_B_fut_dm = nan3
 
     return {
         'iy': iy_inner, 'ix': ix_inner,
@@ -552,14 +548,15 @@ def main():
     # -------------------------------------------------------------------------
     section("PHASE 2 — Allocating output arrays")
 
-    obs_pres_h_out   = np.full((n_q,  ny, nx), np.nan, dtype=np.float32)
-    obs_pres_dm_out  = np.full((n_q,  ny, nx), np.nan, dtype=np.float32)
-    obs_fut_h_out    = np.full((n_q,  ny, nx), np.nan, dtype=np.float32)
-    obs_fut_dm_out   = np.full((n_q,  ny, nx), np.nan, dtype=np.float32)
-    ci_C_pres_h_out  = np.full((n_bq, n_q, ny, nx), np.nan, dtype=np.float32)
-    ci_C_fut_h_out   = np.full((n_bq, n_q, ny, nx), np.nan, dtype=np.float32)
-    ci_B_pres_dm_out = np.full((n_bq, n_q, ny, nx), np.nan, dtype=np.float32)
-    ci_B_fut_dm_out  = np.full((n_bq, n_q, ny, nx), np.nan, dtype=np.float32)
+    obs_pres_h_out  = np.full((n_q,  ny, nx), np.nan, dtype=np.float32)
+    obs_fut_h_out   = np.full((n_q,  ny, nx), np.nan, dtype=np.float32)
+    ci_C_pres_h_out = np.full((n_bq, n_q, ny, nx), np.nan, dtype=np.float32)
+    ci_C_fut_h_out  = np.full((n_bq, n_q, ny, nx), np.nan, dtype=np.float32)
+    if RUN_METHOD_B:
+        obs_pres_dm_out  = np.full((n_q,  ny, nx), np.nan, dtype=np.float32)
+        obs_fut_dm_out   = np.full((n_q,  ny, nx), np.nan, dtype=np.float32)
+        ci_B_pres_dm_out = np.full((n_bq, n_q, ny, nx), np.nan, dtype=np.float32)
+        ci_B_fut_dm_out  = np.full((n_bq, n_q, ny, nx), np.nan, dtype=np.float32)
 
     if SAVE_CONDPROB:
         hist_intens_out = np.full((nbins_high, nbins_low, ny, nx),
@@ -628,6 +625,7 @@ def main():
                 'buffer': BUFFER,
                 'y0': y0, 'y1': y1, 'x0': x0, 'x1': x1,
                 'y0h': y0h, 'y1h': y1h, 'x0h': x0h, 'x1h': x1h,
+                'run_method_b': RUN_METHOD_B,
             }
             del blk_p_tile, blk_f_tile
 
@@ -648,14 +646,15 @@ def main():
                 iy_i = r['iy'];  ix_i = r['ix']
                 gy   = y0 + iy_i;  gx  = x0 + ix_i
 
-                obs_pres_h_out[:, gy, gx]    = r['obs_pres_h']
-                obs_fut_h_out[:, gy, gx]     = r['obs_fut_h']
-                obs_pres_dm_out[:, gy, gx]   = r['obs_pres_dm']
-                obs_fut_dm_out[:, gy, gx]    = r['obs_fut_dm']
+                obs_pres_h_out[:, gy, gx]      = r['obs_pres_h']
+                obs_fut_h_out[:, gy, gx]       = r['obs_fut_h']
                 ci_C_pres_h_out[:, :, gy, gx]  = r['ci_C_pres_h']
                 ci_C_fut_h_out[:, :, gy, gx]   = r['ci_C_fut_h']
-                ci_B_pres_dm_out[:, :, gy, gx] = r['ci_B_pres_dm']
-                ci_B_fut_dm_out[:, :, gy, gx]  = r['ci_B_fut_dm']
+                if RUN_METHOD_B:
+                    obs_pres_dm_out[:, gy, gx]     = r['obs_pres_dm']
+                    obs_fut_dm_out[:, gy, gx]      = r['obs_fut_dm']
+                    ci_B_pres_dm_out[:, :, gy, gx] = r['ci_B_pres_dm']
+                    ci_B_fut_dm_out[:, :, gy, gx]  = r['ci_B_fut_dm']
                 if SAVE_CONDPROB:
                     hist_intens_out[:, :, gy, gx] = r['hist_intens']
                     hist_max_out[:, :, gy, gx]    = r['hist_max']
@@ -712,20 +711,21 @@ def main():
     _write_nc(
         f'{out_dir}/synthetic_pres_buf{BUFFER}.nc',
         {
-            'obs_h':    (['plot_q', 'y', 'x'], obs_pres_h_out,
-                         {'long_name': 'Observed present hourly quantiles (buffer-pooled)',
-                          'units': 'mm/h'}),
-            'obs_dm':   (['plot_q', 'y', 'x'], obs_pres_dm_out,
-                         {'long_name': 'Observed present daily-max quantiles (buffer-pooled)',
-                          'units': 'mm/h'}),
-            'syn_h_C':  (['bootstrap_q', 'plot_q', 'y', 'x'], ci_C_pres_h_out,
-                         {'long_name': 'Synthetic present hourly CI — Method C',
-                          'units': 'mm/h'}),
-            'syn_dm_B': (['bootstrap_q', 'plot_q', 'y', 'x'], ci_B_pres_dm_out,
-                         {'long_name': 'Synthetic present daily-max CI — Method B',
-                          'units': 'mm/h'}),
-            'lat':      (['y', 'x'], lat2d, {'long_name': 'Latitude',  'units': 'degrees_north'}),
-            'lon':      (['y', 'x'], lon2d, {'long_name': 'Longitude', 'units': 'degrees_east'}),
+            'obs_h':   (['plot_q', 'y', 'x'], obs_pres_h_out,
+                        {'long_name': 'Observed present hourly quantiles (buffer-pooled)',
+                         'units': 'mm/h'}),
+            'syn_h_C': (['bootstrap_q', 'plot_q', 'y', 'x'], ci_C_pres_h_out,
+                        {'long_name': 'Synthetic present hourly CI — Method C',
+                         'units': 'mm/h'}),
+            **({'obs_dm':   (['plot_q', 'y', 'x'], obs_pres_dm_out,
+                              {'long_name': 'Observed present daily-max quantiles (buffer-pooled)',
+                               'units': 'mm/h'}),
+                'syn_dm_B': (['bootstrap_q', 'plot_q', 'y', 'x'], ci_B_pres_dm_out,
+                              {'long_name': 'Synthetic present daily-max CI — Method B',
+                               'units': 'mm/h'}),
+                } if RUN_METHOD_B else {}),
+            'lat':     (['y', 'x'], lat2d, {'long_name': 'Latitude',  'units': 'degrees_north'}),
+            'lon':     (['y', 'x'], lon2d, {'long_name': 'Longitude', 'units': 'degrees_east'}),
         },
         spatial_coords,
         {**common_attrs, 'description':
@@ -736,20 +736,21 @@ def main():
     _write_nc(
         f'{out_dir}/synthetic_fut_buf{BUFFER}.nc',
         {
-            'obs_h':    (['plot_q', 'y', 'x'], obs_fut_h_out,
-                         {'long_name': 'Observed future hourly quantiles (buffer-pooled)',
-                          'units': 'mm/h'}),
-            'obs_dm':   (['plot_q', 'y', 'x'], obs_fut_dm_out,
-                         {'long_name': 'Observed future daily-max quantiles (buffer-pooled)',
-                          'units': 'mm/h'}),
-            'syn_h_C':  (['bootstrap_q', 'plot_q', 'y', 'x'], ci_C_fut_h_out,
-                         {'long_name': 'Synthetic future hourly CI — Method C',
-                          'units': 'mm/h'}),
-            'syn_dm_B': (['bootstrap_q', 'plot_q', 'y', 'x'], ci_B_fut_dm_out,
-                         {'long_name': 'Synthetic future daily-max CI — Method B',
-                          'units': 'mm/h'}),
-            'lat':      (['y', 'x'], lat2d, {'long_name': 'Latitude',  'units': 'degrees_north'}),
-            'lon':      (['y', 'x'], lon2d, {'long_name': 'Longitude', 'units': 'degrees_east'}),
+            'obs_h':   (['plot_q', 'y', 'x'], obs_fut_h_out,
+                        {'long_name': 'Observed future hourly quantiles (buffer-pooled)',
+                         'units': 'mm/h'}),
+            'syn_h_C': (['bootstrap_q', 'plot_q', 'y', 'x'], ci_C_fut_h_out,
+                        {'long_name': 'Synthetic future hourly CI — Method C',
+                         'units': 'mm/h'}),
+            **({'obs_dm':   (['plot_q', 'y', 'x'], obs_fut_dm_out,
+                              {'long_name': 'Observed future daily-max quantiles (buffer-pooled)',
+                               'units': 'mm/h'}),
+                'syn_dm_B': (['bootstrap_q', 'plot_q', 'y', 'x'], ci_B_fut_dm_out,
+                              {'long_name': 'Synthetic future daily-max CI — Method B',
+                               'units': 'mm/h'}),
+                } if RUN_METHOD_B else {}),
+            'lat':     (['y', 'x'], lat2d, {'long_name': 'Latitude',  'units': 'degrees_north'}),
+            'lon':     (['y', 'x'], lon2d, {'long_name': 'Longitude', 'units': 'degrees_east'}),
         },
         spatial_coords,
         {**common_attrs, 'description':
