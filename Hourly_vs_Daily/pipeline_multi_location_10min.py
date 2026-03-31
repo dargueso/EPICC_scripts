@@ -39,6 +39,8 @@ Data
 
 import time
 import os
+import matplotlib
+matplotlib.use('Agg')   # non-interactive backend — must be set before pyplot import
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
@@ -353,6 +355,14 @@ def run_single(location, buffer):
 
     cnt_D = sum(len(a) for a in profiles_D_arrays)
     print(f"  Library D built: {elapsed(t0)}  |  {cnt_D:,} profiles")
+    print(f"  Events per daily-total bin (Method D, present period):")
+    print(f"  {'Bin (mm/d)':>14}  {'Wet days':>9}  {'With wet 10min':>15}  {'Profiles':>9}")
+    for b in range(nbins_low):
+        lo = BINS_LOW[b]
+        hi = BINS_LOW[b + 1]
+        bin_str = f"{lo:.0f}–{'inf' if np.isinf(hi) else f'{hi:.0f}'}"
+        print(f"  {bin_str:>14}  {n_days_per_bin[b]:>9,}  "
+              f"{n_days_wet_per_bin[b]:>15,}  {len(profiles_D_arrays[b]):>9,}")
 
     # ------------------------------------------------------------------
     # STEP 4b — Library E: analog 10-min-within-hour profiles indexed by hourly total
@@ -397,6 +407,17 @@ def run_single(location, buffer):
 
     cnt_E = sum(len(a) for a in profiles_E_arrays)
     print(f"  Library E built: {elapsed(t0)}  |  {cnt_E:,} profiles")
+    print(f"  Events per hourly-total bin (Method E, present period):")
+    print(f"  {'Bin (mm/h)':>14}  {'Wet hours':>9}  {'With wet 10min':>15}  {'Profiles':>9}")
+    for b in range(nbins_hour):
+        lo = BINS_HOUR[b]
+        hi = BINS_HOUR[b + 1]
+        bin_str = f"{lo:.0f}–{'inf' if np.isinf(hi) else f'{hi:.0f}'}"
+        n_h  = int(n_hrs_per_bin[b])
+        n_hw = int(n_hrs_wet_per_bin[b])
+        if n_h == 0 and n_hw == 0:
+            continue
+        print(f"  {bin_str:>14}  {n_h:>9,}  {n_hw:>15,}  {len(profiles_E_arrays[b]):>9,}")
 
     # ------------------------------------------------------------------
     # STEP 5 — Bootstrap samplers
@@ -619,6 +640,12 @@ def run_single(location, buffer):
         n_days_fut          = np.array(n_days_fut),
         ny_reg              = np.array(ny_reg),
         nx_reg              = np.array(nx_reg),
+        bins_low            = BINS_LOW,
+        bins_hour           = BINS_HOUR,
+        n_days_per_bin      = n_days_per_bin.astype(np.int32),
+        n_days_wet_per_bin  = n_days_wet_per_bin.astype(np.int32),
+        n_hrs_per_bin       = n_hrs_per_bin.astype(np.int32),
+        n_hrs_wet_per_bin   = n_hrs_wet_per_bin.astype(np.int32),
         # observed
         obs_pres_10m        = obs_pres_10m,
         obs_fut_10m         = obs_fut_10m,

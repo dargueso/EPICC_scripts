@@ -13,6 +13,8 @@ with np.load() for further analysis without re-running the pipeline.
 
 import time
 import os
+import matplotlib
+matplotlib.use('Agg')   # non-interactive backend — must be set before pyplot import
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
@@ -43,7 +45,7 @@ loc_lons = {'Mallorca':   2.6360,  'Barcelona':  2.173,  'Valencia':   -0.376,
             "L'Aquila":  13.4068}
 
 LOCATIONS = ['Mallorca', 'Catania', 'Turis','Rosiglione','Ardeche','Corte',"L'Aquila", 'Pyrenees']   # locations to run
-BUFFERS   = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20]              # buffer sizes (grid cells; 0 = center pixel only)
+BUFFERS   = [0, 1, 2, 3, 4, 5]# 6, 7, 8, 9, 10, 15, 20]              # buffer sizes (grid cells; 0 = center pixel only)
 
 WET_VALUE_HIGH = 0.1   # mm/h
 WET_VALUE_LOW  = 1.0   # mm/d
@@ -415,6 +417,14 @@ def run_single(location, buffer):
     print(f"  Total analog profiles : {sum(profile_counts):,}  "
           f"(bins with ≥1 profile: "
           f"{sum(1 for c in profile_counts if c > 0)}/{nbins_low})")
+    print(f"  Events per daily-total bin (present period):")
+    print(f"  {'Bin (mm/d)':>14}  {'Wet days':>9}  {'With wet hrs':>13}  {'Profiles':>9}")
+    for j in range(nbins_low):
+        lo = BINS_LOW[j]
+        hi = BINS_LOW[j + 1]
+        bin_str = f"{lo:.0f}–{'inf' if np.isinf(hi) else f'{hi:.0f}'}"
+        print(f"  {bin_str:>14}  {n_days_all_by_bin[j]:>9,}  "
+              f"{n_days_wet_hrs_by_bin[j]:>13,}  {profile_counts[j]:>9,}")
 
     # ------------------------------------------------------------------
     # SAMPLER FUNCTIONS  (defined here to close over run-specific state)
@@ -765,6 +775,9 @@ def run_single(location, buffer):
         n_days_fut          = np.array(n_days_fut),
         ny_reg              = np.array(ny_reg),
         nx_reg              = np.array(nx_reg),
+        bins_low            = BINS_LOW,
+        n_days_per_bin      = n_days_all_by_bin,
+        n_days_wet_hrs_per_bin = n_days_wet_hrs_by_bin,
         # observed percentiles — center pixel
         obs_pres_h          = obs_pres_h,
         obs_fut_h           = obs_fut_h,
