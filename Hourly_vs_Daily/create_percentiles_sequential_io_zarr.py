@@ -22,9 +22,9 @@ PATH_IN = '/home/dargueso/postprocessed/EPICC/'
 PATH_OUT = '/home/dargueso/postprocessed/EPICC/'
 WRUN_PRESENT = "EPICC_2km_ERA5"
 WRUN_FUTURE = "EPICC_2km_ERA5_CMIP6anom"
-test_suffix = "_test_100x100"
+test_suffix = ""
 
-FREQ = '1H'
+FREQ = '10MIN'
 WET_THRESHOLD = 0.1
 PERCENTILES = [10, 20, 25, 40, 50, 60, 70, 75, 80, 85, 90, 95, 98, 99, 99.5, 99.9, 99.99, 100]
 ALPHA = 0.05
