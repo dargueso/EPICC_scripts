@@ -72,7 +72,7 @@ loc_lons = {'Mallorca':   2.6360,  'Barcelona':  2.173,  'Valencia':   -0.376,
 
 LOCATIONS = ['Mallorca', 'Catania', 'Turis', 'Rosiglione', 'Ardeche',
              'Corte', "L'Aquila", 'Pyrenees']
-BUFFERS   = [0, 1, 3, 5, 10]
+BUFFERS   = [0, 1,2, 3,4, 5,6,7,8,9, 10, 15, 20]
 
 # 10-min specific
 N_INTERVAL   = 144    # 10-min steps per day

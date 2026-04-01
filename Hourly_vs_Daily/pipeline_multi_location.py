@@ -45,7 +45,7 @@ loc_lons = {'Mallorca':   2.6360,  'Barcelona':  2.173,  'Valencia':   -0.376,
             "L'Aquila":  13.4068}
 
 LOCATIONS = ['Mallorca', 'Catania', 'Turis','Rosiglione','Ardeche','Corte',"L'Aquila", 'Pyrenees']   # locations to run
-BUFFERS   = [0, 1, 2, 3, 4, 5]# 6, 7, 8, 9, 10, 15, 20]              # buffer sizes (grid cells; 0 = center pixel only)
+BUFFERS   = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20]              # buffer sizes (grid cells; 0 = center pixel only)
 
 WET_VALUE_HIGH = 0.1   # mm/h
 WET_VALUE_LOW  = 1.0   # mm/d
