@@ -92,7 +92,7 @@ subregs = np.zeros_like(lm_is.values)
 #####################################################################
 #####################################################################
 
-qtile = 99.5
+qtile = 99
 
 mylevels=np.asarray([0,2,4,6,8,10,15,20,25,30,35,40,50,60,70,80,90,100])
 cmap = sns.color_palette("icefire", as_cmap=True)
@@ -120,7 +120,7 @@ for season in seasons:
         suffix_season = f'_{season}'
 
 
-    filein_d = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/percentiles_and_significance_D_mann_whitney_seqio.nc'
+    filein_d = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/percentiles_and_significance_DAY_mann_whitney_seqio.nc'
     fin_d = xr.open_dataset(filein_d).sel(percentile=qtile).squeeze()
 
     filein_h = f'/home/dargueso/postprocessed/EPICC//EPICC_2km_ERA5/percentiles_and_significance_1H_mann_whitney_seqio.nc'
@@ -422,6 +422,176 @@ for season in seasons:
                       bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     
     plt.tight_layout()
-    plt.savefig(f'/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/violin_plot_precipitation_changes_q{qtile}th_{mode}{suffix_season}.png', 
+    plt.savefig(f'/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/violin_plot_precipitation_changes_q{qtile}th_{mode}{suffix_season}.png',
                 dpi=300, bbox_inches='tight', facecolor='white')
     plt.close(fig_violin)
+
+    #####################################################################
+    # Combined figure: maps + violin next to each change panel
+    #####################################################################
+
+    violin_colors   = {'daily': '#ED6A5A', 'hourly': '#F4F1BB', '10min': '#9BC1BC'}
+    percentile_low  = 5
+    percentile_high = 95
+
+    fig3 = plt.figure(figsize=(28, 15), constrained_layout=False)
+    gs3 = GridSpec(3, 4, figure=fig3,
+                   width_ratios=[1, 1, 1, 0.40],
+                   left=0.06, bottom=0.11, right=0.95, top=0.93,
+                   hspace=0.06, wspace=0.06)
+
+    ax_violins = []   # collect for shared y-axis
+
+    for row, datatype in enumerate(['daily', 'hourly', '10min']):
+
+        values_viol = data_diff[datatype]
+        values_viol = values_viol[border_width:-border_width, border_width:-border_width].flatten()
+        values_viol = values_viol[np.isfinite(values_viol)]
+
+        median_val = np.median(values_viol)
+        p_lo       = np.percentile(values_viol, percentile_low)
+        p_hi       = np.percentile(values_viol, percentile_high)
+
+        # --- Column 0: Present ---
+        ax0 = fig3.add_subplot(gs3[row, 0], projection=cart_proj)
+        ax0.set_title(f"{string.ascii_lowercase[row * 3 + 0]}",
+                      size='x-large', weight='bold', loc='left')
+        ax0.add_feature(cfeature.COASTLINE, linewidth=0.5, zorder=102)
+        pm0 = ax0.pcolormesh(lons, lats, data_p[datatype],
+                             cmap=cmap, norm=norm,
+                             transform=ccrs.PlateCarree(), zorder=101)
+        ax0.contourf(to_np(lons), to_np(lats), border_mask,
+                     levels=[0.5, 1.5], colors=['gray'], alpha=0.5,
+                     transform=ccrs.PlateCarree(), zorder=103)
+        ax0.set_xlim(cartopy_xlim(hgt, geobounds=mbounds))
+        ax0.set_ylim(cartopy_ylim(hgt, geobounds=mbounds))
+        gl0 = ax0.gridlines(color='black', linestyle='dotted', linewidth=0.5,
+                            draw_labels=True, x_inline=False, y_inline=False, zorder=103)
+        gl0.right_labels  = False
+        gl0.top_labels    = False
+        if row != 2:
+            gl0.bottom_labels = False
+
+        # --- Column 1: Future ---
+        ax1 = fig3.add_subplot(gs3[row, 1], projection=cart_proj)
+        ax1.set_title(f"{string.ascii_lowercase[row * 3 + 1]}",
+                      size='x-large', weight='bold', loc='left')
+        ax1.add_feature(cfeature.COASTLINE, linewidth=0.5, zorder=102)
+        pm1 = ax1.pcolormesh(lons, lats, data_f[datatype],
+                             cmap=cmap, norm=norm,
+                             transform=ccrs.PlateCarree(), zorder=101)
+        ax1.contourf(to_np(lons), to_np(lats), border_mask,
+                     levels=[0.5, 1.5], colors=['gray'], alpha=0.5,
+                     transform=ccrs.PlateCarree(), zorder=103)
+        ax1.set_xlim(cartopy_xlim(hgt, geobounds=mbounds))
+        ax1.set_ylim(cartopy_ylim(hgt, geobounds=mbounds))
+        gl1 = ax1.gridlines(color='black', linestyle='dotted', linewidth=0.5,
+                            draw_labels=True, x_inline=False, y_inline=False, zorder=103)
+        gl1.right_labels  = False
+        gl1.top_labels    = False
+        gl1.left_labels   = False
+        if row != 2:
+            gl1.bottom_labels = False
+
+        # --- Column 2: Change map ---
+        ax2 = fig3.add_subplot(gs3[row, 2], projection=cart_proj)
+        ax2.set_title(f"{string.ascii_lowercase[row * 3 + 2]}",
+                      size='x-large', weight='bold', loc='left')
+        ax2.add_feature(cfeature.COASTLINE, linewidth=0.5, zorder=102)
+        pm2 = ax2.pcolormesh(lons, lats, data_diff[datatype],
+                             cmap=cmap_diff, norm=norm_diff,
+                             transform=ccrs.PlateCarree(), zorder=101)
+        ax2.contourf(to_np(lons), to_np(lats), data_sig[datatype],
+                     np.array([-0.5, 0.5, 1.5]), colors='none',
+                     hatches=['', '//////'],
+                     transform=ccrs.PlateCarree(), zorder=105)
+        ax2.contourf(to_np(lons), to_np(lats), border_mask,
+                     levels=[0.5, 1.5], colors=['gray'], alpha=0.5,
+                     transform=ccrs.PlateCarree(), zorder=103)
+        ax2.set_xlim(cartopy_xlim(hgt, geobounds=mbounds))
+        ax2.set_ylim(cartopy_ylim(hgt, geobounds=mbounds))
+        gl2 = ax2.gridlines(color='black', linestyle='dotted', linewidth=0.5,
+                            draw_labels=True, x_inline=False, y_inline=False, zorder=103)
+        gl2.right_labels  = False
+        gl2.top_labels    = False
+        gl2.left_labels   = False
+        if row != 2:
+            gl2.bottom_labels = False
+
+        # --- Column 3: Violin ---
+        ax3 = fig3.add_subplot(gs3[row, 3])
+
+        parts = ax3.violinplot([values_viol], positions=[0], showmeans=False,
+                               showmedians=True, showextrema=False, widths=0.45)
+        parts['bodies'][0].set_facecolor(violin_colors[datatype])
+        parts['bodies'][0].set_edgecolor('black')
+        parts['bodies'][0].set_alpha(0.7)
+        parts['bodies'][0].set_linewidth(1)
+        parts['cmedians'].set_edgecolor('black')
+        parts['cmedians'].set_linewidth(1.5)
+
+        cap_w = 0.12
+        ax3.plot([0, 0], [p_lo, p_hi], color='black', linewidth=1, zorder=3)
+        ax3.plot([-cap_w, cap_w], [p_lo, p_lo], color='black', linewidth=1, zorder=3)
+        ax3.plot([-cap_w, cap_w], [p_hi, p_hi], color='black', linewidth=1, zorder=3)
+
+        ax3.axhline(0, color='gray', linestyle='--', linewidth=1, alpha=0.7)
+
+        # Stat labels next to each horizontal line
+        tx = cap_w + 0.05
+        ax3.text(tx, p_hi,      f'P{percentile_high}: {p_hi:.1f}%',
+                 ha='left', va='center', fontsize=7.5)
+        ax3.text(tx, median_val, f'Md: {median_val:.1f}%',
+                 ha='left', va='center', fontsize=7.5)
+        ax3.text(tx, p_lo,      f'P{percentile_low}: {p_lo:.1f}%',
+                 ha='left', va='center', fontsize=7.5)
+
+        ax3.set_xticks([])
+        ax3.yaxis.tick_right()
+        ax3.grid(axis='y', alpha=0.3, linestyle=':')
+        ax3.set_xlim(-0.40, 1.05)
+
+        ax_violins.append(ax3)
+
+    # Shared y-limits across all violin panels
+    vmin = min(ax.get_ylim()[0] for ax in ax_violins)
+    vmax = max(ax.get_ylim()[1] for ax in ax_violins)
+    for ax in ax_violins:
+        ax.set_ylim(vmin, vmax)
+
+    # Shared y-label for violins (right edge of figure)
+    fig3.text(0.975, (0.11 + 0.93) / 2, 'Change (%)',
+              rotation=90, ha='center', va='center', fontsize=11,
+              transform=fig3.transFigure)
+
+    # Column labels — account for unequal width_ratios=[1,1,1,0.40]
+    _uw = (0.95 - 0.06) / 3.40   # figure-width per ratio unit (ignoring wspace)
+    col_positions3 = [
+        0.06 + _uw * 0.50,
+        0.06 + _uw * 1.50,
+        0.06 + _uw * 2.50,
+        0.06 + _uw * (3.0 + 0.20),
+    ]
+    for col_pos, col_label in zip(col_positions3,
+                                  ['Present', 'Future', 'Change', 'Distribution']):
+        fig3.text(col_pos, 0.945, col_label,
+                  ha='center', va='bottom', fontsize=14,
+                  transform=fig3.transFigure)
+
+    row_height3 = (0.93 - 0.11) / 3
+    row_positions3 = [0.11 + row_height3 * (2.5 - i) for i in range(3)]
+    for row_pos, row_label in zip(row_positions3, ['Daily', 'Hourly', '10-min']):
+        fig3.text(0.02, row_pos, row_label,
+                  ha='center', va='center', fontsize=14, rotation=90,
+                  transform=fig3.transFigure)
+
+    # Colorbars
+    cbar_ax3 = fig3.add_axes([0.06, 0.055, 0.48, 0.020])
+    plt.colorbar(pm0, cax=cbar_ax3, orientation='horizontal').set_label('Precipitation (mm)')
+
+    cbar_ax3d = fig3.add_axes([0.60, 0.055, 0.20, 0.020])
+    plt.colorbar(pm2, cax=cbar_ax3d, orientation='horizontal').set_label('Precipitation change (%)')
+
+    plt.savefig(f'/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/combined_map_violin_precipitation_changes_q{qtile}th{suffix_season}.png',
+                dpi=300, bbox_inches='tight', facecolor='white')
+    plt.close(fig3)
