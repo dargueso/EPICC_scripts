@@ -38,7 +38,7 @@ mpl.rcParams["font.size"] = 12
 
 # Set to 'hourly' for the original 1H pipeline plots,
 #         '10min'  for the 10-min pipeline plots.
-FREQ = '10min'
+FREQ = 'hourly'
 
 LOCATIONS = ['Mallorca', 'Catania', 'Turis', 'Rosiglione',
              'Ardeche', 'Corte', "L'Aquila", 'Pyrenees']
@@ -50,6 +50,10 @@ PATH_NPZ = '/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/testing_data/'
 PATH_OUT = '/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/'
 
 os.makedirs(PATH_OUT, exist_ok=True)
+
+# CI level — recomputed on the fly from raw bootstrap samples in the NPZ.
+# Change the outer values to adjust: e.g. [0.025, 0.5, 0.975] = 95%, [0.005, 0.5, 0.995] = 99%
+BOOTSTRAP_QUANTILES = np.array([0.005, 0.5, 0.995])
 
 # Visual properties per buffer — fixed offsets so bars don't overlap
 MARKERS     = {0: 'D', 1: 'o', 3: 's', 5: '^', 10: 'P', 15:'*',20:'d'}
@@ -65,13 +69,7 @@ BUF_COLORS = {buf: CMAP(i / (len(BUFFERS) - 1)) for i, buf in enumerate(BUFFERS)
 
 def ci_from_boot(boot, bq):
     """boot: (N_SAMPLES, n_q) → (3, n_q) with rows [lo, median, hi]."""
-    out = np.full((3, boot.shape[1]), np.nan)
-    for iq in range(boot.shape[1]):
-        v = boot[:, iq]
-        v = v[~np.isnan(v)]
-        if len(v):
-            out[:, iq] = np.quantile(v, bq)
-    return out   # rows: [lo, median, hi]
+    return np.nanquantile(boot, bq, axis=0)
 
 
 def diff_and_errs(obs, ci):
@@ -114,29 +112,27 @@ for location in LOCATIONS:
             continue
 
         d = np.load(fname)
-        plot_quantiles      = d['plot_quantiles']
-        bootstrap_quantiles = d['bootstrap_quantiles']
-        bq                  = bootstrap_quantiles
+        plot_quantiles = d['plot_quantiles']
 
         if FREQ == 'hourly':
             obs_A = d['obs_pres_h_buf']
             obs_B = d['obs_fut_h_buf']
             obs_C = d['obs_pres_dm_buf']
             obs_D = d['obs_fut_dm_buf']
-            ci_A  = ci_from_boot(d['syn_pres_c_h_boot_buf'],  bq)
-            ci_B  = ci_from_boot(d['syn_fut_c_h_boot_buf'],   bq)
-            ci_C  = ci_from_boot(d['syn_pres_mx_boot_buf'],   bq)
-            ci_D  = ci_from_boot(d['syn_fut_mx_boot_buf'],    bq)
+            ci_A  = ci_from_boot(d['syn_pres_c_h_boot_buf'],  BOOTSTRAP_QUANTILES)
+            ci_B  = ci_from_boot(d['syn_fut_c_h_boot_buf'],   BOOTSTRAP_QUANTILES)
+            ci_C  = ci_from_boot(d['syn_pres_mx_boot_buf'],   BOOTSTRAP_QUANTILES)
+            ci_D  = ci_from_boot(d['syn_fut_mx_boot_buf'],    BOOTSTRAP_QUANTILES)
 
         else:  # 10min
             obs_A = d['obs_pres_10m_buf']
             obs_B = d['obs_fut_10m_buf']
             obs_C = d['obs_pres_10m_buf']   # same obs for both methods
             obs_D = d['obs_fut_10m_buf']
-            ci_A  = ci_from_boot(d['D_pres_boot_buf'], bq)   # Method D present
-            ci_B  = ci_from_boot(d['D_fut_boot_buf'],  bq)   # Method D future
-            ci_C  = ci_from_boot(d['E_pres_boot_buf'], bq)   # Method E present
-            ci_D  = ci_from_boot(d['E_fut_boot_buf'],  bq)   # Method E future
+            ci_A  = ci_from_boot(d['D_pres_boot_buf'], BOOTSTRAP_QUANTILES)   # Method D present
+            ci_B  = ci_from_boot(d['D_fut_boot_buf'],  BOOTSTRAP_QUANTILES)   # Method D future
+            ci_C  = ci_from_boot(d['E_pres_boot_buf'], BOOTSTRAP_QUANTILES)   # Method E present
+            ci_D  = ci_from_boot(d['E_fut_boot_buf'],  BOOTSTRAP_QUANTILES)   # Method E future
 
         data['A'][buf] = diff_and_errs(obs_A, ci_A)
         data['B'][buf] = diff_and_errs(obs_B, ci_B)
