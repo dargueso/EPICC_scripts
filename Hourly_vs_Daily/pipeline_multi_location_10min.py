@@ -80,14 +80,24 @@ N_HOUR_STEPS = 6      # 10-min steps per hour
 CONV_TO_MMH  = 6.0    # raw mm/10min × 6 → mm/h
 
 WET_VALUE_HIGH = 0.1  # mm/h — 10-min wet threshold (after conversion)
-WET_VALUE_LOW  = 1.0  # mm/d — daily wet threshold
+WET_VALUE_LOW  = 0.1  # mm/d — daily wet threshold
 WET_HOUR_LOW   = 0.1  # mm/h — hourly wet threshold (for Method E conditioning)
 
 PLOT_QUANTILES      = np.array([0.90, 0.95, 0.98, 0.99, 0.995, 0.999])
 # Bins for daily conditioning (Method D)
-BINS_LOW   = np.append(np.arange(0, 100, 5), np.inf)
+BINS_LOW   = np.concatenate([
+    np.arange(0, 1.0, 0.25),   # fine bins below 1 mm/d (empty when threshold = 1 mm)
+    np.arange(1.0, 5.0, 1.0),  # 1 mm/d bins for 1–5 mm range
+    np.arange(5.0, 100, 5),    # original 5 mm/d bins from 5 mm up (unchanged)
+    [np.inf]
+])
 # Bins for hourly conditioning (Method E)
-BINS_HOUR  = np.append(np.arange(0, 100, 1), np.inf)
+BINS_HOUR  = np.concatenate([
+    np.arange(0, 1.0, 0.1),    # 0.1 mm/h bins below 1 mm/h  (most wet hours here)
+    np.arange(1.0, 10.0, 1.0), # 1 mm/h bins for 1–10 mm/h range
+    np.arange(10.0, 100, 5),   # 5 mm/h bins from 10 mm/h up
+    [np.inf]
+])
 
 N_SAMPLES           = 1000
 BOOTSTRAP_QUANTILES = np.array([0.025, 0.5, 0.975])
@@ -311,6 +321,36 @@ def run_single(location, buffer):
     print(f"  Obs center : P99 pres={obs_pres_10m[3]:.2f}  fut={obs_fut_10m[3]:.2f} mm/h")
     print(f"  Obs buffer : P99 pres={obs_pres_10m_buf[3]:.2f}  fut={obs_fut_10m_buf[3]:.2f} mm/h")
 
+    # Observed 10-min conditioned on wet HOURS — used for Method E validation.
+    # Method E conditions on hourly_pres >= WET_HOUR_LOW; the comparison must
+    # use the same conditioning or the synthetic will always overestimate
+    # (light hours on wet days contribute low-intensity values to the wet-day
+    # observed but are absent from the synthetic).
+    def _obs_10m_wethr_ctr(blk_h6, hourly):
+        """Center-pixel 10-min from wet hours (hourly mean >= WET_HOUR_LOW)."""
+        wet_hr  = hourly[:, :, cy_loc, cx_loc] >= WET_HOUR_LOW   # (n_days, 24)
+        wet_rep = np.repeat(wet_hr, N_HOUR_STEPS, axis=1).reshape(-1)   # (n_days*144,)
+        flat    = blk_h6[:, :, :, cy_loc, cx_loc].reshape(-1)
+        wet     = flat[(flat > WET_VALUE_HIGH) & wet_rep]
+        return (np.percentile(wet, PLOT_QUANTILES * 100)
+                if len(wet) > 0 else np.full(len(PLOT_QUANTILES), np.nan))
+
+    def _obs_10m_wethr_buf(blk_h6, hourly):
+        """Buffer-pooled 10-min from wet hours (hourly mean >= WET_HOUR_LOW)."""
+        mask5d = (hourly >= WET_HOUR_LOW)[:, :, np.newaxis, :, :]   # (n_days,24,1,ny,nx)
+        flat   = np.where(mask5d, blk_h6, 0.0).reshape(-1)
+        wet    = flat[flat > WET_VALUE_HIGH]
+        return (np.percentile(wet, PLOT_QUANTILES * 100)
+                if len(wet) > 0 else np.full(len(PLOT_QUANTILES), np.nan))
+
+    obs_pres_10m_E_ctr = _obs_10m_wethr_ctr(blk_pres_h6, hourly_pres)
+    obs_fut_10m_E_ctr  = _obs_10m_wethr_ctr(blk_fut_h6,  hourly_fut)
+    obs_pres_10m_E_buf = _obs_10m_wethr_buf(blk_pres_h6, hourly_pres)
+    obs_fut_10m_E_buf  = _obs_10m_wethr_buf(blk_fut_h6,  hourly_fut)
+
+    print(f"  Obs-E center: P99 pres={obs_pres_10m_E_ctr[3]:.2f}  fut={obs_fut_10m_E_ctr[3]:.2f} mm/h  (wet-hour filtered)")
+    print(f"  Obs-E buffer: P99 pres={obs_pres_10m_E_buf[3]:.2f}  fut={obs_fut_10m_E_buf[3]:.2f} mm/h  (wet-hour filtered)")
+
     # ------------------------------------------------------------------
     # STEP 4a — Library D: analog 10-min profiles indexed by daily total
     # ------------------------------------------------------------------
@@ -360,7 +400,7 @@ def run_single(location, buffer):
     for b in range(nbins_low):
         lo = BINS_LOW[b]
         hi = BINS_LOW[b + 1]
-        bin_str = f"{lo:.0f}–{'inf' if np.isinf(hi) else f'{hi:.0f}'}"
+        bin_str = f"{lo:.3g}–{'inf' if np.isinf(hi) else f'{hi:.3g}'}"
         print(f"  {bin_str:>14}  {n_days_per_bin[b]:>9,}  "
               f"{n_days_wet_per_bin[b]:>15,}  {len(profiles_D_arrays[b]):>9,}")
 
@@ -412,7 +452,7 @@ def run_single(location, buffer):
     for b in range(nbins_hour):
         lo = BINS_HOUR[b]
         hi = BINS_HOUR[b + 1]
-        bin_str = f"{lo:.0f}–{'inf' if np.isinf(hi) else f'{hi:.0f}'}"
+        bin_str = f"{lo:.3g}–{'inf' if np.isinf(hi) else f'{hi:.3g}'}"
         n_h  = int(n_hrs_per_bin[b])
         n_hw = int(n_hrs_wet_per_bin[b])
         if n_h == 0 and n_hw == 0:
@@ -526,43 +566,51 @@ def run_single(location, buffer):
 
     fig, axes = plt.subplots(2, 3, figsize=(20, 11))
 
+    # Each row tuple: (wet-day obs pres, wet-day obs fut,
+    #                  wet-hr obs pres [for E], wet-hr obs fut [for E],
+    #                  D_pres_ci, D_fut_ci, E_pres_ci, E_fut_ci, label)
     rows = [
         (obs_pres_10m,     obs_fut_10m,
+         obs_pres_10m_E_ctr, obs_fut_10m_E_ctr,
          D_pres_ci,     D_fut_ci,
          E_pres_ci,     E_fut_ci,
          f'center pixel'),
         (obs_pres_10m_buf, obs_fut_10m_buf,
+         obs_pres_10m_E_buf, obs_fut_10m_E_buf,
          D_pres_ci_buf, D_fut_ci_buf,
          E_pres_ci_buf, E_fut_ci_buf,
          f'buffer ({ny_reg}×{nx_reg})'),
     ]
 
     for row, (obs_p, obs_f,
+              obs_p_E, obs_f_E,
               D_pres_ci_r, D_fut_ci_r,
               E_pres_ci_r, E_fut_ci_r,
               row_lbl) in enumerate(rows):
 
-        # Col 0 — Method D (from daily)
+        # Col 0 — Method D (from daily) — compared against wet-day observations
         _plot_panel(axes[row, 0], obs_p, obs_f, D_pres_ci_r, D_fut_ci_r,
                     'Synthetic present (from daily)',
                     'Synthetic future (from daily)',
                     YLABEL,
                     f'From daily — {row_lbl}\n{location}, {buf_str}')
 
-        # Col 1 — Method E (from hourly)
-        _plot_panel(axes[row, 1], obs_p, obs_f, E_pres_ci_r, E_fut_ci_r,
+        # Col 1 — Method E (from hourly) — compared against wet-HOUR observations
+        # (consistent with Method E's conditioning: hours with mean >= WET_HOUR_LOW)
+        _plot_panel(axes[row, 1], obs_p_E, obs_f_E, E_pres_ci_r, E_fut_ci_r,
                     'Synthetic present (from hourly)',
                     'Synthetic future (from hourly)',
                     YLABEL,
-                    f'From hourly — {row_lbl}\n{location}, {buf_str}')
+                    f'From hourly — {row_lbl}\n{location}, {buf_str}\n'
+                    f'[obs: wet-hour filtered]')
 
-        # Col 2 — both future CIs overlaid
+        # Col 2 — both future CIs vs wet-day observations (full change signal)
         ax = axes[row, 2]
         ax.plot(q_axis, obs_p, color='#2E86AB', linewidth=1.8,
-                marker='o', markersize=5, label='Present observed', zorder=4)
+                marker='o', markersize=5, label='Present observed (wet-day)', zorder=4)
         ax.plot(q_axis, obs_f, color='#E50C0C', linewidth=1.5,
-                marker='s', markersize=4, linestyle='--', label='Future observed',
-                zorder=3)
+                marker='s', markersize=4, linestyle='--',
+                label='Future observed (wet-day)', zorder=3)
         _add_ci(ax, D_fut_ci_r, '#F18F01', 'Synthetic future (from daily)',  alpha=0.25)
         _add_ci(ax, E_fut_ci_r, '#9B59B6', 'Synthetic future (from hourly)', alpha=0.25)
         _setup_ax(ax, YLABEL,
@@ -570,14 +618,16 @@ def run_single(location, buffer):
         _dedup_legend(ax, fontsize=8, loc='upper left', frameon=True,
                       fancybox=True, shadow=True)
 
-        # P99 annotation on bottom row cols 0 and 1
+        # P99 annotation on bottom row:
+        #   col 0 (D) uses wet-day obs; col 1 (E) uses wet-hour obs
         if row == 1 and idx_99 < len(q_axis) and np.isclose(
                 q_axis[idx_99], 0.99, atol=0.001):
-            for ax_i, ci_fut in [(axes[1, 0], D_fut_ci_r),
-                                  (axes[1, 1], E_fut_ci_r)]:
+            for ax_i, ci_fut, op_i, of_i in [
+                    (axes[1, 0], D_fut_ci_r, obs_p,   obs_f),
+                    (axes[1, 1], E_fut_ci_r, obs_p_E, obs_f_E)]:
                 total, expl, struct, pct_d, pct_s = _attr_row(
-                    float(obs_p[idx_99]),
-                    float(obs_f[idx_99]),
+                    float(op_i[idx_99]),
+                    float(of_i[idx_99]),
                     float(ci_fut[I_MED, idx_99]))
                 ax_i.text(0.03, 0.04,
                           f'P99 total Δ : {total:+.2f} mm/h\n'
@@ -605,9 +655,14 @@ def run_single(location, buffer):
     # STEP 7 — Attribution summary tables
     # ------------------------------------------------------------------
     subsection("Attribution summary (buffer pooled)")
-    for method, ci_fut in [('Method D (from daily) ', D_fut_ci_buf),
-                            ('Method E (from hourly)', E_fut_ci_buf)]:
-        print(f"\n  [{method}]")
+    # Method D uses wet-day observed; Method E uses wet-hour observed
+    # (consistent with each method's conditioning population)
+    attr_rows = [
+        ('Method D (from daily) ', D_fut_ci_buf, obs_pres_10m_buf,   obs_fut_10m_buf,   '(wet-day obs)'),
+        ('Method E (from hourly)', E_fut_ci_buf, obs_pres_10m_E_buf, obs_fut_10m_E_buf, '(wet-hour obs)'),
+    ]
+    for method, ci_fut, op_buf, of_buf, obs_note in attr_rows:
+        print(f"\n  [{method}]  {obs_note}")
         hdr = (f"  {'Quantile':>10}  {'Obs_Pres':>10}  {'Obs_Fut':>10}  "
                f"{'Syn_Fut':>10}  {'Total Δ':>10}  {'Explained':>10}  "
                f"{'Structural':>11}  {'Expl%':>8}  {'Struct%':>8}")
@@ -615,11 +670,11 @@ def run_single(location, buffer):
         print("  " + "-" * (len(hdr) - 2))
         for i, q in enumerate(PLOT_QUANTILES):
             total, expl, struct, pct_d, pct_s = _attr_row(
-                float(obs_pres_10m_buf[i]),
-                float(obs_fut_10m_buf[i]),
+                float(op_buf[i]),
+                float(of_buf[i]),
                 float(ci_fut[I_MED, i]))
-            print(f"  {q:>10.4f}  {obs_pres_10m_buf[i]:>10.3f}  "
-                  f"{obs_fut_10m_buf[i]:>10.3f}  {ci_fut[I_MED,i]:>10.3f}  "
+            print(f"  {q:>10.4f}  {op_buf[i]:>10.3f}  "
+                  f"{of_buf[i]:>10.3f}  {ci_fut[I_MED,i]:>10.3f}  "
                   f"{total:>+10.3f}  {expl:>+10.3f}  {struct:>+11.3f}  "
                   f"{pct_d:>+8.1f}%  {pct_s:>+8.1f}%")
 
@@ -646,11 +701,16 @@ def run_single(location, buffer):
         n_days_wet_per_bin  = n_days_wet_per_bin.astype(np.int32),
         n_hrs_per_bin       = n_hrs_per_bin.astype(np.int32),
         n_hrs_wet_per_bin   = n_hrs_wet_per_bin.astype(np.int32),
-        # observed
+        # observed — wet-day filtered (used by Method D)
         obs_pres_10m        = obs_pres_10m,
         obs_fut_10m         = obs_fut_10m,
         obs_pres_10m_buf    = obs_pres_10m_buf,
         obs_fut_10m_buf     = obs_fut_10m_buf,
+        # observed — wet-hour filtered (used by Method E)
+        obs_pres_10m_E_ctr  = obs_pres_10m_E_ctr,
+        obs_fut_10m_E_ctr   = obs_fut_10m_E_ctr,
+        obs_pres_10m_E_buf  = obs_pres_10m_E_buf,
+        obs_fut_10m_E_buf   = obs_fut_10m_E_buf,
         # Method D bootstrap (N_SAMPLES, n_q)
         D_pres_boot         = D_pres_boot,
         D_fut_boot          = D_fut_boot,

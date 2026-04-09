@@ -48,11 +48,21 @@ LOCATIONS = ['Mallorca', 'Catania', 'Turis','Rosiglione','Ardeche','Corte',"L'Aq
 BUFFERS   = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20]              # buffer sizes (grid cells; 0 = center pixel only)
 
 WET_VALUE_HIGH = 0.1   # mm/h
-WET_VALUE_LOW  = 1.0   # mm/d
+WET_VALUE_LOW  = 0.1   # mm/d
 
 PLOT_QUANTILES      = np.array([0.90, 0.95, 0.98, 0.99, 0.995, 0.999])
-BINS_HIGH           = np.append(np.arange(0, 100, 1), np.inf)
-BINS_LOW            = np.append(np.arange(0, 100, 5), np.inf)
+BINS_HIGH           = np.concatenate([
+    np.arange(0, 1.0, 0.1),    # 0.1 mm/h bins below 1 mm/h
+    np.arange(1.0, 10.0, 1.0), # 1 mm/h bins for 1–10 mm/h range
+    np.arange(10.0, 100, 5),   # 5 mm/h bins from 10 mm/h up
+    [np.inf]
+])
+BINS_LOW            = np.concatenate([
+    np.arange(0, 1.0, 0.25),   # fine bins below 1 mm/d (empty when threshold = 1 mm)
+    np.arange(1.0, 5.0, 1.0),  # 1 mm/d bins for 1–5 mm range
+    np.arange(5.0, 100, 5),    # original 5 mm/d bins from 5 mm up (unchanged)
+    [np.inf]
+])
 
 N_SAMPLES           = 1000
 BOOTSTRAP_QUANTILES = np.array([0.025, 0.5, 0.975])
@@ -422,7 +432,7 @@ def run_single(location, buffer):
     for j in range(nbins_low):
         lo = BINS_LOW[j]
         hi = BINS_LOW[j + 1]
-        bin_str = f"{lo:.0f}–{'inf' if np.isinf(hi) else f'{hi:.0f}'}"
+        bin_str = f"{lo:.3g}–{'inf' if np.isinf(hi) else f'{hi:.3g}'}"
         print(f"  {bin_str:>14}  {n_days_all_by_bin[j]:>9,}  "
               f"{n_days_wet_hrs_by_bin[j]:>13,}  {profile_counts[j]:>9,}")
 

@@ -62,11 +62,21 @@ N_SAMPLES   = 200  # bootstrap iterations per pixel
 N_PROCESSES = 128   # parallel workers (pixels within each tile)
 
 WET_VALUE_HIGH = 0.1   # mm/h — hourly wet threshold
-WET_VALUE_LOW  = 1.0   # mm/d — daily wet threshold
+WET_VALUE_LOW  = 0.1   # mm/d — daily wet threshold
 N_INTERVAL     = 24    # hourly steps per day
 
-BINS_HIGH = np.append(np.arange(0, 100, 1), np.inf).astype(np.float64)
-BINS_LOW  = np.append(np.arange(0, 100, 5), np.inf).astype(np.float64)
+BINS_HIGH = np.concatenate([
+    np.arange(0, 1.0, 0.1),    # 0.1 mm/h bins below 1 mm/h
+    np.arange(1.0, 10.0, 1.0), # 1 mm/h bins for 1–10 mm/h range
+    np.arange(10.0, 100, 5),   # 5 mm/h bins from 10 mm/h up
+    [np.inf]
+]).astype(np.float64)
+BINS_LOW  = np.concatenate([
+    np.arange(0, 1.0, 0.25),   # fine bins below 1 mm/d (empty when threshold = 1 mm)
+    np.arange(1.0, 5.0, 1.0),  # 1 mm/d bins for 1–5 mm range
+    np.arange(5.0, 100, 5),    # original 5 mm/d bins from 5 mm up (unchanged)
+    [np.inf]
+]).astype(np.float64)
 EXP_SCALE = 5.0
 
 PLOT_QUANTILES      = np.array([0.90, 0.95, 0.98, 0.99, 0.995, 0.999])

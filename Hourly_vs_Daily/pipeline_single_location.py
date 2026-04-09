@@ -60,14 +60,24 @@ BUFFER = 10
 
 # Wet thresholds — must match the full-domain pipeline
 WET_VALUE_HIGH = 0.1   # mm/h  — hourly wet threshold
-WET_VALUE_LOW  = 1.0   # mm/d  — daily  wet threshold
+WET_VALUE_LOW  = 0.1   # mm/d  — daily  wet threshold
 
 # Quantile fractions for comparison plots and summary table
 PLOT_QUANTILES = np.array([0.90, 0.95, 0.98, 0.99, 0.995, 0.999])
 
 # Bins — must match full-domain create_conditional_probabilities_zarr.py
-BINS_HIGH = np.append(np.arange(0, 100, 1), np.inf)   # 100 hourly intensity bins
-BINS_LOW  = np.append(np.arange(0, 100, 5), np.inf)   #  20 daily  total bins
+BINS_HIGH = np.concatenate([
+    np.arange(0, 1.0, 0.1),    # 0.1 mm/h bins below 1 mm/h
+    np.arange(1.0, 10.0, 1.0), # 1 mm/h bins for 1–10 mm/h range
+    np.arange(10.0, 100, 5),   # 5 mm/h bins from 10 mm/h up
+    [np.inf]
+])
+BINS_LOW  = np.concatenate([
+    np.arange(0, 1.0, 0.25),   # fine bins below 1 mm/d (empty when threshold = 1 mm)
+    np.arange(1.0, 5.0, 1.0),  # 1 mm/d bins for 1–5 mm range
+    np.arange(5.0, 100, 5),    # original 5 mm/d bins from 5 mm up (unchanged)
+    [np.inf]
+])                              # 27 bins total (4 sub-threshold + 4 x 1mm + 19 x 5mm)
 
 # Bootstrap
 N_SAMPLES           = 1000   # synthetic realisations per climate state

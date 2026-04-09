@@ -36,11 +36,13 @@ WET_VALUE_HIGH = 0.1  # mm per high-freq interval
 WET_VALUE_LOW = 1   # mm per low-freq interval
 
 # Bins for each frequency - must match those used in create_conditional_probabilities
-BINS_HIGH = np.arange(0, 100, 1)  # For hourly: 0-100mm in 1mm steps
-BINS_LOW = np.arange(0, 100, 5)   # For daily: 0-100mm in 5mm steps
-# Add infinity as the last bin edge to catch all values above max
-BINS_HIGH = np.append(BINS_HIGH, np.inf)
-BINS_LOW = np.append(BINS_LOW, np.inf)
+BINS_HIGH = np.concatenate([
+    np.arange(0, 1.0, 0.1),    # 0.1 mm/h bins below 1 mm/h
+    np.arange(1.0, 10.0, 1.0), # 1 mm/h bins for 1–10 mm/h range
+    np.arange(10.0, 100, 5),   # 5 mm/h bins from 10 mm/h up
+    [np.inf]
+])
+BINS_LOW = np.append(np.arange(0, 100, 5), np.inf)   # For daily: 0-100mm in 5mm steps
 
 # Scale for exponential sampling in the open-ended (inf) bin
 EXP_SCALE = 5.0
