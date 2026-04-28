@@ -11,6 +11,7 @@
 '''
 
 from matplotlib.ticker import ScalarFormatter
+import os
 import xarray as xr
 import numpy as np
 import netCDF4 as nc
@@ -72,9 +73,12 @@ subregs = np.zeros_like(lm_is.values)
 #####################################################################
 
 
-qtile = 90
-confidence_level = 0.975
-buffer = 0
+qtile = 99
+confidence_level = 0.995
+buffer = 5 
+
+WET_VALUE_LOW  = 0.1   # mm/d  — wet-day threshold (must match pipeline)
+WET_VALUE_HIGH = 0.1   # mm/h  — wet-hour threshold
 
 mylevels=np.arange(0, 45, 5)
 cmap = sns.color_palette("icefire", as_cmap=True)
@@ -98,16 +102,15 @@ fin = xr.open_dataset(filein).sel(percentile=qtile).squeeze()
 
 #Loading SYN confidence intervals
 
-filein_syn = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5/synthetic_future_01H_from_DAY_confidence.nc'
-fin_syn = xr.open_dataset(filein_syn).sel(quantile=qtile/100.).squeeze()
+filein_syn = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5/synthetic_fut_buf{buffer}.nc'
+fin_syn = xr.open_dataset(filein_syn).sel(plot_q=qtile/100.).squeeze()
 
 fin_syn_all = xr.open_dataset(filein_syn).squeeze()
-fin_syn_all = fin_syn_all.isel(quantile=slice(10,-2))
-qtiles= fin_syn_all['quantile'].values
-cl_hi = round(confidence_level,3)
+qtiles = fin_syn_all['plot_q'].values
+cl_hi = round(confidence_level, 3)
 cl_lo = round(1 - cl_hi, 3)
 
-data = [fin['percentiles_present'].values, fin['percentiles_future'].values, fin_syn.hourly_intensity.sel(bootstrap_quantile=confidence_level).squeeze()]
+data = [fin['percentiles_present'].values, fin['percentiles_future'].values, fin_syn.syn_h_C.sel(bootstrap_q=confidence_level, method='nearest').squeeze()]
 
 diff = data[1]- data[0]
 sig = data[1]- data[2]
@@ -137,7 +140,7 @@ gs_row1 = gs_main[1].subgridspec(1, 4, wspace=0.1)
 #####################################################################
 
 zarr_path_present = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5/UIB_01H_RAIN.zarr'
-zarr_path_future = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5/UIB_01H_RAIN.zarr'
+zarr_path_future  = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5_CMIP6anom/UIB_01H_RAIN.zarr'
 
 try:
     ds_present = xr.open_zarr(zarr_path_present, consolidated=True)
@@ -184,11 +187,69 @@ for loc in range(len(locs_names)):
     #fin_pres_loc = fin_pres.where(fin_pres.RAIN>0.1).isel(y=25,x=25).dropna(dim="time")
     #fin_fut_loc = fin_fut.where(fin_fut.RAIN>0.1).isel(y=25,x=25).dropna(dim="time")
 
-    fin_pres_loc = fin_pres.where(fin_pres>0.1).stack(xyt=("time","y","x")).dropna(dim="xyt")
-    fin_fut_loc = fin_fut.where(fin_fut>0.1).stack(xyt=("time","y","x")).dropna(dim="xyt")
+    # Load to numpy — buffer region is small (2*buf+1)^2 pixels
+    pres_np = fin_pres.values.astype(np.float32)   # (nt, ny_buf, nx_buf)
+    fut_np  = fin_fut.values.astype(np.float32)
 
-    fin_pres_qtiles = fin_pres_loc.chunk(dict(xyt=-1)).quantile(qtiles, dim='xyt', skipna=True)
-    fin_fut_qtiles = fin_fut_loc.chunk(dict(xyt=-1)).quantile(qtiles, dim='xyt', skipna=True)
+    # Daily totals via reshape (assumes N_INTERVAL=24 hourly steps per day)
+    N_INTERVAL = 24
+    n_days_p = pres_np.shape[0] // N_INTERVAL
+    n_days_f = fut_np.shape[0]  // N_INTERVAL
+    nt_p = n_days_p * N_INTERVAL
+    nt_f = n_days_f * N_INTERVAL
+
+    pres_daily_np = pres_np[:nt_p].reshape(n_days_p, N_INTERVAL,
+                                            pres_np.shape[1], pres_np.shape[2]).sum(axis=1)
+    fut_daily_np  = fut_np[:nt_f].reshape(n_days_f, N_INTERVAL,
+                                           fut_np.shape[1], fut_np.shape[2]).sum(axis=1)
+
+    # Wet-day mask broadcast back to hourly by repeating each day 24 times
+    pres_wet_mask_h = np.repeat(pres_daily_np >= WET_VALUE_LOW, N_INTERVAL, axis=0)
+    fut_wet_mask_h  = np.repeat(fut_daily_np  >= WET_VALUE_LOW, N_INTERVAL, axis=0)
+
+    # Apply wet-hour and wet-day filters, flatten, drop NaN
+    pres_filtered = np.where((pres_np[:nt_p] > WET_VALUE_HIGH) & pres_wet_mask_h,
+                             pres_np[:nt_p], np.nan).reshape(-1)
+    fut_filtered  = np.where((fut_np[:nt_f]  > WET_VALUE_HIGH) & fut_wet_mask_h,
+                             fut_np[:nt_f],  np.nan).reshape(-1)
+    pres_wet_1d = pres_filtered[np.isfinite(pres_filtered)]
+    fut_wet_1d  = fut_filtered[np.isfinite(fut_filtered)]
+
+    fin_pres_qtiles = np.quantile(pres_wet_1d, qtiles) if len(pres_wet_1d) > 0 else np.full(len(qtiles), np.nan)
+    fin_fut_qtiles  = np.quantile(fut_wet_1d,  qtiles) if len(fut_wet_1d)  > 0 else np.full(len(qtiles), np.nan)
+
+    # ------------------------------------------------------------------
+    # CROSS-CHECK vs pipeline_multi_location NPZ
+    # ------------------------------------------------------------------
+    npz_path = f'/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/testing_data/{loc_name}_buf{buffer}.npz'
+    if os.path.exists(npz_path):
+        h = np.load(npz_path)
+        npz_q          = h['plot_quantiles']           # (n_q,)
+        npz_obs_pres   = h['obs_pres_h_buf']           # (n_q,)
+        npz_obs_fut    = h['obs_fut_h_buf']            # (n_q,)
+        npz_syn_med    = np.nanquantile(h['syn_fut_c_h_boot_buf'], 0.5, axis=0)  # (n_q,)
+        map_syn_med    = fin_syn.sel(bootstrap_q=0.5, method='nearest').syn_h_C.values  # (n_q,)
+
+        print(f"\n  [{loc_name}] Cross-check full_domain vs multi_location (buf={buffer})")
+        print(f"  {'Quantile':>10}  {'ObsPres_map':>12}  {'ObsPres_npz':>12}  {'diff%':>7}"
+              f"  {'ObsFut_map':>11}  {'ObsFut_npz':>11}  {'diff%':>7}"
+              f"  {'SynFut_map':>11}  {'SynFut_npz':>11}  {'diff%':>7}")
+        for i, q in enumerate(qtiles):
+            # find matching index in npz_q
+            j = np.argmin(np.abs(npz_q - q))
+            if not np.isclose(npz_q[j], q, atol=0.001):
+                continue
+            op_m = fin_pres_qtiles[i];  op_n = npz_obs_pres[j]
+            of_m = fin_fut_qtiles[i];   of_n = npz_obs_fut[j]
+            sf_m = map_syn_med[i];      sf_n = npz_syn_med[j]
+            dp = 100*(op_m - op_n)/op_n if op_n != 0 else np.nan
+            df = 100*(of_m - of_n)/of_n if of_n != 0 else np.nan
+            ds = 100*(sf_m - sf_n)/sf_n if sf_n != 0 else np.nan
+            print(f"  {q:>10.4f}  {op_m:>12.4f}  {op_n:>12.4f}  {dp:>+7.2f}%"
+                  f"  {of_m:>11.4f}  {of_n:>11.4f}  {df:>+7.2f}%"
+                  f"  {sf_m:>11.4f}  {sf_n:>11.4f}  {ds:>+7.2f}%")
+    else:
+        print(f"\n  [{loc_name}] No NPZ found at {npz_path} — skipping cross-check")
 
     nw = loc%4
     nr = loc//4
@@ -215,14 +276,14 @@ for loc in range(len(locs_names)):
             color='#2E86AB', linewidth=1, marker='o', markersize=2)
     ax.plot(qtiles, fin_fut_qtiles, label='Future observations', 
             color="#E50C0C", linewidth=1, marker='s', markersize=2)
-    ax.plot(qtiles, fin_syn.sel(bootstrap_quantile=cl_hi).hourly_intensity.squeeze(), 
-            label='Future synthetic', color='#F18F01', linewidth=0.5, 
+    ax.plot(qtiles, fin_syn.sel(bootstrap_q=cl_hi, method='nearest').syn_h_C.squeeze(),
+            label='Future synthetic', color='#F18F01', linewidth=0.5,
             linestyle='--', marker=None)
-    ax.plot(qtiles, fin_syn.sel(bootstrap_quantile=cl_lo).hourly_intensity.squeeze(), 
-            color='#F18F01', linewidth=0.5, 
+    ax.plot(qtiles, fin_syn.sel(bootstrap_q=cl_lo, method='nearest').syn_h_C.squeeze(),
+            color='#F18F01', linewidth=0.5,
             linestyle='--', marker=None)
-    ax.fill_between(qtiles, fin_syn.sel(bootstrap_quantile=cl_lo).hourly_intensity.squeeze(), 
-                    fin_syn.sel(bootstrap_quantile=cl_hi).hourly_intensity.squeeze(), 
+    ax.fill_between(qtiles, fin_syn.sel(bootstrap_q=cl_lo, method='nearest').syn_h_C.squeeze(),
+                    fin_syn.sel(bootstrap_q=cl_hi, method='nearest').syn_h_C.squeeze(),
                     color='#F18F01', alpha=0.2)
 
 

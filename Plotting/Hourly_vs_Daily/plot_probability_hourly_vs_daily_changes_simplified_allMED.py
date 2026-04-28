@@ -19,16 +19,6 @@ import string
 import xarray as xr
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
-from scipy.ndimage import uniform_filter
-
-def _window_sum(arr, radius):
-    """
-    Sliding-window *sum* over the last two spatial axes (ny, nx).
-    Works for both 3-D and 4-D arrays by building the size tuple at run-time.
-    """
-    k = 2 * radius + 1
-    size = [1] * (arr.ndim - 2) + [k, k]   # e.g. (1,1,k,k) or (1,k,k)
-    return uniform_filter(arr, size=size, mode="nearest") * (k * k)
 
 # ─── User settings ──────────────────────────────────────────────────────
 SCALE       = "linear"        # "linear" | "log"
@@ -37,16 +27,14 @@ SHOW_DELTA  = True
 XLIMHRLY = False
 COLORMAP    = "viridis"       # base cmap for the two experiments
 DELTA_CMAP  = "coolwarm_r"    # *reversed* so blue shows positive Δ
-DATAFILEP    = "/home/dargueso//postprocessed/EPICC/EPICC_2km_ERA5/rainfall_probability_optimized_conditional_hourly.ncc" # 
-DATAFILEF    = "/home/dargueso//postprocessed/EPICC/EPICC_2km_ERA5_CMIP6anom/rainfall_probability_optimized_conditional_hourly.nc" #
+DATAFILEP    = "/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5/condprob_01H_given_DAY.nc"
+DATAFILEF    = "/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5_CMIP6anom/condprob_01H_given_DAY.nc"
 
 
 
 # ─── Load & pre‑process data ────────────────────────────────────────────
 ds_p          = xr.open_dataset(DATAFILEP)
 ds_f          = xr.open_dataset(DATAFILEF)
-buffer= 25
-
 
 med_mask = xr.open_dataset('/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5/my_coastal_med_mask.nc')['combined_mask'].values
 
@@ -54,58 +42,93 @@ locs_names = {'Med_all':1,'Med_Ocean':3,'Med_Coast':2}
 
 ds = xr.concat([ds_p, ds_f], dim="experiment")
 
-wet_hour_dist_present = ds.wet_hours_distribution.data
-hourly_intensity_dist_present = ds.hourly_distribution.data
-samples_per_bin_present = ds.samples_per_bin.data
+# Variable names from condprob_01H_given_DAY.nc
+# dims: cond_prob_n_wet     -> (exp, n_wet_timesteps, bin_DAY, y, x)
+#       cond_prob_intensity -> (exp, bin_01H, bin_DAY, y, x)
+#       n_events            -> (exp, bin_DAY, y, x)
+cond_prob_n_wet     = np.nan_to_num(ds.cond_prob_n_wet.data,     nan=0.0)
+cond_prob_intensity = np.nan_to_num(ds.cond_prob_intensity.data, nan=0.0)
+n_events            = ds.n_events.data
 
-wet_hour_dist_present = np.nan_to_num(wet_hour_dist_present, nan=0.0)
-hourly_intensity_dist_present = np.nan_to_num(hourly_intensity_dist_present, nan=0.0)
+whdp_weighted = cond_prob_n_wet     * n_events[:, np.newaxis, :, :, :]  # (exp, n_wet, bin_DAY, y, x)
+hidp_weighted = cond_prob_intensity * n_events[:, np.newaxis, :, :, :]  # (exp, bin_01H, bin_DAY, y, x)
 
-whdp_weighted = wet_hour_dist_present * samples_per_bin_present[:, :, np.newaxis, :, :]
-hidp_weighted = hourly_intensity_dist_present * samples_per_bin_present[:, :, np.newaxis, :, :]
+drain_centers = ds.bin_DAY.values          # bin centres: 2.5, 7.5, 12.5 … mm
+hrain_centers = ds.bin_01H.values          # hourly bin centres
+n_wet_vals    = ds.n_wet_timesteps.values  # 1, 2, ... 24
+
+# Derive bin edges from centres (assumes uniform spacing)
+_step = drain_centers[1] - drain_centers[0]
+drain_edges = np.concatenate(([drain_centers[0] - _step / 2],
+                               drain_centers + _step / 2)).astype(int)
+
+hrain_edges = np.concatenate(([0], (hrain_centers[1:] + hrain_centers[:-1]) / 2, [hrain_centers[-1] + 1]))
+hrain_edges[-1] = 100
+hrain_edges = hrain_edges.astype(int)
+
+labels  = [f"{lo}-{hi}" for lo, hi in zip(drain_edges[:-1], drain_edges[1:])]
+labels.append(f'>{drain_edges[-1]}')
+hlabels = [f"{lo}-{hi}" for lo, hi in zip(hrain_edges[:-2], hrain_edges[1:-1])]
+hlabels.append(f'>{hrain_edges[-2]}')
 
 for loc_name in locs_names.keys():
-    
+
     loc = locs_names[loc_name]
     print(loc_name)
-    
-    if loc_name == "Med_all":
-        comp_samp = samples_per_bin_present[:,:,med_mask>1].sum(axis=2)
-        comp_wWet = whdp_weighted[:,:,:,med_mask>1].sum(axis=3)
-        comp_wHr = hidp_weighted[:,:,:,med_mask>1].sum(axis=3)
-    else:
-        comp_samp = samples_per_bin_present[:,:,med_mask==loc].sum(axis=2)
-        comp_wWet = whdp_weighted[:,:,:,med_mask==loc].sum(axis=3)
-        comp_wHr = hidp_weighted[:,:,:,med_mask==loc].sum(axis=3)
 
-    comp_wWet /= comp_samp[:, :, np.newaxis]
-    comp_wHr /= comp_samp[:, :, np.newaxis]
+    mask = med_mask > 1 if loc_name == "Med_all" else med_mask == loc
 
-    drain_edges = ds.drain_bin.values                     # 0, 5, 10 … mm
-    hrain_centers = ds.hrain_bin.values                  # 0.5, 1.5, 2.5 … mm
-    hrain_edges = np.concatenate(([0], (hrain_centers[1:] + hrain_centers[:-1]) / 2, [hrain_centers[-1] + 1]))
-    hrain_edges[-1]=100
-    hrain_edges = hrain_edges.astype(int)
-    hour_vals   = ds.hour.values                          # 0 … 23
+    comp_samp = n_events[:, :, mask].sum(axis=2)          # (exp, bin_DAY)
+    comp_wWet = whdp_weighted[:, :, :, mask].sum(axis=3)  # (exp, n_wet, bin_DAY)
+    comp_wHr  = hidp_weighted[:, :, :, mask].sum(axis=3)  # (exp, bin_01H, bin_DAY)
 
-    labels = [f"{lo}–{hi}" for lo, hi in zip(drain_edges[:-1], drain_edges[1:])]
-    labels.append(f'>{drain_edges[-1]}')
+    comp_wWet /= comp_samp[:, np.newaxis, :]
+    comp_wHr  /= comp_samp[:, np.newaxis, :]
 
-    hlabels = [f"{lo}–{hi}" for lo, hi in zip(hrain_edges[:-2], hrain_edges[1:-1])]
-    hlabels.append(f'>{hrain_edges[-2]}')
-
+    # Mean wet hours per wet day: E[N_wet] = sum_k(k * P(N=k)) per bin and overall
+    E_n_wet = (comp_wWet * n_wet_vals[np.newaxis, :, np.newaxis]).sum(axis=1)  # (exp, bin_DAY)
+    mean_wet_hrs_pres = float((E_n_wet[0] * comp_samp[0]).sum() / comp_samp[0].sum())
+    mean_wet_hrs_fut  = float((E_n_wet[1] * comp_samp[1]).sum() / comp_samp[1].sum())
+    abs_change = mean_wet_hrs_fut - mean_wet_hrs_pres
+    rel_change = 100.0 * abs_change / mean_wet_hrs_pres
+    print(f"  {'Bin (mm)':<12} {'Present':>9} {'Future':>9} {'Abs':>8} {'Rel (%)':>9}")
+    print(f"  {'-'*50}")
+    for j, (lo, hi) in enumerate(zip(drain_edges[:-1], drain_edges[1:])):
+        p = float(E_n_wet[0, j])
+        f = float(E_n_wet[1, j])
+        ac = f - p
+        rc = 100.0 * ac / p if p > 0 else float('nan')
+        print(f"  {lo}-{hi} mm{'':<4} {p:>9.2f} {f:>9.2f} {ac:>+8.2f} {rc:>+9.1f}%")
+    print(f"  {'-'*50}")
+    print(f"  {'Overall':<12} {mean_wet_hrs_pres:>9.2f} {mean_wet_hrs_fut:>9.2f} "
+          f"{abs_change:>+8.2f} {rel_change:>+9.1f}%")
+    # Overall excluding first bin (0-5 mm)
+    p_exc = float((E_n_wet[0, 1:] * comp_samp[0, 1:]).sum() / comp_samp[0, 1:].sum())
+    f_exc = float((E_n_wet[1, 1:] * comp_samp[1, 1:]).sum() / comp_samp[1, 1:].sum())
+    ac_exc = f_exc - p_exc
+    rc_exc = 100.0 * ac_exc / p_exc
+    print(f"  {'Overall >5mm':<12} {p_exc:>9.2f} {f_exc:>9.2f} "
+          f"{ac_exc:>+8.2f} {rc_exc:>+9.1f}%")
+    # Overall for bins >30 mm
+    idx30 = np.searchsorted(drain_edges, 30)   # first edge >= 30 → bins from that index onward
+    p_30 = float((E_n_wet[0, idx30:] * comp_samp[0, idx30:]).sum() / comp_samp[0, idx30:].sum())
+    f_30 = float((E_n_wet[1, idx30:] * comp_samp[1, idx30:]).sum() / comp_samp[1, idx30:].sum())
+    ac_30 = f_30 - p_30
+    rc_30 = 100.0 * ac_30 / p_30
+    print(f"  {'Overall >30mm':<12} {p_30:>9.2f} {f_30:>9.2f} "
+          f"{ac_30:>+8.2f} {rc_30:>+9.1f}%")
 
     wet_prob = xr.DataArray(
-        comp_wWet[:, :, :] * 100.0,
-        coords={"experiment":["Present", "Future"],"drain_bin": drain_edges, "hour": hour_vals},
-        dims=["experiment","drain_bin", "hour"],
+        comp_wWet * 100.0,
+        coords={"experiment": ["Present", "Future"], "n_wet_timesteps": n_wet_vals, "bin_DAY": drain_centers},
+        dims=["experiment", "n_wet_timesteps", "bin_DAY"],
         name="wet_prob"
     )
 
     int_prob = xr.DataArray(
-        comp_wHr[:, :, :] * 100.0,
-        coords={"experiment":["Present", "Future"],"drain_bin": drain_edges, "hrain_bin": hrain_centers},
-        dims=["experiment","drain_bin", "hrain_bin"],
+        comp_wHr * 100.0,
+        coords={"experiment": ["Present", "Future"], "bin_01H": hrain_centers, "bin_DAY": drain_centers},
+        dims=["experiment", "bin_01H", "bin_DAY"],
         name="int_prob"
     )
 
@@ -125,7 +148,7 @@ for loc_name in locs_names.keys():
     experiment_im = []      # store a mappable for the colour‑bar
     for i in range(n_exp):
         da = wet_prob.isel(experiment=i)
-        da = da.assign_coords(drain_index=("drain_bin", range(len(drain_edges))))
+        da = da.assign_coords(drain_index=("bin_DAY", range(len(drain_centers))))
 
         if MASK_ZERO:
             da = da.where(da != 0)
@@ -140,7 +163,7 @@ for loc_name in locs_names.keys():
 
         im = da.plot.imshow(
             ax           = axes[i],
-            x            = "hour",
+            x            = "n_wet_timesteps",
             y            = "drain_index",
             cmap         = COLORMAP,
             norm         = norm,
@@ -153,11 +176,11 @@ for loc_name in locs_names.keys():
         #axes[i].text(0.5,0.99,f'{str(int_prob.experiment.values[i])}',color='k',fontsize='xx-large',verticalalignment = 'top',horizontalalignment = 'center', transform=axes[i].transAxes,zorder=105)
 
         # axes[i].set_title(str(int_prob.experiment.values[i]))
-        axes[i].set_xlabel("Wet hours")
+        axes[i].set_xlabel("N wet hours")
 
-        # x‑axis ticks
-        axes[i].set_xticks(hour_vals[1::2])
-        axes[i].set_xticklabels(hour_vals[1::2], fontsize=8)
+        # x-axis ticks
+        axes[i].set_xticks(n_wet_vals[1::2])
+        axes[i].set_xticklabels(n_wet_vals[1::2], fontsize=8)
 
         # y‑axis ticks & labels only in first column
         if i == 0:
@@ -176,7 +199,7 @@ for loc_name in locs_names.keys():
     # ─── Δ panel (Future – Present) ─────────────────────────────────────────
     if SHOW_DELTA:
         delta_da = wet_prob.isel(experiment=1) - wet_prob.isel(experiment=0)
-        delta_da = delta_da.assign_coords(drain_index=("drain_bin", range(len(drain_edges))))
+        delta_da = delta_da.assign_coords(drain_index=("bin_DAY", range(len(drain_centers))))
         if MASK_ZERO:
             delta_da = delta_da.where(delta_da != 0)
 
@@ -185,7 +208,7 @@ for loc_name in locs_names.keys():
 
         delta_im = delta_da.plot.imshow(
             ax           = axes[-1],
-            x            = "hour",
+            x            = "n_wet_timesteps",
             y            = "drain_index",
             cmap         = DELTA_CMAP,     # *reversed* cmap
             norm         = delta_norm,
@@ -197,7 +220,7 @@ for loc_name in locs_names.keys():
         #axes[-1].text(0.5,0.99,'Future – Present',color='k',fontsize='xx-large',verticalalignment = 'top',horizontalalignment = 'center', transform=axes[-1].transAxes,zorder=105)
 
         axes[-1].set_title("Future – Present", loc="center")
-        axes[-1].set_xlabel("Wet hours")
+        axes[-1].set_xlabel("N wet hours")
 
         # duplicate y‑axis ticks on the right
         axes[-1].set_ylabel("")
@@ -214,8 +237,8 @@ for loc_name in locs_names.keys():
         )
 
         # match x‑axis ticks
-        axes[-1].set_xticks(hour_vals[1::2])
-        axes[-1].set_xticklabels(hour_vals[1::2], fontsize=8)
+        axes[-1].set_xticks(n_wet_vals[1::2])
+        axes[-1].set_xticklabels(n_wet_vals[1::2], fontsize=8)
         #axes[-1].tick_params(axis="x", which="both", length=0, rotation=90)
         axes[-1].tick_params(axis="both", which="both", length=0)
 

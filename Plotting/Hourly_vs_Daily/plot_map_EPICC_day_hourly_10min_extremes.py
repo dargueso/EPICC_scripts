@@ -93,16 +93,48 @@ subregs = np.zeros_like(lm_is.values)
 #####################################################################
 #####################################################################
 
-qtile = 99
+qtile = 95
 
-# --- Colormap selection: 'rain' (cmocean.rain) or 'icefire' (seaborn) ---
-PRECIP_CMAP = 'icefire'   # change to 'icefire' to match older plots
+# --- Colormap selection: 'custom' | 'rain' | 'haline' (cmocean) or 'icefire' (seaborn) ---
+PRECIP_CMAP = 'custom'
 
-mylevels=np.asarray([0,2,4,6,8,10,15,20,25,30,35,40,50,60,70,80,90,100])
-if PRECIP_CMAP == 'rain':
+# Custom precipitation colormap (12 colours: white = under, 11 intervals)
+_CUSTOM_RGB = np.array([
+    [255, 255, 255],   # under  (no rain / below first level)
+    [237, 250, 194],
+    [205, 255, 205],
+    [153, 240, 178],
+    [ 83, 189, 159],
+    [ 50, 166, 150],
+    [ 50, 150, 180],
+    [  5, 112, 176],
+    [  5,  80, 140],
+    [ 10,  31, 150],
+    [ 44,   2,  70],
+    [106,  44,  90],
+], dtype=float) / 255.0
+
+# --- Unit conversion: set to True to express intensities in mm hr-1
+#     daily  -> divide by 24   (mm day-1 -> mm hr-1)
+#     hourly -> unchanged      (already mm hr-1)
+#     10 min -> multiply by 6  (mm (10 min)-1 -> mm hr-1)
+CONVERT_TO_MM_HR = False
+
+if PRECIP_CMAP == 'custom':
+    # 12 colours: colour[0] (white) → 0–2 mm interval,
+    #             colour[11] (dark maroon) → >100 mm extension (required by extend="max")
+    cmap = matplotlib.colors.ListedColormap(_CUSTOM_RGB)        # 12 colours
+    cmap.set_under(_CUSTOM_RGB[0])                              # white for < first level
+    mylevels = np.array([0, 2, 4, 6, 10, 15, 20, 30, 40, 60, 80, 100])  # 12 bounds → 11 intervals
+elif PRECIP_CMAP == 'rain':
     cmap = cmocean.cm.rain
+    mylevels = np.asarray([0, 2, 4, 6, 8, 10, 15, 20, 25, 30, 35, 40, 50, 60, 70, 80, 90, 100])
+elif PRECIP_CMAP == 'haline':
+    cmap = cmocean.cm.haline
+    mylevels = np.asarray([0, 2, 4, 6, 8, 10, 15, 20, 25, 30, 35, 40, 50, 60, 70, 80, 90, 100])
 else:
     cmap = sns.color_palette("icefire", as_cmap=True)
+    mylevels = np.asarray([0, 2, 4, 6, 8, 10, 15, 20, 25, 30, 35, 40, 50, 60, 70, 80, 90, 100])
 norm = BoundaryNorm(mylevels, ncolors=cmap.N, extend="max")
 
 cmap_diff = cmaps["BrBG"]
@@ -138,8 +170,22 @@ for season in seasons:
 
 
 
-    data_p={'daily':fin_d['percentiles_present'].values,'hourly':fin_h['percentiles_present'].values,'10min':fin_m['percentiles_present'].values}
-    data_f={'daily':fin_d['percentiles_future'].values,'hourly':fin_h['percentiles_future'].values,'10min':fin_m['percentiles_future'].values}
+    # Unit conversion factors (mm hr-1 mode)
+    if CONVERT_TO_MM_HR:
+        unit_factors = {'daily': 1.0/24.0, 'hourly': 1.0, '10min': 6.0}
+        unit_label   = 'mm hr$^{-1}$'
+        unit_suffix  = '_mmhr'
+    else:
+        unit_factors = {'daily': 1.0, 'hourly': 1.0, '10min': 1.0}
+        unit_label   = 'mm'
+        unit_suffix  = ''
+
+    data_p={'daily':fin_d['percentiles_present'].values * unit_factors['daily'],
+            'hourly':fin_h['percentiles_present'].values * unit_factors['hourly'],
+            '10min':fin_m['percentiles_present'].values * unit_factors['10min']}
+    data_f={'daily':fin_d['percentiles_future'].values * unit_factors['daily'],
+            'hourly':fin_h['percentiles_future'].values * unit_factors['hourly'],
+            '10min':fin_m['percentiles_future'].values * unit_factors['10min']}
     data_diff={'daily':(fin_d['percentiles_future'].values-fin_d['percentiles_present'].values)*100/fin_d['percentiles_present'].values,
             'hourly':(fin_h['percentiles_future'].values-fin_h['percentiles_present'].values)*100/fin_h['percentiles_present'].values,
             '10min':(fin_m['percentiles_future'].values-fin_m['percentiles_present'].values)*100/fin_m['percentiles_present'].values}
@@ -147,8 +193,58 @@ for season in seasons:
     data_sig = {'daily':fin_d['pvalue'].values,
                 'hourly':fin_h['pvalue'].values,
                 '10min':fin_m['pvalue'].values}
-    
-                          
+
+    # --- Masks for statistics and violin plots ---
+    interior      = border_mask == 0                                        # full interior domain
+    coastal_mask  = (med_mask.combined_mask.values == 3) & interior         # coastal region only
+    n_interior = int(interior.sum())
+    n_coastal  = int(coastal_mask.sum())
+    print(f"\nSignificant changes at Q{qtile} (p < 0.05){' — ' + season if season != 'ALL' else ''}:")
+    print(f"  {'':6s}  {'Interior':>20s}  {'Coastal':>20s}")
+    print(f"  {'':6s}  {'('+str(n_interior)+' pts)':>20s}  {'('+str(n_coastal)+' pts)':>20s}")
+    for datatype, pvals in data_sig.items():
+        diff  = data_diff[datatype]
+        sig_int = (pvals < 0.05) & interior
+        sig_cst = (pvals < 0.05) & coastal_mask
+        n_sig_int  = int(sig_int.sum())
+        n_sig_cst  = int(sig_cst.sum())
+        pct_int    = 100.0 * n_sig_int / n_interior if n_interior > 0 else np.nan
+        pct_cst    = 100.0 * n_sig_cst / n_coastal  if n_coastal  > 0 else np.nan
+        # total positive/negative points in each region
+        pos_int = interior & (diff > 0)
+        neg_int = interior & (diff < 0)
+        pos_cst = coastal_mask & (diff > 0)
+        neg_cst = coastal_mask & (diff < 0)
+        n_pos_all_int = int(pos_int.sum());  n_neg_all_int = int(neg_int.sum())
+        n_pos_all_cst = int(pos_cst.sum());  n_neg_all_cst = int(neg_cst.sum())
+        # significant among positive / negative
+        n_sig_pos_int = int((sig_int & (diff > 0)).sum())
+        n_sig_neg_int = int((sig_int & (diff < 0)).sum())
+        n_sig_pos_cst = int((sig_cst & (diff > 0)).sum())
+        n_sig_neg_cst = int((sig_cst & (diff < 0)).sum())
+        pct_pos_int      = 100.0 * n_pos_all_int / n_interior    if n_interior    > 0 else np.nan
+        pct_neg_int      = 100.0 * n_neg_all_int / n_interior    if n_interior    > 0 else np.nan
+        pct_pos_cst      = 100.0 * n_pos_all_cst / n_coastal     if n_coastal     > 0 else np.nan
+        pct_neg_cst      = 100.0 * n_neg_all_cst / n_coastal     if n_coastal     > 0 else np.nan
+        pct_sig_pos_int  = 100.0 * n_sig_pos_int / n_pos_all_int if n_pos_all_int > 0 else np.nan
+        pct_sig_neg_int  = 100.0 * n_sig_neg_int / n_neg_all_int if n_neg_all_int > 0 else np.nan
+        pct_sig_pos_cst  = 100.0 * n_sig_pos_cst / n_pos_all_cst if n_pos_all_cst > 0 else np.nan
+        pct_sig_neg_cst  = 100.0 * n_sig_neg_cst / n_neg_all_cst if n_neg_all_cst > 0 else np.nan
+        # of significant points, what fraction is positive / negative
+        pct_ofsig_pos_int = 100.0 * n_sig_pos_int / n_sig_int if n_sig_int > 0 else np.nan
+        pct_ofsig_neg_int = 100.0 * n_sig_neg_int / n_sig_int if n_sig_int > 0 else np.nan
+        pct_ofsig_pos_cst = 100.0 * n_sig_pos_cst / n_sig_cst if n_sig_cst > 0 else np.nan
+        pct_ofsig_neg_cst = 100.0 * n_sig_neg_cst / n_sig_cst if n_sig_cst > 0 else np.nan
+        print(f"  {datatype:>6s}:  sig {n_sig_int:>6d}/{n_interior:>6d} ({pct_int:5.1f}%)"
+              f"  [of sig: pos {pct_ofsig_pos_int:5.1f}% / neg {pct_ofsig_neg_int:5.1f}%]"
+              f"  | pos {n_pos_all_int:>6d}/{n_interior:>6d} ({pct_pos_int:5.1f}%) of which sig ({pct_sig_pos_int:5.1f}%)"
+              f"  | neg {n_neg_all_int:>6d}/{n_interior:>6d} ({pct_neg_int:5.1f}%) of which sig ({pct_sig_neg_int:5.1f}%)")
+        print(f"  {'':6s}   {'Coastal':}"
+              f"  sig {n_sig_cst:>6d}/{n_coastal:>6d} ({pct_cst:5.1f}%)"
+              f"  [of sig: pos {pct_ofsig_pos_cst:5.1f}% / neg {pct_ofsig_neg_cst:5.1f}%]"
+              f"  | pos {n_pos_all_cst:>6d}/{n_coastal:>6d} ({pct_pos_cst:5.1f}%) of which sig ({pct_sig_pos_cst:5.1f}%)"
+              f"  | neg {n_neg_all_cst:>6d}/{n_coastal:>6d} ({pct_neg_cst:5.1f}%) of which sig ({pct_sig_neg_cst:5.1f}%)")
+    print()
 
     #####################################################################
     #####################################################################
@@ -156,7 +252,7 @@ for season in seasons:
     fig = plt.figure(figsize=(20, 15), constrained_layout=False)
     # Create main GridSpec with separate spacing control
     gs_main = GridSpec(3, 3, figure=fig,
-                    left=0.08, bottom=0.12, right=0.95, top=0.93,
+                    left=0.08, bottom=0.15, right=0.95, top=0.93,
                     hspace=0.05, wspace=0.05)
 
     #####################################################################
@@ -240,8 +336,8 @@ for season in seasons:
         
     for row, datatype in enumerate(['daily', 'hourly', '10min']):
  
-        sig_var = data_sig[datatype]
-        sig_levs = np.array([-0.5, 0.5, 1.5])
+        sig_var = np.where(np.isfinite(data_sig[datatype]), data_sig[datatype], 1.0)  # NaN → 1.0 (non-significant)
+        sig_levs = np.array([-0.5, 0.05, 1.05])   # hatch where p >= 0.05 (not significant)
         sig = sig_var<0.05
 
         axs = fig.add_subplot(gs_main[row, 2], projection=cart_proj)
@@ -288,7 +384,7 @@ for season in seasons:
     cbar_exp = plt.colorbar(
         dtrain, cax=cbar_ax, orientation="horizontal", shrink=0.9
     )
-    cbar_exp.set_label("Precipitation (mm)")
+    cbar_exp.set_label(f"Precipitation ({unit_label})")
 
     cbar_axd = fig.add_axes([0.70, 0.07, 0.20, 0.025])
     cbar_del = plt.colorbar(
@@ -315,11 +411,11 @@ for season in seasons:
                 transform=fig.transFigure)
     
     # Row labels (left side, rotated 90 degrees)
-    # Calculate row positions based on GridSpec (bottom=0.12, top=0.93, 3 rows)
-    row_height = (0.93 - 0.12) / 3
-    row_positions = [0.12 + row_height * 2.5,  # Row 0 (Daily) - top
-                     0.12 + row_height * 1.5,  # Row 1 (Hourly) - middle
-                     0.12 + row_height * 0.5]  # Row 2 (10-min) - bottom
+    # Calculate row positions based on GridSpec (bottom=0.15, top=0.93, 3 rows)
+    row_height = (0.93 - 0.15) / 3
+    row_positions = [0.15 + row_height * 2.5,  # Row 0 (Daily) - top
+                     0.15 + row_height * 1.5,  # Row 1 (Hourly) - middle
+                     0.15 + row_height * 0.5]  # Row 2 (10-min) - bottom
     row_labels = ['Daily', 'Hourly', '10-min']
     
     for row_pos, row_label in zip(row_positions, row_labels):
@@ -340,94 +436,97 @@ for season in seasons:
     #                      aspect=30, label="Precipitation change (%)")
 
 
-    plt.savefig(f'/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/map_quantiles_daily_hourly_10min_precipitation_q{qtile}th{suffix_season}.png', 
+    plt.savefig(f'/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/map_quantiles_daily_hourly_10min_precipitation_q{qtile}th{suffix_season}{unit_suffix}.png',
                     dpi=300, bbox_inches='tight', facecolor='white')
 
     #####################################################################
     # Create violin plot of changes across the domain
     #####################################################################
-    
-    # Prepare data for violin plot - flatten the 2D arrays and remove NaN values
-    violin_data = []
-    labels = []
-    
-    for datatype in ['daily', 'hourly', '10min']:
-        # Flatten the 2D array and remove NaN/inf values
-        values = data_diff[datatype]
-        #values[med_mask.combined_mask.values!=3]=np.nan  # Apply mask to consider only valid land points
-        values = values[border_width:-border_width, border_width:-border_width].flatten()
-        values = values[np.isfinite(values)]
-        violin_data.append(values)
-        labels.append(datatype.capitalize())
-    
-    # Create violin plot
-    fig_violin = plt.figure(figsize=(10, 8))
-    ax_violin = fig_violin.add_subplot(111)
-    
-    # Create violin plot without default min/max lines
-    parts = ax_violin.violinplot(violin_data, positions=[1, 2, 3], 
-                                   showmeans=False, showmedians=True, 
-                                   showextrema=False,  # Don't show min/max
-                                   widths=0.7)
-    
-    # Customize violin colors
-    colors = ['#ED6A5A', '#F4F1BB', '#9BC1BC']
-    for i, pc in enumerate(parts['bodies']):
-        pc.set_facecolor(colors[i])
-        pc.set_alpha(0.7)
-        pc.set_edgecolor('black')
-        pc.set_linewidth(1) 
-    
-    # Customize mean and median lines
-    for partname in ['cmedians']:#, 'cmeans']:
-        if partname in parts:
-            vp = parts[partname]
-            vp.set_edgecolor('black')
-            vp.set_linewidth(1)
-    
-    # Add custom percentile lines (e.g., 5th and 95th percentiles)
-    percentile_low = 5  # Change this value (e.g., 5, 10, 25)
-    percentile_high = 95  # Change this value (e.g., 75, 90, 95)
-    
-    for i, values in enumerate(violin_data):
-        pos = i + 1
-        p_low = np.percentile(values, percentile_low)
-        p_high = np.percentile(values, percentile_high)
-        
-        # Draw vertical line from low to high percentile
-        ax_violin.plot([pos, pos], [p_low, p_high], 
-                      color='black', linewidth=1, zorder=3)
-        
-        # Draw horizontal caps at percentiles
-        cap_width = 0.15
-        ax_violin.plot([pos - cap_width, pos + cap_width], [p_low, p_low], 
-                      color='black', linewidth=1, zorder=3)
-        ax_violin.plot([pos - cap_width, pos + cap_width], [p_high, p_high], 
-                      color='black', linewidth=1, zorder=3)
-    
-    # Add horizontal line at 0
-    ax_violin.axhline(y=0, color='gray', linestyle='--', linewidth=1, alpha=0.7)
-    
-    # Customize plot
-    ax_violin.set_xticks([1, 2, 3])
-    ax_violin.set_xticklabels(labels, fontsize=14)
+
+    percentile_low  = 5
+    percentile_high = 95
+    _dtypes  = ['daily', 'hourly', '10min']
+    _colors  = {'daily': '#ED6A5A', 'hourly': '#F4F1BB', '10min': '#9BC1BC'}
+    _offset  = 0.27   # half-distance between domain and coastal violin
+
+    fig_violin = plt.figure(figsize=(12, 8))
+    ax_violin  = fig_violin.add_subplot(111)
+
+    group_centers = [1, 2, 3]
+    for i, datatype in enumerate(_dtypes):
+        pos_dom  = group_centers[i] - _offset
+        pos_cst  = group_centers[i] + _offset
+        col      = _colors[datatype]
+
+        pvals_arr = data_sig[datatype]
+        vals_dom = data_diff[datatype][interior]
+        vals_dom = vals_dom[np.isfinite(vals_dom)]
+        vals_dom_sig = data_diff[datatype][(pvals_arr < 0.05) & interior]
+        vals_dom_sig = vals_dom_sig[np.isfinite(vals_dom_sig)]
+
+        vals_cst = data_diff[datatype][coastal_mask]
+        vals_cst = vals_cst[np.isfinite(vals_cst)]
+        vals_cst_sig = data_diff[datatype][(pvals_arr < 0.05) & coastal_mask]
+        vals_cst_sig = vals_cst_sig[np.isfinite(vals_cst_sig)]
+
+        cap_w = 0.08
+        sig_col = 'crimson'
+        for pos, vals, vals_sig, alpha, ls in [(pos_dom, vals_dom, vals_dom_sig, 0.5, '-'),
+                                               (pos_cst, vals_cst, vals_cst_sig, 0.9, '-')]:
+            parts = ax_violin.violinplot([vals], positions=[pos],
+                                         showmeans=False, showmedians=True,
+                                         showextrema=False, widths=0.30)
+            parts['bodies'][0].set_facecolor(col)
+            parts['bodies'][0].set_alpha(alpha)
+            parts['bodies'][0].set_edgecolor('black')
+            parts['bodies'][0].set_linewidth(1)
+            parts['cmedians'].set_edgecolor('black')
+            parts['cmedians'].set_linewidth(1.5)
+
+            p_lo = np.percentile(vals, percentile_low)
+            p_hi = np.percentile(vals, percentile_high)
+            ax_violin.plot([pos, pos], [p_lo, p_hi], color='black', linewidth=1, zorder=3)
+            ax_violin.plot([pos - cap_w, pos + cap_w], [p_lo, p_lo], color='black', linewidth=1, zorder=3)
+            ax_violin.plot([pos - cap_w, pos + cap_w], [p_hi, p_hi], color='black', linewidth=1, zorder=3)
+
+            # Significant-only whiskers and median
+            if len(vals_sig) > 1:
+                p_lo_sig = np.percentile(vals_sig, percentile_low)
+                p_hi_sig = np.percentile(vals_sig, percentile_high)
+                med_sig  = np.median(vals_sig)
+                ax_violin.plot([pos, pos], [p_lo_sig, p_hi_sig], color=sig_col, linewidth=2, zorder=4)
+                ax_violin.plot([pos - cap_w*0.7, pos + cap_w*0.7], [p_lo_sig, p_lo_sig], color=sig_col, linewidth=2, zorder=4)
+                ax_violin.plot([pos - cap_w*0.7, pos + cap_w*0.7], [p_hi_sig, p_hi_sig], color=sig_col, linewidth=2, zorder=4)
+                ax_violin.plot([pos - cap_w*0.5, pos + cap_w*0.5], [med_sig,  med_sig],  color=sig_col, linewidth=2.5, zorder=4)
+
+            # Black labels (all-data) to the left; crimson labels (sig-only) to the right
+            tx_blk = pos - cap_w - 0.03
+            ax_violin.text(tx_blk, p_hi, f'{p_hi:.1f}%', ha='right', va='center', fontsize=7, color='black')
+            ax_violin.text(tx_blk, np.median(vals), f'{np.median(vals):.1f}%', ha='right', va='center', fontsize=7, color='black')
+            ax_violin.text(tx_blk, p_lo, f'{p_lo:.1f}%', ha='right', va='center', fontsize=7, color='black')
+            if len(vals_sig) > 1:
+                tx_crim = pos + cap_w*0.7 + 0.03
+                ax_violin.text(tx_crim, p_hi_sig, f'{p_hi_sig:.1f}%', ha='left', va='center', fontsize=7, color=sig_col)
+                ax_violin.text(tx_crim, med_sig,  f'{med_sig:.1f}%',  ha='left', va='center', fontsize=7, color=sig_col)
+                ax_violin.text(tx_crim, p_lo_sig, f'{p_lo_sig:.1f}%', ha='left', va='center', fontsize=7, color=sig_col)
+
+    ax_violin.axhline(0, color='gray', linestyle='--', linewidth=1, alpha=0.7)
+    ax_violin.set_xticks(group_centers)
+    ax_violin.set_xticklabels([d.capitalize() for d in _dtypes], fontsize=14)
     ax_violin.set_ylabel('Precipitation change (%)', fontsize=14)
-    # ax_violin.set_title(f'Distribution of precipitation changes (Q{int(qtile*100)}th percentile)\nWhiskers show {percentile_low}th-{percentile_high}th percentile range', 
-    #                     fontsize=16, weight='bold')
     ax_violin.grid(axis='y', alpha=0.3, linestyle=':')
-    ax_violin.set_xlim(0.5, 3.5)
-    
-    # Add statistics text
-    for i, (datatype, values) in enumerate(zip(labels, violin_data)):
-        median_val = np.median(values)
-        mean_val = np.mean(values)
-        p_low = np.percentile(values, percentile_low)
-        p_high = np.percentile(values, percentile_high)
-        ax_violin.text(i+1, ax_violin.get_ylim()[1]*0.95, 
-                      f'Median: {median_val:.1f}%\nP{percentile_low}: {p_low:.1f}%\nP{percentile_high}: {p_high:.1f}%',
-                      ha='center', va='top', fontsize=9, 
-                      bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-    
+    ax_violin.set_xlim(0.35, 3.65)
+
+    # Legend
+    from matplotlib.patches import Patch
+    from matplotlib.lines import Line2D
+    ax_violin.legend(
+        [Patch(facecolor='gray', alpha=0.5, edgecolor='black'),
+         Patch(facecolor='gray', alpha=0.9, edgecolor='black'),
+         Line2D([0], [0], color='crimson', linewidth=2)],
+        ['Full domain', 'Coastal region', 'Significant only'],
+        fontsize=11, loc='upper left')
+
     plt.tight_layout()
     plt.savefig(f'/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/violin_plot_precipitation_changes_q{qtile}th_{mode}{suffix_season}.png',
                 dpi=300, bbox_inches='tight', facecolor='white')
@@ -444,8 +543,8 @@ for season in seasons:
     # 4 cols: 3 maps + 1 narrow violin; letters a–l across all 12 panels (row×4)
     fig3 = plt.figure(figsize=(24, 15), constrained_layout=False)
     gs3 = GridSpec(3, 4, figure=fig3,
-                   width_ratios=[1, 1, 1, 0.22],
-                   left=0.06, bottom=0.10, right=0.96, top=0.91,
+                   width_ratios=[1, 1, 1, 0.42],
+                   left=0.06, bottom=0.13, right=0.96, top=0.91,
                    hspace=0.10, wspace=0.08)
 
     ax_violins = []   # collect for shared y-axis
@@ -453,19 +552,22 @@ for season in seasons:
 
     for row, datatype in enumerate(['daily', 'hourly', '10min']):
 
-        values_viol = data_diff[datatype]
-        values_viol = values_viol[border_width:-border_width, border_width:-border_width].flatten()
-        values_viol = values_viol[np.isfinite(values_viol)]
+        pvals_arr = data_sig[datatype]
+        vals_dom = data_diff[datatype][interior]
+        vals_dom = vals_dom[np.isfinite(vals_dom)]
+        vals_dom_sig = data_diff[datatype][(pvals_arr < 0.05) & interior]
+        vals_dom_sig = vals_dom_sig[np.isfinite(vals_dom_sig)]
 
-        median_val = np.median(values_viol)
-        p_lo       = np.percentile(values_viol, percentile_low)
-        p_hi       = np.percentile(values_viol, percentile_high)
+        vals_cst = data_diff[datatype][coastal_mask]
+        vals_cst = vals_cst[np.isfinite(vals_cst)]
+        vals_cst_sig = data_diff[datatype][(pvals_arr < 0.05) & coastal_mask]
+        vals_cst_sig = vals_cst_sig[np.isfinite(vals_cst_sig)]
 
         # --- Column 0: Present ---
         ax0 = fig3.add_subplot(gs3[row, 0], projection=cart_proj)
-        ax0.text(0.01, 0.97, _pl[row * 4 + 0],
+        ax0.text(0.0, 1.02, _pl[row * 4 + 0],
                  transform=ax0.transAxes, size='x-large', weight='bold',
-                 ha='left', va='top', zorder=200)
+                 ha='left', va='bottom')
         ax0.add_feature(cfeature.COASTLINE, linewidth=0.5, zorder=102)
         pm0 = ax0.pcolormesh(lons, lats, data_p[datatype],
                              cmap=cmap, norm=norm,
@@ -484,9 +586,9 @@ for season in seasons:
 
         # --- Column 1: Future ---
         ax1 = fig3.add_subplot(gs3[row, 1], projection=cart_proj)
-        ax1.text(0.01, 0.97, _pl[row * 4 + 1],
+        ax1.text(0.0, 1.02, _pl[row * 4 + 1],
                  transform=ax1.transAxes, size='x-large', weight='bold',
-                 ha='left', va='top', zorder=200)
+                 ha='left', va='bottom')
         ax1.add_feature(cfeature.COASTLINE, linewidth=0.5, zorder=102)
         pm1 = ax1.pcolormesh(lons, lats, data_f[datatype],
                              cmap=cmap, norm=norm,
@@ -506,15 +608,16 @@ for season in seasons:
 
         # --- Column 2: Change map ---
         ax2 = fig3.add_subplot(gs3[row, 2], projection=cart_proj)
-        ax2.text(0.01, 0.97, _pl[row * 4 + 2],
+        ax2.text(0.0, 1.02, _pl[row * 4 + 2],
                  transform=ax2.transAxes, size='x-large', weight='bold',
-                 ha='left', va='top', zorder=200)
+                 ha='left', va='bottom')
         ax2.add_feature(cfeature.COASTLINE, linewidth=0.5, zorder=102)
         pm2 = ax2.pcolormesh(lons, lats, data_diff[datatype],
                              cmap=cmap_diff, norm=norm_diff,
                              transform=ccrs.PlateCarree(), zorder=101)
-        ax2.contourf(to_np(lons), to_np(lats), data_sig[datatype],
-                     np.array([-0.5, 0.5, 1.5]), colors='none',
+        ax2.contourf(to_np(lons), to_np(lats),
+                     np.where(np.isfinite(data_sig[datatype]), data_sig[datatype], 1.0),
+                     np.array([-0.5, 0.05, 1.05]), colors='none',   # hatch where p >= 0.05 (NaN → non-sig)
                      hatches=['', '//////'],
                      transform=ccrs.PlateCarree(), zorder=105)
         ax2.contourf(to_np(lons), to_np(lats), border_mask,
@@ -532,43 +635,65 @@ for season in seasons:
 
         # --- Column 3: Violin ---
         ax3 = fig3.add_subplot(gs3[row, 3])
-        ax3.text(0.04, 0.97, _pl[row * 4 + 3],
+        ax3.text(0.0, 1.02, _pl[row * 4 + 3],
                  transform=ax3.transAxes, size='x-large', weight='bold',
-                 ha='left', va='top')
+                 ha='left', va='bottom')
 
-        parts = ax3.violinplot([values_viol], positions=[0], showmeans=False,
-                               showmedians=True, showextrema=False, widths=0.28)
-        parts['bodies'][0].set_facecolor(violin_colors[datatype])
-        parts['bodies'][0].set_edgecolor('black')
-        parts['bodies'][0].set_alpha(0.7)
-        parts['bodies'][0].set_linewidth(1)
-        parts['cmedians'].set_edgecolor('black')
-        parts['cmedians'].set_linewidth(1.5)
-
+        col = violin_colors[datatype]
         cap_w = 0.10
-        ax3.plot([0, 0], [p_lo, p_hi], color='black', linewidth=1, zorder=3)
-        ax3.plot([-cap_w, cap_w], [p_lo, p_lo], color='black', linewidth=1, zorder=3)
-        ax3.plot([-cap_w, cap_w], [p_hi, p_hi], color='black', linewidth=1, zorder=3)
+        pos_dom, pos_cst = -0.30, 0.30
+        sig_col = 'crimson'
+
+        for pos, vals, vals_sig, alpha in [(pos_dom, vals_dom, vals_dom_sig, 0.5),
+                                           (pos_cst, vals_cst, vals_cst_sig, 0.9)]:
+            parts = ax3.violinplot([vals], positions=[pos], showmeans=False,
+                                   showmedians=True, showextrema=False, widths=0.30)
+            parts['bodies'][0].set_facecolor(col)
+            parts['bodies'][0].set_edgecolor('black')
+            parts['bodies'][0].set_alpha(alpha)
+            parts['bodies'][0].set_linewidth(1)
+            parts['cmedians'].set_edgecolor('black')
+            parts['cmedians'].set_linewidth(1.5)
+
+            p_lo = np.percentile(vals, percentile_low)
+            p_hi = np.percentile(vals, percentile_high)
+            med  = np.median(vals)
+            ax3.plot([pos, pos], [p_lo, p_hi], color='black', linewidth=1, zorder=3)
+            ax3.plot([pos - cap_w, pos + cap_w], [p_lo, p_lo], color='black', linewidth=1, zorder=3)
+            ax3.plot([pos - cap_w, pos + cap_w], [p_hi, p_hi], color='black', linewidth=1, zorder=3)
+
+            # Significant-only whiskers and median
+            if len(vals_sig) > 1:
+                p_lo_sig = np.percentile(vals_sig, percentile_low)
+                p_hi_sig = np.percentile(vals_sig, percentile_high)
+                med_sig  = np.median(vals_sig)
+                ax3.plot([pos, pos], [p_lo_sig, p_hi_sig], color=sig_col, linewidth=2, zorder=4)
+                ax3.plot([pos - cap_w*0.7, pos + cap_w*0.7], [p_lo_sig, p_lo_sig], color=sig_col, linewidth=2, zorder=4)
+                ax3.plot([pos - cap_w*0.7, pos + cap_w*0.7], [p_hi_sig, p_hi_sig], color=sig_col, linewidth=2, zorder=4)
+                ax3.plot([pos - cap_w*0.5, pos + cap_w*0.5], [med_sig,  med_sig],  color=sig_col, linewidth=2.5, zorder=4)
+
+            # Black labels (all-data) to the left; crimson labels (sig-only) to the right
+            tx_blk  = pos - cap_w - 0.03
+            tx_crim = pos + cap_w*0.7 + 0.03
+            ax3.text(tx_blk, p_hi, f'{p_hi:.1f}%', ha='right', va='center', fontsize=7, color='black')
+            ax3.text(tx_blk, med,  f'{med:.1f}%',  ha='right', va='center', fontsize=7, color='black')
+            ax3.text(tx_blk, p_lo, f'{p_lo:.1f}%', ha='right', va='center', fontsize=7, color='black')
+            if len(vals_sig) > 1:
+                ax3.text(tx_crim, p_hi_sig, f'{p_hi_sig:.1f}%', ha='left', va='center', fontsize=7, color=sig_col)
+                ax3.text(tx_crim, med_sig,  f'{med_sig:.1f}%',  ha='left', va='center', fontsize=7, color=sig_col)
+                ax3.text(tx_crim, p_lo_sig, f'{p_lo_sig:.1f}%', ha='left', va='center', fontsize=7, color=sig_col)
 
         ax3.axhline(0, color='gray', linestyle='--', linewidth=1, alpha=0.7)
 
-        # Stat labels next to each horizontal line
-        tx = cap_w + 0.04
-        ax3.text(tx, p_hi,      f'P{percentile_high}: {p_hi:.1f}%',
-                 ha='left', va='center', fontsize=9)
-        ax3.text(tx, median_val, f'Md: {median_val:.1f}%',
-                 ha='left', va='center', fontsize=9)
-        ax3.text(tx, p_lo,      f'P{percentile_low}: {p_lo:.1f}%',
-                 ha='left', va='center', fontsize=9)
-
-        ax3.set_xticks([])
+        # x-tick labels
+        ax3.set_xticks([pos_dom, pos_cst])
+        ax3.set_xticklabels(['Dom', 'Coast'], fontsize=8)
         ax3.yaxis.tick_right()
         ax3.tick_params(axis='y', labelsize=8)
         ax3.spines['left'].set_visible(False)
         ax3.spines['top'].set_visible(False)
-        ax3.spines['bottom'].set_visible(False)
         ax3.grid(axis='y', alpha=0.3, linestyle=':')
-        ax3.set_xlim(-0.28, 0.75)
+        ax3.set_xlim(-0.75, 0.75)
 
         ax_violins.append(ax3)
 
@@ -579,7 +704,7 @@ for season in seasons:
         ax.set_ylim(vmin, vmax)
 
     # Shared y-label for violins (right edge)
-    fig3.text(0.988, (0.10 + 0.91) / 2, 'Change (%)',
+    fig3.text(0.988, (0.13 + 0.91) / 2, 'Change (%)',
               rotation=90, ha='center', va='center', fontsize=11,
               transform=fig3.transFigure)
 
@@ -595,25 +720,31 @@ for season in seasons:
                   ha='center', va='bottom', fontsize=14,
                   transform=fig3.transFigure)
 
-    row_height3 = (0.91 - 0.10) / 3
-    row_positions3 = [0.10 + row_height3 * (2.5 - i) for i in range(3)]
+    row_height3 = (0.91 - 0.13) / 3
+    row_positions3 = [0.13 + row_height3 * (2.5 - i) for i in range(3)]
     for row_pos, row_label in zip(row_positions3, ['Daily', 'Hourly', '10-min']):
         fig3.text(0.02, row_pos, row_label,
                   ha='center', va='center', fontsize=14, rotation=90,
                   transform=fig3.transFigure)
 
-    # Colorbars — precipitation covers cols 0+1, change centered under col 2
-    _col2_left  = 0.06 + _uw * 2.0   # left edge of col 2
-    _col2_right = 0.06 + _uw * 3.0   # right edge of col 2
-    _cbar2_w    = (_col2_right - _col2_left) * 0.85
-    _cbar2_x    = (_col2_left + _col2_right) / 2 - _cbar2_w / 2
+    # Colorbars — derived from actual axes positions so alignment is exact
+    # ax0/ax1/ax2 still reference the last-row panels after the loop
+    fig3.canvas.draw()   # force layout so get_position() is reliable
+    _p0 = ax0.get_position()
+    _p1 = ax1.get_position()
+    _p2 = ax2.get_position()
+    _cbar_y, _cbar_h, _pad = 0.045, 0.018, 0.01
 
-    cbar_ax3 = fig3.add_axes([0.06, 0.045, _col2_left - 0.06 - 0.02, 0.018])
-    plt.colorbar(pm0, cax=cbar_ax3, orientation='horizontal').set_label('Precipitation (mm)')
+    # Colorbar 1: centered under cols 0 + 1
+    cbar_ax3 = fig3.add_axes([_p0.x0 + _pad, _cbar_y,
+                               _p1.x1 - _p0.x0 - 2 * _pad, _cbar_h])
+    plt.colorbar(pm0, cax=cbar_ax3, orientation='horizontal').set_label(f'Precipitation ({unit_label})')
 
-    cbar_ax3d = fig3.add_axes([_cbar2_x, 0.045, _cbar2_w, 0.018])
+    # Colorbar 2: centered under col 2
+    cbar_ax3d = fig3.add_axes([_p2.x0 + _pad, _cbar_y,
+                                _p2.x1 - _p2.x0 - 2 * _pad, _cbar_h])
     plt.colorbar(pm2, cax=cbar_ax3d, orientation='horizontal').set_label('Precipitation change (%)')
 
-    plt.savefig(f'/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/combined_map_violin_precipitation_changes_q{qtile}th{suffix_season}.png',
+    plt.savefig(f'/home/dargueso/Analyses/EPICC/Hourly_vs_Daily/combined_map_violin_precipitation_changes_q{qtile}th{suffix_season}{unit_suffix}.png',
                 dpi=300, bbox_inches='tight', facecolor='white')
     plt.close(fig3)
