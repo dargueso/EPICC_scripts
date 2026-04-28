@@ -24,10 +24,19 @@ WRUN_PRESENT = "EPICC_2km_ERA5"
 WRUN_FUTURE = "EPICC_2km_ERA5_CMIP6anom"
 test_suffix = ""
 
-FREQ = 'D'
-WET_THRESHOLD = 0.1 
+FREQ = '1H'
+WET_THRESHOLD = 0.1    # mm accumulated per period (0.1 mm/day, 0.1 mm/h, 0.1 mm/10min)
 PERCENTILES = [10, 20, 25, 40, 50, 60, 70, 75, 80, 85, 90, 95, 98, 99, 99.5, 99.9, 99.99, 100]
 ALPHA = 0.05
+
+# --- Wet-day filter: for sub-daily frequencies, only keep periods within wet days ---
+# Set to True to compute percentiles of sub-daily values on wet days only.
+# Requires the daily zarr files to be accessible (same PATH_IN/WRUN_*/UIB_DAY_RAIN.zarr).
+WET_DAY_FILTER = True
+
+# Sub-daily steps per day (set automatically below; do not edit)
+_N_PER_DAY = {'10MIN': 144, '1H': 24, '3H': 8, '6H': 4, '12H': 2, 'D': 1}
+N_PER_DAY = _N_PER_DAY.get(FREQ, 1)
 
 # Test options:
 # 'mann-whitney-fast' : Fast numba version
@@ -327,7 +336,23 @@ def main():
         print("   Opened without consolidated metadata")
     
     print(f"   Time: {time.time()-t0:.2f}s")
-    
+
+    # Open daily zarrs for wet-day masking (sub-daily frequencies only)
+    ds_daily_present = None
+    ds_daily_future  = None
+    if FREQ != 'D' and WET_DAY_FILTER:
+        zarr_daily_pres = f'{PATH_IN}/{WRUN_PRESENT}/UIB_DAY_RAIN{test_suffix}.zarr'
+        zarr_daily_fut  = f'{PATH_IN}/{WRUN_FUTURE}/UIB_DAY_RAIN{test_suffix}.zarr'
+        print(f"\n   Opening daily zarrs for wet-day filter...")
+        try:
+            ds_daily_present = xr.open_zarr(zarr_daily_pres, consolidated=True)
+            ds_daily_future  = xr.open_zarr(zarr_daily_fut,  consolidated=True)
+        except KeyError:
+            ds_daily_present = xr.open_zarr(zarr_daily_pres, consolidated=False)
+            ds_daily_future  = xr.open_zarr(zarr_daily_fut,  consolidated=False)
+        print(f"   Daily zarr: {len(ds_daily_present.time)} days, "
+              f"{N_PER_DAY} sub-daily steps/day")
+
     ny, nx = len(ds_present.y), len(ds_present.x)
     lat = ds_present.lat.isel(time=0).values
     lon = ds_present.lon.isel(time=0).values
@@ -408,9 +433,24 @@ def main():
             y=slice(y_start, y_end),
             x=slice(x_start, x_end)
         ).values.astype(np.float32)
+
+        # Wet-day filter: zero sub-daily values on dry days so they fall below WET_THRESHOLD
+        if ds_daily_present is not None:
+            daily_pres_tile = ds_daily_present.RAIN.isel(
+                y=slice(y_start, y_end), x=slice(x_start, x_end)
+            ).values.astype(np.float32)
+            daily_fut_tile = ds_daily_future.RAIN.isel(
+                y=slice(y_start, y_end), x=slice(x_start, x_end)
+            ).values.astype(np.float32)
+            # Broadcast daily wet mask to sub-daily time axis
+            wet_mask_pres = np.repeat(daily_pres_tile >= WET_THRESHOLD, N_PER_DAY, axis=0)
+            wet_mask_fut  = np.repeat(daily_fut_tile  >= WET_THRESHOLD, N_PER_DAY, axis=0)
+            rain_present[~wet_mask_pres] = 0.0
+            rain_future[~wet_mask_fut]   = 0.0
+
         io_time = time.time() - t_io
         io_times.append(io_time)
-        
+
         # Process tile (PARALLEL within tile)
         t_compute = time.time()
         
@@ -471,6 +511,9 @@ def main():
     
     ds_present.close()
     ds_future.close()
+    if ds_daily_present is not None:
+        ds_daily_present.close()
+        ds_daily_future.close()
     
     # Save
     print(f"\n3. Saving output...")
@@ -597,8 +640,9 @@ def main():
         ),
         attrs={
             'description': f'Percentiles and statistical significance for {FREQ} rainfall',
-            'units': f'mm/{FREQ}',
+            'units': f'mm (accumulated per {FREQ} period)',
             'wet_threshold': WET_THRESHOLD,
+            'wet_day_filter': str(WET_DAY_FILTER),
             'statistical_test': TEST_TYPE,
             'significance_level': ALPHA,
             'present_period': WRUN_PRESENT,
@@ -631,10 +675,11 @@ def main():
     }
     
     suffix = TEST_TYPE.replace('-', '_')
+    wetday_tag = '_wetday' if (FREQ != 'D' and WET_DAY_FILTER) else ''
     if SINGLE_TILE_MODE:
-        output_file = f'{PATH_OUT}/{WRUN_PRESENT}/percentiles_and_significance_{freq_name}_{suffix}_tile_{SINGLE_TILE_Y:03d}y_{SINGLE_TILE_X:03d}x.nc'
+        output_file = f'{PATH_OUT}/{WRUN_PRESENT}/percentiles_and_significance_{freq_name}_{suffix}_tile_{SINGLE_TILE_Y:03d}y_{SINGLE_TILE_X:03d}x{wetday_tag}.nc'
     else:
-        output_file = f'{PATH_OUT}/{WRUN_PRESENT}/percentiles_and_significance_{freq_name}_{suffix}_seqio{test_suffix}.nc'
+        output_file = f'{PATH_OUT}/{WRUN_PRESENT}/percentiles_and_significance_{freq_name}_{suffix}_seqio{test_suffix}{wetday_tag}.nc'
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     ds_output.to_netcdf(output_file)
     
