@@ -56,9 +56,9 @@ PATH_OUT     = '/home/dargueso/postprocessed/EPICC/'
 WRUN_PRESENT = 'EPICC_2km_ERA5'
 WRUN_FUTURE  = 'EPICC_2km_ERA5_CMIP6anom'
 
-BUFFER      = 3    # spatial pooling radius (grid cells)
+BUFFER      = 5    # spatial pooling radius (grid cells)
 TILE_SIZE   = 50   # inner tile dimension (pixels)
-N_SAMPLES   = 200  # bootstrap iterations per pixel
+N_SAMPLES   = 1000  # bootstrap iterations per pixel
 N_PROCESSES = 128   # parallel workers (pixels within each tile)
 
 WET_VALUE_HIGH = 0.1   # mm/h — hourly wet threshold
@@ -80,7 +80,7 @@ BINS_LOW  = np.concatenate([
 EXP_SCALE = 5.0
 
 PLOT_QUANTILES      = np.array([0.90, 0.95, 0.98, 0.99, 0.995, 0.999])
-BOOTSTRAP_QUANTILES = np.array([0.025, 0.5, 0.975])
+BOOTSTRAP_QUANTILES = np.array([0.005, 0.01, 0.025, 0.5, 0.975, 0.99, 0.995])
 
 SAVE_CONDPROB  = True   # write buffer-pooled condprob histograms
 RUN_METHOD_B   = False   # compute daily-max CIs via Method B; set False to skip and save ~50% bootstrap time
@@ -249,11 +249,26 @@ def build_analog_library(blk_nbr, daily_nbr):
 # SAMPLERS
 # =============================================================================
 
-def _method_c_one_sample(rain_daily_1d, profiles_arrays, profiles_totals,
+def _method_c_one_sample(by_pixel, n_pix, profiles_arrays, profiles_totals,
                           nbins_low, p_has_wet, rng):
-    """One Method C bootstrap sample → (hourly_q, dmax_q)."""
+    """One Method C bootstrap sample — spatial block bootstrap → (hourly_q, dmax_q).
+
+    Resamples n_pix pixels with replacement, then resamples each pixel's wet
+    days with replacement (double resampling = spatial block bootstrap).
+    """
     pq100 = PLOT_QUANTILES * 100.0
     nan_row = np.full(len(pq100), np.nan, np.float32)
+
+    # --- Spatial block bootstrap: resample pixels then events within pixels ---
+    pix_idx = rng.integers(0, n_pix, size=n_pix)
+    parts = []
+    for p in pix_idx:
+        days = by_pixel[p]
+        if len(days) > 0:
+            parts.append(days[rng.integers(0, len(days), size=len(days))])
+    if not parts:
+        return nan_row, nan_row
+    rain_daily_1d = np.concatenate(parts)
 
     # --- Step 1: vectorized bin assignment and wet-day filter ---
     bins = np.searchsorted(BINS_LOW[1:], rain_daily_1d).clip(0, nbins_low - 1)
@@ -418,11 +433,17 @@ def process_pixel(args):
     profiles_arrays, profiles_totals = build_analog_library(blk_nbr, daily_nbr)
 
     # ------------------------------------------------------------------
-    # BOOTSTRAP SAMPLING
+    # BOOTSTRAP SAMPLING  (spatial block bootstrap)
     # ------------------------------------------------------------------
-    # Buffer-pooled wet-day sequences as inputs
-    pres_in = daily_nbr[daily_nbr >= WET_VALUE_LOW].reshape(-1)
-    fut_in  = daily_f_nbr[daily_f_nbr >= WET_VALUE_LOW].reshape(-1)
+    # Pre-build per-pixel wet-day arrays for the neighbourhood
+    ny_nbr = yb1 - yb0
+    nx_nbr = xb1 - xb0
+    n_pix_nbr = ny_nbr * nx_nbr
+
+    pres_by_pixel = [daily_nbr[:, iy, ix][daily_nbr[:, iy, ix] >= WET_VALUE_LOW]
+                     for iy in range(ny_nbr) for ix in range(nx_nbr)]
+    fut_by_pixel  = [daily_f_nbr[:, iy, ix][daily_f_nbr[:, iy, ix] >= WET_VALUE_LOW]
+                     for iy in range(ny_nbr) for ix in range(nx_nbr)]
 
     # Deterministic per-pixel seed to ensure reproducibility
     seed_base = int(42 + (y0 + iy_inner) * 100003 + (x0 + ix_inner))
@@ -436,13 +457,15 @@ def process_pixel(args):
     for s in range(N_SAMPLES):
         # Method C — present
         rng = np.random.default_rng(seed_base + s)
-        h, _ = _method_c_one_sample(pres_in, profiles_arrays, profiles_totals,
+        h, _ = _method_c_one_sample(pres_by_pixel, n_pix_nbr,
+                                     profiles_arrays, profiles_totals,
                                      nbins_low, p_has_wet, rng)
         c_pres_h_boot[s] = h
 
         # Method C — future (present condprob × future daily totals)
         rng = np.random.default_rng(seed_base + 1_000_000 + s)
-        h, _ = _method_c_one_sample(fut_in, profiles_arrays, profiles_totals,
+        h, _ = _method_c_one_sample(fut_by_pixel, n_pix_nbr,
+                                     profiles_arrays, profiles_totals,
                                      nbins_low, p_has_wet, rng)
         c_fut_h_boot[s] = h
 

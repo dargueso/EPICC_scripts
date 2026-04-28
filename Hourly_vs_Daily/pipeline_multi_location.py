@@ -448,17 +448,28 @@ def run_single(location, buffer):
             rate = (sample + 1) / (time.time() - t0_loop)
             print(f"    {sample+1:4d}/{N_SAMPLES}  —  {rate:.1f} samples/s")
 
-    def generate_synthetic_quantiles(rain_daily_1d, label, seed_base):
-        """Method A — parametric hourly sampler."""
+    def generate_synthetic_quantiles(by_pixel, n_pix, label, seed_base):
+        """Method A — parametric hourly sampler, spatial pixel bootstrap."""
+        total_events = sum(len(p) for p in by_pixel)
+        print(f"\n  [Method A — {label}]  Pixels: {n_pix},  total wet days: {total_events:,}")
         hourly_q_boot = np.full((N_SAMPLES, n_q), np.nan, dtype=np.float32)
         max_q_boot    = np.full((N_SAMPLES, n_q), np.nan, dtype=np.float32)
-        print(f"\n  [Method A — {label}]  "
-              f"Wet days: {int((rain_daily_1d > 0).sum())}")
         t0_loop = time.time()
         for sample in range(N_SAMPLES):
             rng = np.random.default_rng(seed_base + sample)
+            # Resample pixels with replacement, then days within each pixel
+            pix_idx = rng.integers(0, n_pix, size=n_pix)
+            parts = []
+            for p in pix_idx:
+                days = by_pixel[p]
+                if len(days) > 0:
+                    parts.append(days[rng.integers(0, len(days), size=len(days))])
+            if not parts:
+                _progress(sample, t0_loop)
+                continue
+            rain_seq = np.concatenate(parts)
             temp_hourly, temp_max = [], []
-            for R in rain_daily_1d:
+            for R in rain_seq:
                 if R <= 0.0 or not np.isfinite(R):
                     continue
                 b = min(int(np.searchsorted(BINS_LOW[1:], R)),
@@ -496,15 +507,25 @@ def run_single(location, buffer):
             _progress(sample, t0_loop)
         return hourly_q_boot, max_q_boot
 
-    def generate_synthetic_max_quantiles(rain_daily_1d, label, seed_base):
-        """Method B — direct daily-max sampler, parallelized over samples."""
-        print(f"\n  [Method B — {label}]  Wet days: {len(rain_daily_1d)}")
+    def generate_synthetic_max_quantiles(by_pixel, n_pix, label, seed_base):
+        """Method B — direct daily-max sampler, spatial pixel bootstrap."""
+        total_events = sum(len(p) for p in by_pixel)
+        print(f"\n  [Method B — {label}]  Pixels: {n_pix},  total wet days: {total_events:,}")
         t0_loop = time.time()
 
         def _one_sample(sample):
             rng = np.random.default_rng(seed_base + sample)
+            pix_idx = rng.integers(0, n_pix, size=n_pix)
+            parts = []
+            for p in pix_idx:
+                days = by_pixel[p]
+                if len(days) > 0:
+                    parts.append(days[rng.integers(0, len(days), size=len(days))])
+            if not parts:
+                return np.full(n_q, np.nan, dtype=np.float32)
+            rain_seq = np.concatenate(parts)
             temp_max = []
-            for R in rain_daily_1d:
+            for R in rain_seq:
                 if not np.isfinite(R):
                     continue
                 b = min(int(np.searchsorted(BINS_LOW[1:], R)),
@@ -528,21 +549,32 @@ def run_single(location, buffer):
                     return np.percentile(wet_m, pq100).astype(np.float32)
             return np.full(n_q, np.nan, dtype=np.float32)
 
-        results   = Parallel(n_jobs=N_JOBS)(
+        results    = Parallel(n_jobs=N_JOBS)(
             delayed(_one_sample)(s) for s in range(N_SAMPLES))
         max_q_boot = np.array(results, dtype=np.float32)
         print(f"  Total time: {elapsed(t0_loop)}")
         return max_q_boot
 
-    def generate_analog_quantiles(rain_daily_1d, label, seed_base):
-        """Method C — analog resampling, parallelized over samples."""
-        print(f"\n  [Method C — {label}]  Wet days: {len(rain_daily_1d)}")
+    def generate_analog_quantiles(by_pixel, n_pix, label, seed_base):
+        """Method C — analog resampling, spatial pixel bootstrap."""
+        total_events = sum(len(p) for p in by_pixel)
+        print(f"\n  [Method C — {label}]  Pixels: {n_pix},  total wet days: {total_events:,}")
         t0_loop = time.time()
 
         def _one_sample(sample):
             rng = np.random.default_rng(seed_base + sample)
+            pix_idx = rng.integers(0, n_pix, size=n_pix)
+            parts = []
+            for p in pix_idx:
+                days = by_pixel[p]
+                if len(days) > 0:
+                    parts.append(days[rng.integers(0, len(days), size=len(days))])
+            if not parts:
+                return (np.full(n_q, np.nan, dtype=np.float32),
+                        np.full(n_q, np.nan, dtype=np.float32))
+            rain_seq = np.concatenate(parts)
             temp_hourly, temp_max = [], []
-            for R in rain_daily_1d:
+            for R in rain_seq:
                 b = min(int(np.searchsorted(BINS_LOW[1:], R)), nbins_low - 1)
                 if rng.random() >= p_has_wet_hours[b]:
                     continue
@@ -575,46 +607,65 @@ def run_single(location, buffer):
         return hourly_q_boot, max_q_boot
 
     # ------------------------------------------------------------------
-    # STEP 5 & 6 — Bootstrap
+    # STEP 5 & 6 — Bootstrap (spatial pixel bootstrap)
     # ------------------------------------------------------------------
-    # Pre-filter to wet days only — dry days make no rng calls in the bootstrap
-    # inner loop so removing them gives identical results with fewer iterations.
-    pres_daily_input     = pres_day_ctr[pres_day_ctr >= WET_VALUE_LOW]
-    fut_daily_input      = fut_day_ctr[ fut_day_ctr  >= WET_VALUE_LOW]
-    pres_daily_buf_input = daily_pres[daily_pres >= WET_VALUE_LOW].reshape(-1)
-    fut_daily_buf_input  = daily_fut[ daily_fut  >= WET_VALUE_LOW].reshape(-1)
+    # Per-pixel wet-day sequences. Resampling *pixels* (then days within each
+    # pixel) turns the Monte Carlo into a proper bootstrap whose CI width
+    # reflects spatial sampling variability. Center = 1-pixel case bootstrap
+    # over wet days; buffer = spatial bootstrap over n_pixels pixels.
+    n_pixels = ny_reg * nx_reg
+    ctr_pixel_idx = cy_loc * nx_reg + cx_loc
+
+    pres_days_by_pixel = [
+        daily_pres[:, iy, ix][daily_pres[:, iy, ix] >= WET_VALUE_LOW]
+        for iy in range(ny_reg) for ix in range(nx_reg)]
+    fut_days_by_pixel = [
+        daily_fut[:, iy, ix][daily_fut[:, iy, ix] >= WET_VALUE_LOW]
+        for iy in range(ny_reg) for ix in range(nx_reg)]
 
     subsection("Bootstrap sampling")
 
     if RUN_METHOD_A:
         syn_pres_h_boot,     syn_pres_dm_boot     = generate_synthetic_quantiles(
-            pres_daily_input,     "PRESENT (center pixel)", seed_base=42)
+            [pres_days_by_pixel[ctr_pixel_idx]], 1,
+            "PRESENT (center pixel)", seed_base=42)
         syn_fut_h_boot,      syn_fut_dm_boot      = generate_synthetic_quantiles(
-            fut_daily_input,      "FUTURE  (center pixel)", seed_base=999)
+            [fut_days_by_pixel[ctr_pixel_idx]],  1,
+            "FUTURE  (center pixel)", seed_base=999)
         syn_pres_h_boot_buf, syn_pres_dm_boot_buf = generate_synthetic_quantiles(
-            pres_daily_buf_input, "PRESENT (buffer)",       seed_base=142)
+            pres_days_by_pixel, n_pixels,
+            "PRESENT (buffer)",       seed_base=142)
         syn_fut_h_boot_buf,  syn_fut_dm_boot_buf  = generate_synthetic_quantiles(
-            fut_daily_buf_input,  "FUTURE  (buffer)",       seed_base=1099)
+            fut_days_by_pixel, n_pixels,
+            "FUTURE  (buffer)",       seed_base=1099)
     else:
         print("  [Method A skipped — RUN_METHOD_A = False]")
 
     syn_pres_mx_boot     = generate_synthetic_max_quantiles(
-        pres_daily_input,     "PRESENT (center pixel)", seed_base=242)
+        [pres_days_by_pixel[ctr_pixel_idx]], 1,
+        "PRESENT (center pixel)", seed_base=242)
     syn_fut_mx_boot      = generate_synthetic_max_quantiles(
-        fut_daily_input,      "FUTURE  (center pixel)", seed_base=1999)
+        [fut_days_by_pixel[ctr_pixel_idx]],  1,
+        "FUTURE  (center pixel)", seed_base=1999)
     syn_pres_mx_boot_buf = generate_synthetic_max_quantiles(
-        pres_daily_buf_input, "PRESENT (buffer)",       seed_base=342)
+        pres_days_by_pixel, n_pixels,
+        "PRESENT (buffer)",       seed_base=342)
     syn_fut_mx_boot_buf  = generate_synthetic_max_quantiles(
-        fut_daily_buf_input,  "FUTURE  (buffer)",       seed_base=2099)
+        fut_days_by_pixel,  n_pixels,
+        "FUTURE  (buffer)",       seed_base=2099)
 
     syn_pres_c_h_boot,     syn_pres_c_dm_boot     = generate_analog_quantiles(
-        pres_daily_input,     "PRESENT (center pixel)", seed_base=542)
+        [pres_days_by_pixel[ctr_pixel_idx]], 1,
+        "PRESENT (center pixel)", seed_base=542)
     syn_fut_c_h_boot,      syn_fut_c_dm_boot      = generate_analog_quantiles(
-        fut_daily_input,      "FUTURE  (center pixel)", seed_base=2999)
+        [fut_days_by_pixel[ctr_pixel_idx]],  1,
+        "FUTURE  (center pixel)", seed_base=2999)
     syn_pres_c_h_boot_buf, syn_pres_c_dm_boot_buf = generate_analog_quantiles(
-        pres_daily_buf_input, "PRESENT (buffer)",       seed_base=642)
+        pres_days_by_pixel, n_pixels,
+        "PRESENT (buffer)",       seed_base=642)
     syn_fut_c_h_boot_buf,  syn_fut_c_dm_boot_buf  = generate_analog_quantiles(
-        fut_daily_buf_input,  "FUTURE  (buffer)",       seed_base=3099)
+        fut_days_by_pixel,  n_pixels,
+        "FUTURE  (buffer)",       seed_base=3099)
 
     # Bootstrap CIs
     pres_mx_ci      = ci_across_samples(syn_pres_mx_boot)

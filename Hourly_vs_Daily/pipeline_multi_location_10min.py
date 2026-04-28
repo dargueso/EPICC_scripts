@@ -460,20 +460,56 @@ def run_single(location, buffer):
         print(f"  {bin_str:>14}  {n_h:>9,}  {n_hw:>15,}  {len(profiles_E_arrays[b]):>9,}")
 
     # ------------------------------------------------------------------
-    # STEP 5 — Bootstrap samplers
+    # STEP 5 — Bootstrap samplers (spatial pixel bootstrap)
     # ------------------------------------------------------------------
+    # Per-pixel wet-day / wet-hour sequences used for spatial bootstrap.
+    # Resampling *pixels* with replacement (rather than iterating over a fixed
+    # flat sequence) turns the Monte Carlo into a proper bootstrap whose CI
+    # width reflects spatial sampling variability — comparable between center
+    # (1 pixel → case bootstrap over wet days) and buffer (n_pixels spatial
+    # draws → CI ∝ 1/√n_pixels instead of collapsing to near-zero).
+    n_pixels = ny_reg * nx_reg
+    ctr_pixel_idx = cy_loc * nx_reg + cx_loc
+
+    pres_days_by_pixel = [
+        daily_pres[:, iy, ix][daily_pres[:, iy, ix] >= WET_VALUE_LOW]
+        for iy in range(ny_reg) for ix in range(nx_reg)]
+    fut_days_by_pixel  = [
+        daily_fut[:, iy, ix][daily_fut[:, iy, ix] >= WET_VALUE_LOW]
+        for iy in range(ny_reg) for ix in range(nx_reg)]
+
+    pres_hrs_by_pixel = [
+        hourly_pres[:, :, iy, ix].reshape(-1)
+        for iy in range(ny_reg) for ix in range(nx_reg)]
+    pres_hrs_by_pixel = [h[h >= WET_HOUR_LOW] for h in pres_hrs_by_pixel]
+    fut_hrs_by_pixel  = [
+        hourly_fut[:, :, iy, ix].reshape(-1)
+        for iy in range(ny_reg) for ix in range(nx_reg)]
+    fut_hrs_by_pixel  = [h[h >= WET_HOUR_LOW] for h in fut_hrs_by_pixel]
+
     pq100 = PLOT_QUANTILES * 100.0
     n_q   = len(pq100)
 
-    def _sample_D(rain_daily_1d, label, seed_base):
-        """Method D — analog 10-min from daily totals."""
-        print(f"\n  [Method D — {label}]  Wet days: {len(rain_daily_1d)}")
+    def _sample_D(by_pixel, n_pix, label, seed_base):
+        """Method D — analog 10-min from daily totals, spatial pixel bootstrap."""
+        total_events = sum(len(p) for p in by_pixel)
+        print(f"\n  [Method D — {label}]  Pixels: {n_pix},  total wet days: {total_events:,}")
         t0_loop = time.time()
 
         def _one(s):
             rng = np.random.default_rng(seed_base + s)
+            # Resample pixels with replacement, then days within each pixel
+            pix_idx = rng.integers(0, n_pix, size=n_pix)
+            parts = []
+            for p in pix_idx:
+                days = by_pixel[p]
+                if len(days) > 0:
+                    parts.append(days[rng.integers(0, len(days), size=len(days))])
+            if not parts:
+                return np.full(n_q, np.nan, np.float32)
+            rain_seq = np.concatenate(parts)
             temp = []
-            for R in rain_daily_1d:
+            for R in rain_seq:
                 b = min(int(np.searchsorted(BINS_LOW[1:], R)), nbins_low - 1)
                 if rng.random() >= p_has_wet_D[b]:
                     continue
@@ -493,15 +529,26 @@ def run_single(location, buffer):
         print(f"  Total time: {elapsed(t0_loop)}")
         return np.array(results, dtype=np.float32)
 
-    def _sample_E(rain_hourly_1d, label, seed_base):
-        """Method E — analog 10-min from hourly totals."""
-        print(f"\n  [Method E — {label}]  Wet hours: {len(rain_hourly_1d)}")
+    def _sample_E(by_pixel, n_pix, label, seed_base):
+        """Method E — analog 10-min from hourly totals, spatial pixel bootstrap."""
+        total_events = sum(len(p) for p in by_pixel)
+        print(f"\n  [Method E — {label}]  Pixels: {n_pix},  total wet hours: {total_events:,}")
         t0_loop = time.time()
 
         def _one(s):
             rng = np.random.default_rng(seed_base + s)
+            # Resample pixels with replacement, then hours within each pixel
+            pix_idx = rng.integers(0, n_pix, size=n_pix)
+            parts = []
+            for p in pix_idx:
+                hrs = by_pixel[p]
+                if len(hrs) > 0:
+                    parts.append(hrs[rng.integers(0, len(hrs), size=len(hrs))])
+            if not parts:
+                return np.full(n_q, np.nan, np.float32)
+            hr_seq = np.concatenate(parts)
             temp = []
-            for R_h in rain_hourly_1d:
+            for R_h in hr_seq:
                 b = min(int(np.searchsorted(BINS_HOUR[1:], R_h)), nbins_hour - 1)
                 if rng.random() >= p_has_wet_E[b]:
                     continue
@@ -521,30 +568,27 @@ def run_single(location, buffer):
         print(f"  Total time: {elapsed(t0_loop)}")
         return np.array(results, dtype=np.float32)
 
-    # Input sequences (wet days / wet hours only)
-    pres_day_ctr_in  = pres_day_ctr[pres_day_ctr >= WET_VALUE_LOW]
-    fut_day_ctr_in   = fut_day_ctr[ fut_day_ctr  >= WET_VALUE_LOW]
-    pres_day_buf_in  = daily_pres[daily_pres >= WET_VALUE_LOW].reshape(-1)
-    fut_day_buf_in   = daily_fut[ daily_fut  >= WET_VALUE_LOW].reshape(-1)
-
-    pres_hr_ctr_in   = hourly_pres[:, :, cy_loc, cx_loc].reshape(-1)
-    pres_hr_ctr_in   = pres_hr_ctr_in[pres_hr_ctr_in >= WET_HOUR_LOW]
-    fut_hr_ctr_in    = hourly_fut[:, :, cy_loc, cx_loc].reshape(-1)
-    fut_hr_ctr_in    = fut_hr_ctr_in[fut_hr_ctr_in >= WET_HOUR_LOW]
-    pres_hr_buf_in   = hourly_pres[hourly_pres >= WET_HOUR_LOW].reshape(-1)
-    fut_hr_buf_in    = hourly_fut[ hourly_fut  >= WET_HOUR_LOW].reshape(-1)
-
     subsection("Bootstrap sampling")
 
-    D_pres_boot     = _sample_D(pres_day_ctr_in,  "PRESENT (center)",  seed_base=100)
-    D_fut_boot      = _sample_D(fut_day_ctr_in,   "FUTURE  (center)",  seed_base=200)
-    D_pres_boot_buf = _sample_D(pres_day_buf_in,  "PRESENT (buffer)",  seed_base=300)
-    D_fut_boot_buf  = _sample_D(fut_day_buf_in,   "FUTURE  (buffer)",  seed_base=400)
+    # Center: 1-pixel bootstrap (= case bootstrap over wet days at center pixel)
+    D_pres_boot     = _sample_D([pres_days_by_pixel[ctr_pixel_idx]], 1,
+                                 "PRESENT (center)", seed_base=100)
+    D_fut_boot      = _sample_D([fut_days_by_pixel[ctr_pixel_idx]],  1,
+                                 "FUTURE  (center)", seed_base=200)
+    # Buffer: spatial bootstrap over all buffer pixels
+    D_pres_boot_buf = _sample_D(pres_days_by_pixel, n_pixels,
+                                 "PRESENT (buffer)", seed_base=300)
+    D_fut_boot_buf  = _sample_D(fut_days_by_pixel,  n_pixels,
+                                 "FUTURE  (buffer)", seed_base=400)
 
-    E_pres_boot     = _sample_E(pres_hr_ctr_in,   "PRESENT (center)",  seed_base=500)
-    E_fut_boot      = _sample_E(fut_hr_ctr_in,    "FUTURE  (center)",  seed_base=600)
-    E_pres_boot_buf = _sample_E(pres_hr_buf_in,   "PRESENT (buffer)",  seed_base=700)
-    E_fut_boot_buf  = _sample_E(fut_hr_buf_in,    "FUTURE  (buffer)",  seed_base=800)
+    E_pres_boot     = _sample_E([pres_hrs_by_pixel[ctr_pixel_idx]], 1,
+                                 "PRESENT (center)", seed_base=500)
+    E_fut_boot      = _sample_E([fut_hrs_by_pixel[ctr_pixel_idx]],  1,
+                                 "FUTURE  (center)", seed_base=600)
+    E_pres_boot_buf = _sample_E(pres_hrs_by_pixel, n_pixels,
+                                 "PRESENT (buffer)", seed_base=700)
+    E_fut_boot_buf  = _sample_E(fut_hrs_by_pixel,  n_pixels,
+                                 "FUTURE  (buffer)", seed_base=800)
 
     D_pres_ci     = ci_across_samples(D_pres_boot)
     D_fut_ci      = ci_across_samples(D_fut_boot)
@@ -604,13 +648,15 @@ def run_single(location, buffer):
                     f'From hourly — {row_lbl}\n{location}, {buf_str}\n'
                     f'[obs: wet-hour filtered]')
 
-        # Col 2 — both future CIs vs wet-day observations (full change signal)
+        # Col 2 — both future CIs vs wet-hour observations
+        # Using wet-hour obs so both CIs are compared against the same population
+        # that Method E conditions on (consistent with Col 1).
         ax = axes[row, 2]
-        ax.plot(q_axis, obs_p, color='#2E86AB', linewidth=1.8,
-                marker='o', markersize=5, label='Present observed (wet-day)', zorder=4)
-        ax.plot(q_axis, obs_f, color='#E50C0C', linewidth=1.5,
+        ax.plot(q_axis, obs_p_E, color='#2E86AB', linewidth=1.8,
+                marker='o', markersize=5, label='Present observed (wet-hour)', zorder=4)
+        ax.plot(q_axis, obs_f_E, color='#E50C0C', linewidth=1.5,
                 marker='s', markersize=4, linestyle='--',
-                label='Future observed (wet-day)', zorder=3)
+                label='Future observed (wet-hour)', zorder=3)
         _add_ci(ax, D_fut_ci_r, '#F18F01', 'Synthetic future (from daily)',  alpha=0.25)
         _add_ci(ax, E_fut_ci_r, '#9B59B6', 'Synthetic future (from hourly)', alpha=0.25)
         _setup_ax(ax, YLABEL,
