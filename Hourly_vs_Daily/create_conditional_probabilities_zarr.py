@@ -11,12 +11,12 @@ dask.config.set(scheduler='threads', num_workers=8)  # Reduced since we're using
 
 PATH_IN = '/home/dargueso/postprocessed/EPICC/'
 PATH_OUT = '/home/dargueso/postprocessed/EPICC/'
-WRUN = "EPICC_2km_ERA5"
+WRUN = "EPICC_2km_ERA5_CMIP6anom"
 test_suffix = ""
 
 # Wet thresholds - values below these are considered "dry" and excluded
 WET_VALUE_HIFREQ = 0.1  # mm (for high frequency)
-WET_VALUE_LOFREQ = 1.0  # mm (for low frequency)
+WET_VALUE_LOFREQ = 0.1  # mm (for low frequency)
 
 #####################################################################
 # CONFIGURATION - Change these for different frequency comparisons
