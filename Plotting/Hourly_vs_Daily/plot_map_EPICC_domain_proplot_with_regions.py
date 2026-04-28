@@ -114,11 +114,11 @@ for loc in range(len(locs_names)):
     nyc = locs_y_idx[loc]
     nxc = locs_x_idx[loc]
 
-    subregs[nyc-10:nyc+11,nxc-10:nxc+11]=1
+    subregs[nyc-3:nyc+4,nxc-3:nxc+4]=1
     
 
-    axs[0].plot(locx,locy,'ro',transform=ccrs.PlateCarree(),zorder=103)
-    axs[0].text(locx+0.1,locy-0.1,locname,color='black',fontsize=10,transform=ccrs.PlateCarree(),zorder=103,
+    axs[0].plot(locx,locy,'ro',transform=ccrs.PlateCarree(),zorder=103,markersize=1)
+    axs[0].text(locx+0.2,locy-0.1,locname,color='black',fontsize=10,transform=ccrs.PlateCarree(),zorder=103,
                 bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=1.0))
 
 axs[0].contourf(to_np(lons), to_np(lats), subregs,
