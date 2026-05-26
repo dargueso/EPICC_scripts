@@ -147,6 +147,17 @@ def _open_zarr(path):
         return xr.open_zarr(path, consolidated=False)
 
 
+def _nn_idx(sorted_tots, R):
+    """Index of the nearest-neighbour in a sorted 1-D array of totals."""
+    n   = len(sorted_tots)
+    pos = int(np.searchsorted(sorted_tots, R))
+    if pos == 0:
+        return 0
+    if pos >= n:
+        return n - 1
+    return pos - 1 if (R - sorted_tots[pos - 1]) <= (sorted_tots[pos] - R) else pos
+
+
 def ci_across_samples(q_boot):
     n_q = q_boot.shape[1]
     out = np.full((3, n_q), np.nan, dtype=np.float32)
@@ -363,6 +374,9 @@ def run_single(location, buffer):
     rain_10m_clipped = np.where(
         wet_day_mask_4d & (blk_pres >= WET_VALUE_HIGH),
         blk_pres, 0.0).astype(np.float32)                   # (n_days,144,ny,nx)
+    # Raw profiles: sub-threshold steps kept (only dry days zeroed).
+    # Threshold filter applied after scaling in the bootstrap, restoring symmetry.
+    rain_10m_raw = np.where(wet_day_mask_4d, blk_pres, 0.0).astype(np.float32)
 
     n_wet_10m     = (rain_10m_clipped > WET_VALUE_HIGH).sum(axis=1)  # (n_days,ny,nx)
     has_wet_mask  = wet_day_mask & (n_wet_10m > 0)
@@ -385,7 +399,7 @@ def run_single(location, buffer):
         mask = has_wet_mask & (b_day_all == b)
         if mask.sum() > 0:
             days_i, iy_i, ix_i = np.where(mask)
-            profs = rain_10m_clipped[days_i, :, iy_i, ix_i]   # (n_in_bin, 144)
+            profs = rain_10m_raw[days_i, :, iy_i, ix_i]         # (n_in_bin, 144)
             tots  = daily_pres[days_i, iy_i, ix_i]
             profiles_D_arrays.append(profs.copy())
             profiles_D_totals.append(tots.astype(np.float32))
@@ -394,6 +408,12 @@ def run_single(location, buffer):
             profiles_D_totals.append(np.empty(0, dtype=np.float32))
 
     cnt_D = sum(len(a) for a in profiles_D_arrays)
+    # Sort each bin by total so bootstrap can do nearest-neighbour lookup
+    for b in range(nbins_low):
+        if len(profiles_D_totals[b]) > 1:
+            si = np.argsort(profiles_D_totals[b])
+            profiles_D_arrays[b] = profiles_D_arrays[b][si]
+            profiles_D_totals[b] = profiles_D_totals[b][si]
     print(f"  Library D built: {elapsed(t0)}  |  {cnt_D:,} profiles")
     print(f"  Events per daily-total bin (Method D, present period):")
     print(f"  {'Bin (mm/d)':>14}  {'Wet days':>9}  {'With wet 10min':>15}  {'Profiles':>9}")
@@ -416,6 +436,11 @@ def run_single(location, buffer):
     rain_h6_clipped = np.where(
         wet_hour_mask[:, :, np.newaxis, :, :] & (blk_pres_h6 >= WET_VALUE_HIGH),
         blk_pres_h6, 0.0).astype(np.float32)              # (n_days,24,6,ny,nx)
+    # Raw profiles: sub-threshold steps kept (only dry hours zeroed).
+    # Threshold filter applied after scaling in the bootstrap, restoring symmetry.
+    rain_h6_raw = np.where(
+        wet_hour_mask[:, :, np.newaxis, :, :],
+        blk_pres_h6, 0.0).astype(np.float32)
     n_wet_in_hour = (rain_h6_clipped > WET_VALUE_HIGH).sum(axis=2)  # (n_days,24,ny,nx)
     has_wet_hour_mask = wet_hour_mask & (n_wet_in_hour > 0)
 
@@ -437,7 +462,7 @@ def run_single(location, buffer):
         if mask.sum() > 0:
             days_i, hrs_i, iy_i, ix_i = np.where(mask)
             # profiles_E shape per bin: (n_in_bin, 6)
-            profs = rain_h6_clipped[days_i, hrs_i, :, iy_i, ix_i]
+            profs = rain_h6_raw[days_i, hrs_i, :, iy_i, ix_i]
             tots  = hourly_pres[days_i, hrs_i, iy_i, ix_i]
             profiles_E_arrays.append(profs.copy())
             profiles_E_totals.append(tots.astype(np.float32))
@@ -446,6 +471,12 @@ def run_single(location, buffer):
             profiles_E_totals.append(np.empty(0, dtype=np.float32))
 
     cnt_E = sum(len(a) for a in profiles_E_arrays)
+    # Sort each bin by total so bootstrap can do nearest-neighbour lookup
+    for b in range(nbins_hour):
+        if len(profiles_E_totals[b]) > 1:
+            si = np.argsort(profiles_E_totals[b])
+            profiles_E_arrays[b] = profiles_E_arrays[b][si]
+            profiles_E_totals[b] = profiles_E_totals[b][si]
     print(f"  Library E built: {elapsed(t0)}  |  {cnt_E:,} profiles")
     print(f"  Events per hourly-total bin (Method E, present period):")
     print(f"  {'Bin (mm/h)':>14}  {'Wet hours':>9}  {'With wet 10min':>15}  {'Profiles':>9}")
@@ -516,7 +547,7 @@ def run_single(location, buffer):
                 n_a = len(profiles_D_arrays[b])
                 if n_a == 0:
                     continue
-                idx     = rng.integers(0, n_a)
+                idx     = _nn_idx(profiles_D_totals[b], R)
                 R_a     = float(profiles_D_totals[b][idx])
                 if R_a <= 0.0:
                     continue
@@ -555,7 +586,7 @@ def run_single(location, buffer):
                 n_a = len(profiles_E_arrays[b])
                 if n_a == 0:
                     continue
-                idx    = rng.integers(0, n_a)
+                idx    = _nn_idx(profiles_E_totals[b], R_h)
                 R_a    = float(profiles_E_totals[b][idx])
                 if R_a <= 0.0:
                     continue

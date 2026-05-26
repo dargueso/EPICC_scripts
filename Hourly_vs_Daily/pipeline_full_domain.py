@@ -226,6 +226,11 @@ def build_analog_library(blk_nbr, daily_nbr):
     rain_clipped = np.where(
         wet_day_mask[:, np.newaxis, :, :] & (blk_nbr >= WET_VALUE_HIGH),
         blk_nbr, 0.0).astype(np.float32)
+    # Raw profiles: sub-threshold steps kept (only dry days zeroed).
+    # Threshold filter applied after scaling in the bootstrap, restoring symmetry.
+    rain_raw = np.where(
+        wet_day_mask[:, np.newaxis, :, :],
+        blk_nbr, 0.0).astype(np.float32)
 
     n_wet_all     = (rain_clipped > WET_VALUE_HIGH).sum(axis=1)
     has_wet_hours = wet_day_mask & (n_wet_all > 0)
@@ -233,7 +238,7 @@ def build_analog_library(blk_nbr, daily_nbr):
 
     # Vectorized extraction: find all (day, iy, ix) triples with valid wet days
     days_i, iy_i, ix_i = np.where(has_wet_hours)           # each shape (N_valid,)
-    profs  = rain_clipped[days_i, :, iy_i, ix_i]           # (N_valid, N_INTERVAL)
+    profs  = rain_raw[days_i, :, iy_i, ix_i]               # (N_valid, N_INTERVAL)
     tots   = daily_nbr[days_i, iy_i, ix_i].astype(np.float32)
     b_vec  = b_all[days_i, iy_i, ix_i]
 
@@ -242,6 +247,13 @@ def build_analog_library(blk_nbr, daily_nbr):
         mask = b_vec == b
         profiles_arrays.append(profs[mask].copy())
         profiles_totals.append(tots[mask].copy())
+
+    # Sort each bin by total for nearest-neighbour analog matching in the bootstrap
+    for b in range(nbins_low):
+        if len(profiles_totals[b]) > 1:
+            si = np.argsort(profiles_totals[b])
+            profiles_arrays[b] = profiles_arrays[b][si]
+            profiles_totals[b] = profiles_totals[b][si]
     return profiles_arrays, profiles_totals
 
 
@@ -283,21 +295,24 @@ def _method_c_one_sample(by_pixel, n_pix, profiles_arrays, profiles_totals,
     if n_valid == 0:
         return nan_row, nan_row
 
-    # --- Step 2: draw analog indices (one random float per valid day, scaled to int) ---
-    rand_f   = rng.random(n_valid)
-    idx_arr  = (rand_f * n_analogs_arr[valid_bins]).astype(np.int64)
-    # clip to guard against floating-point edge where rand_f==1.0
-    idx_arr  = np.minimum(idx_arr, n_analogs_arr[valid_bins] - 1)
-
-    # --- Step 3: batch-extract profiles and totals using per-bin fancy indexing ---
+    # --- Steps 2+3: nearest-neighbour analog selection and profile extraction ---
+    # For each event find the library profile whose total is closest to R,
+    # minimising the scale factor and eliminating Jensen's inequality inflation.
     all_profiles = np.empty((n_valid, N_INTERVAL), dtype=np.float32)
     all_R_analog = np.empty(n_valid,               dtype=np.float32)
     for b in range(nbins_low):
         mask_b = valid_bins == b
         if not mask_b.any():
             continue
-        all_profiles[mask_b] = profiles_arrays[b][idx_arr[mask_b]]
-        all_R_analog[mask_b] = profiles_totals[b][idx_arr[mask_b]]
+        tots_b  = profiles_totals[b]          # sorted by build_analog_library
+        R_b     = valid_R[mask_b]
+        pos     = np.searchsorted(tots_b, R_b)
+        pos     = np.clip(pos, 0, len(tots_b) - 1)
+        left    = np.clip(pos - 1, 0, len(tots_b) - 1)
+        nn_idx  = np.where(np.abs(tots_b[left] - R_b) <= np.abs(tots_b[pos] - R_b),
+                           left, pos)
+        all_profiles[mask_b] = profiles_arrays[b][nn_idx]
+        all_R_analog[mask_b] = tots_b[nn_idx]
 
     # --- Step 4: scale profiles, compute hourly values and daily max ---
     good = all_R_analog > 0.0
