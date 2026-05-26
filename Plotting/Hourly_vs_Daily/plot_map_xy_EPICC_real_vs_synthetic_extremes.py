@@ -10,7 +10,7 @@
 @Desc    :  None
 '''
 
-from matplotlib.ticker import ScalarFormatter
+from matplotlib.ticker import FuncFormatter
 import os
 import xarray as xr
 import numpy as np
@@ -104,8 +104,11 @@ fin = xr.open_dataset(filein).sel(percentile=qtile).squeeze()
 
 filein_syn = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5/synthetic_fut_buf{buffer}.nc'
 fin_syn = xr.open_dataset(filein_syn).sel(plot_q=qtile/100.).squeeze()
-
 fin_syn_all = xr.open_dataset(filein_syn).squeeze()
+
+filein_syn_pres = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5/synthetic_pres_buf{buffer}.nc'
+fin_syn_pres_all = xr.open_dataset(filein_syn_pres).squeeze()
+
 qtiles = fin_syn_all['plot_q'].values
 cl_hi = round(confidence_level, 3)
 cl_lo = round(1 - cl_hi, 3)
@@ -116,6 +119,59 @@ diff = data[1]- data[0]
 sig = data[1]- data[2]
 sig_var= sig > 0
 sig_var = sig_var.astype(int)
+
+# -------------------------------------------------------------------
+# Domain-wide P{qtile} attribution diagnostic (printed to terminal)
+# -------------------------------------------------------------------
+obs_pres_2d = fin['percentiles_present'].values
+obs_fut_2d  = fin['percentiles_future'].values
+syn_med_2d  = fin_syn.syn_h_C.sel(bootstrap_q=0.5, method='nearest').squeeze().values
+
+total_delta_2d = obs_fut_2d - obs_pres_2d
+explained_2d   = syn_med_2d - obs_pres_2d
+structural_2d  = obs_fut_2d - syn_med_2d
+
+with np.errstate(divide='ignore', invalid='ignore'):
+    pct_expl_2d   = np.where(np.abs(total_delta_2d) > 0.01,
+                             100.0 * explained_2d   / np.abs(total_delta_2d), np.nan)
+    pct_struct_2d = np.where(np.abs(total_delta_2d) > 0.01,
+                             100.0 * structural_2d  / np.abs(total_delta_2d), np.nan)
+
+interior_2d  = (border_mask == 0)
+med_coast_2d = (med_mask['combined_mask'].values == 2)
+
+print(f"\n{'='*62}")
+print(f"  Domain-wide P{qtile} attribution  (buf={buffer}, CI={cl_lo}–{cl_hi})")
+print(f"{'='*62}")
+for label, mask in [
+    ('Full domain (excl. border)',           interior_2d),
+    ('Coastal Mediterranean (excl. border)', interior_2d & med_coast_2d),
+]:
+    m = mask & np.isfinite(pct_expl_2d)
+    n = int(m.sum())
+    if n == 0:
+        print(f"\n  {label}: no valid pixels")
+        continue
+    def _stats(arr, mask):
+        v = arr[mask]
+        return (float(np.nanmean(v)),
+                float(np.nanmedian(v)),
+                float(np.nanpercentile(v, 25)),
+                float(np.nanpercentile(v, 75)))
+
+    mn_tot, med_tot, q25_tot, q75_tot = _stats(total_delta_2d, m)
+    mn_exp, med_exp, q25_exp, q75_exp = _stats(explained_2d,   m)
+    mn_str, med_str, q25_str, q75_str = _stats(structural_2d,  m)
+    mn_pe,  med_pe,  q25_pe,  q75_pe  = _stats(pct_expl_2d,    m)
+    mn_ps,  med_ps,  q25_ps,  q75_ps  = _stats(pct_struct_2d,  m)
+    print(f"\n  {label}  (N={n:,} px)")
+    print(f"    {'':20s}  {'mean':>8}  {'median':>8}  {'IQR':>18}")
+    print(f"    {'Total Δ (mm/h)':20s}  {mn_tot:>+8.3f}  {med_tot:>+8.3f}  [{q25_tot:+.3f}, {q75_tot:+.3f}]")
+    print(f"    {'Explained (mm/h)':20s}  {mn_exp:>+8.3f}  {med_exp:>+8.3f}  [{q25_exp:+.3f}, {q75_exp:+.3f}]"
+          f"    {mn_pe:>+6.1f}% / {med_pe:>+6.1f}%  [{q25_pe:+.1f}%, {q75_pe:+.1f}%]")
+    print(f"    {'Structural (mm/h)':20s}  {mn_str:>+8.3f}  {med_str:>+8.3f}  [{q25_str:+.3f}, {q75_str:+.3f}]"
+          f"    {mn_ps:>+6.1f}% / {med_ps:>+6.1f}%  [{q25_ps:+.1f}%, {q75_ps:+.1f}%]")
+print(f"\n{'='*62}\n")
 
 #####################################################################
 #####################################################################
@@ -151,6 +207,8 @@ except KeyError:
     ds_future = xr.open_zarr(zarr_path_future, consolidated=False)
     print("   Opened without consolidated metadata")
 
+xy_axes = []   # collect all xy panels for shared y-limit pass
+
 for loc in range(len(locs_names)):
 
     loc_name = locs_names[loc]
@@ -174,7 +232,8 @@ for loc in range(len(locs_names)):
         x=slice(xloc-buffer,xloc+buffer+1),
     ).astype(np.float32)
 
-    fin_syn = fin_syn_all.isel(y=yloc,x=xloc).squeeze()
+    fin_syn      = fin_syn_all.isel(y=yloc, x=xloc).squeeze()
+    fin_syn_pres = fin_syn_pres_all.isel(y=yloc, x=xloc).squeeze()
 
     locx = lons[locs_y_idx[loc],locs_x_idx[loc]].values
     locy = lats[locs_y_idx[loc],locs_x_idx[loc]].values
@@ -217,6 +276,18 @@ for loc in range(len(locs_names)):
 
     fin_pres_qtiles = np.quantile(pres_wet_1d, qtiles) if len(pres_wet_1d) > 0 else np.full(len(qtiles), np.nan)
     fin_fut_qtiles  = np.quantile(fut_wet_1d,  qtiles) if len(fut_wet_1d)  > 0 else np.full(len(qtiles), np.nan)
+
+    # Center-pixel quantiles (index [buffer, buffer] in the local buffer array)
+    pres_ctr_1d    = pres_np[:nt_p, buffer, buffer]
+    fut_ctr_1d     = fut_np[:nt_f,  buffer, buffer]
+    pres_ctr_daily = pres_ctr_1d.reshape(n_days_p, N_INTERVAL).sum(axis=1)
+    fut_ctr_daily  = fut_ctr_1d.reshape(n_days_f, N_INTERVAL).sum(axis=1)
+    pres_ctr_mask  = np.repeat(pres_ctr_daily >= WET_VALUE_LOW, N_INTERVAL)
+    fut_ctr_mask   = np.repeat(fut_ctr_daily  >= WET_VALUE_LOW, N_INTERVAL)
+    pres_ctr_wet = pres_ctr_1d[(pres_ctr_1d > WET_VALUE_HIGH) & pres_ctr_mask]
+    fut_ctr_wet  = fut_ctr_1d[ (fut_ctr_1d  > WET_VALUE_HIGH) & fut_ctr_mask]
+    fin_pres_qtiles_ctr = np.quantile(pres_ctr_wet, qtiles) if len(pres_ctr_wet) > 0 else np.full(len(qtiles), np.nan)
+    fin_fut_qtiles_ctr  = np.quantile(fut_ctr_wet,  qtiles) if len(fut_ctr_wet)  > 0 else np.full(len(qtiles), np.nan)
 
     # ------------------------------------------------------------------
     # CROSS-CHECK vs pipeline_multi_location NPZ
@@ -267,58 +338,87 @@ for loc in range(len(locs_names)):
         ax = fig.add_subplot(gs_row1[0, nw])
     else:
         continue  # Skip row 2 as it's for the map
+    xy_axes.append(ax)
     ax.set_title(f"{string.ascii_lowercase[nletter]}", size='x-large', weight='bold',loc="left")
     ax.text(0.02, 0.98, loc_name, color='black', fontsize=10, 
         transform=ax.transAxes, zorder=103, 
         verticalalignment='top', horizontalalignment='left')
-    # Plot with improved styling
-    ax.plot(qtiles, fin_pres_qtiles, label='Present-day observations', 
-            color='#2E86AB', linewidth=1, marker='o', markersize=2)
-    ax.plot(qtiles, fin_fut_qtiles, label='Future observations', 
-            color="#E50C0C", linewidth=1, marker='s', markersize=2)
-    ax.plot(qtiles, fin_syn.sel(bootstrap_q=cl_hi, method='nearest').syn_h_C.squeeze(),
-            label='Future synthetic', color='#F18F01', linewidth=0.5,
-            linestyle='--', marker=None)
-    ax.plot(qtiles, fin_syn.sel(bootstrap_q=cl_lo, method='nearest').syn_h_C.squeeze(),
-            color='#F18F01', linewidth=0.5,
-            linestyle='--', marker=None)
-    ax.fill_between(qtiles, fin_syn.sel(bootstrap_q=cl_lo, method='nearest').syn_h_C.squeeze(),
-                    fin_syn.sel(bootstrap_q=cl_hi, method='nearest').syn_h_C.squeeze(),
-                    color='#F18F01', alpha=0.2)
+    # Synthetic CI arrays
+    syn_pres_lo  = fin_syn_pres.sel(bootstrap_q=cl_lo, method='nearest').syn_h_C.values
+    syn_pres_med = fin_syn_pres.sel(bootstrap_q=0.5,   method='nearest').syn_h_C.values
+    syn_pres_hi  = fin_syn_pres.sel(bootstrap_q=cl_hi, method='nearest').syn_h_C.values
+    syn_fut_lo   = fin_syn.sel(bootstrap_q=cl_lo, method='nearest').syn_h_C.values
+    syn_fut_med  = fin_syn.sel(bootstrap_q=0.5,   method='nearest').syn_h_C.values
+    syn_fut_hi   = fin_syn.sel(bootstrap_q=cl_hi, method='nearest').syn_h_C.values
 
+    # Synthetic present CI (blue shading, drawn first so obs sit on top)
+    ax.fill_between(qtiles, syn_pres_lo, syn_pres_hi,
+                    color='#2E86AB', alpha=0.15,
+                    label=f'Syn present CI ({cl_lo}–{cl_hi})')
+    ax.plot(qtiles, syn_pres_med, color='#2E86AB', linewidth=1.4, linestyle='--')
+    # Synthetic future CI (orange shading)
+    ax.fill_between(qtiles, syn_fut_lo, syn_fut_hi,
+                    color='#F18F01', alpha=0.25,
+                    label=f'Syn future CI ({cl_lo}–{cl_hi})')
+    ax.plot(qtiles, syn_fut_med, color='#F18F01', linewidth=1.8,
+            label='Syn future median')
+    # Buffer-pooled observed
+    ax.plot(qtiles, fin_pres_qtiles, label='Present obs (buffer)',
+            color='#2E86AB', linewidth=1.8, linestyle='-', marker='o', markersize=5, zorder=4)
+    ax.plot(qtiles, fin_fut_qtiles, label='Future obs (buffer)',
+            color='#E50C0C', linewidth=1.8, linestyle='--', marker='s', markersize=5, zorder=4)
+    # P99 attribution annotation
+    idx99 = np.searchsorted(qtiles, 0.99)
+    if idx99 < len(qtiles) and np.isclose(qtiles[idx99], 0.99, atol=0.001):
+        op     = float(fin_pres_qtiles[idx99])
+        of     = float(fin_fut_qtiles[idx99])
+        total  = of - op
+        expl   = float(syn_fut_med[idx99]) - op
+        struct = of - float(syn_fut_med[idx99])
+        pct_e  = 100.0 * expl   / abs(total) if total != 0 else 0.0
+        pct_s  = 100.0 * struct / abs(total) if total != 0 else 0.0
+        ax.text(0.97, 0.04,
+                f'P99 Δ: {total:+.2f} mm/h\n'
+                f'Expld: {expl:+.2f} ({pct_e:.0f}%)\n'
+                f'Strct: {struct:+.2f} ({pct_s:.0f}%)',
+                transform=ax.transAxes, fontsize=7,
+                verticalalignment='bottom', horizontalalignment='right',
+                bbox=dict(boxstyle='square,pad=0.3', facecolor='wheat', alpha=0.75))
 
     # Log scale for y-axis
     ax.set_yscale('log')
 
-    # Labels and title with better formatting
+    # Labels
     if nr == 1:
         ax.set_xlabel('Quantiles', fontsize=12, fontweight='bold')
     if nw == 0:
-        ax.set_ylabel('1-hour precipitation (mm)', fontsize=12, fontweight='bold')
-    
-    if nw != 0:
-        ax.yaxis.set_tick_params(labelleft=False)
+        ax.set_ylabel('1-hour precipitation (mm/h)', fontsize=12, fontweight='bold')
 
-    #ax.set_title(f'1-hour Precipitation Quantiles at {loc_name}', 
-    #            fontsize=14, fontweight='bold', pad=20)
+    # Legend on first panel only
+    if loc == 0:
+        ax.legend(frameon=True, fancybox=True, fontsize=7, loc='upper left')
 
-    # Improved legend
-    #if loc == 7:
-        # ax.legend(frameon=True, fancybox=True, shadow=True, 
-        #   fontsize=9, loc='upper left', bbox_to_anchor=(1, 1))
-
-    # Enhanced grid
+    # Grid and ticks
     ax.grid(True, which='both', linestyle=':', linewidth=0.5, alpha=0.7)
     ax.set_axisbelow(True)
-
-    yticks = [5, 10, 20, 50]  # Adjust to your data range
-    ax.set_yticks(yticks)
-    ax.yaxis.set_major_formatter(ScalarFormatter())
-    ax.yaxis.get_major_formatter().set_scientific(False)
-
-    # Adjust tick label sizes
+    # Determine tick range from the actual plotted values (not raw ylim boundaries)
+    _vals = np.concatenate([fin_pres_qtiles, fin_fut_qtiles,
+                            syn_pres_lo, syn_pres_hi,
+                            syn_fut_lo,  syn_fut_hi])
+    _vals = _vals[np.isfinite(_vals) & (_vals > 0)]
+    if len(_vals):
+        _vmin, _vmax = float(_vals.min()), float(_vals.max())
+        _candidates = [1, 2, 5, 10, 20, 50, 100, 200]
+        nice_ticks = [t for t in _candidates if _vmin * 0.7 <= t <= _vmax * 1.4]
+        if nice_ticks:
+            ax.set_yticks(nice_ticks)
+            ax.set_ylim(nice_ticks[0] * 0.75, nice_ticks[-1] * 1.3)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda x, _: f'{x:g}'))
+    span = qtiles[-1] - qtiles[0]
+    ax.set_xlim(qtiles[0] - 0.05 * span, qtiles[-1] + 0.05 * span)
     ax.tick_params(axis='both', which='major', labelsize=10)
     ax.minorticks_on()
+    ax.yaxis.set_minor_formatter(mpl.ticker.NullFormatter())
 
 
 axs= fig.add_subplot(gs_main[2],projection=cart_proj)
