@@ -115,6 +115,17 @@ def _open_zarr(path):
         return xr.open_zarr(path, consolidated=False)
 
 
+def _nn_idx(sorted_tots, R):
+    """Index of the nearest-neighbour in a sorted 1-D array of totals."""
+    n   = len(sorted_tots)
+    pos = int(np.searchsorted(sorted_tots, R))
+    if pos == 0:
+        return 0
+    if pos >= n:
+        return n - 1
+    return pos - 1 if (R - sorted_tots[pos - 1]) <= (sorted_tots[pos] - R) else pos
+
+
 def _sample_from_bin_val(lo, hi, rng):
     if np.isinf(hi):
         return lo + rng.exponential(EXP_SCALE)
@@ -328,6 +339,9 @@ def run_single(location, buffer):
     rain_h_clipped = np.where(
         wet_day_mask_4d & (blk_pres >= WET_VALUE_HIGH),
         blk_pres, 0.0).astype(np.float32)                   # (n_days, 24, ny, nx)
+    # Raw profiles: sub-threshold steps kept (only dry days zeroed).
+    # Threshold filter applied after scaling in the bootstrap, restoring symmetry.
+    rain_h_raw = np.where(wet_day_mask_4d, blk_pres, 0.0).astype(np.float32)
 
     # n_wet per pixel-day; valid = wet day with at least one wet hour
     n_wet_all          = (rain_h_clipped > WET_VALUE_HIGH).sum(axis=1)  # (n_days, ny, nx)
@@ -390,8 +404,6 @@ def run_single(location, buffer):
         n_days_wet_hrs_by_bin / n_days_all_by_bin, 0.0).astype(np.float32)
 
     # --- Analog profile library ---
-    # The nested loop is kept to preserve insertion order (same random analog
-    # selected per seed as in the original code → identical bootstrap results).
     subsection("Building analog profile library")
     t0 = time.time()
     profiles_by_bin = [[] for _ in range(nbins_low)]
@@ -405,7 +417,7 @@ def run_single(location, buffer):
             for k in np.where(valid_mask)[0]:
                 b = int(b_all[k, iy, ix])
                 profiles_by_bin[b].append(
-                    (rain_h_clipped[k, :, iy, ix].copy(),
+                    (rain_h_raw[k, :, iy, ix].copy(),
                      float(daily_pres[k, iy, ix])))
 
     # Convert lists → numpy arrays for fast indexed access in bootstrap
@@ -421,6 +433,13 @@ def run_single(location, buffer):
             profiles_arrays.append(np.empty((0, N_INTERVAL), dtype=np.float32))
             profiles_totals.append(np.empty(0, dtype=np.float32))
     del profiles_by_bin
+
+    # Sort each bin by total for nearest-neighbour analog matching in the bootstrap
+    for b in range(nbins_low):
+        if len(profiles_totals[b]) > 1:
+            si = np.argsort(profiles_totals[b])
+            profiles_arrays[b] = profiles_arrays[b][si]
+            profiles_totals[b] = profiles_totals[b][si]
 
     profile_counts = [len(profiles_arrays[j]) for j in range(nbins_low)]
     print(f"  Library built: {elapsed(t0)}")
@@ -581,7 +600,7 @@ def run_single(location, buffer):
                 n_analogs = len(profiles_arrays[b])
                 if n_analogs == 0:
                     continue
-                idx      = rng.integers(0, n_analogs)
+                idx      = _nn_idx(profiles_totals[b], R)
                 R_analog = float(profiles_totals[b][idx])
                 if R_analog <= 0.0:
                     continue
