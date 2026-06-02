@@ -340,8 +340,8 @@ for loc in range(len(locs_names)):
         continue  # Skip row 2 as it's for the map
     xy_axes.append(ax)
     ax.set_title(f"{string.ascii_lowercase[nletter]}", size='x-large', weight='bold',loc="left")
-    ax.text(0.02, 0.98, loc_name, color='black', fontsize=10, 
-        transform=ax.transAxes, zorder=103, 
+    ax.text(0.02, 0.98, loc_name, color='black', fontsize=13,
+        transform=ax.transAxes, zorder=103,
         verticalalignment='top', horizontalalignment='left')
     # Synthetic CI arrays
     syn_pres_lo  = fin_syn_pres.sel(bootstrap_q=cl_lo, method='nearest').syn_h_C.values
@@ -363,9 +363,9 @@ for loc in range(len(locs_names)):
     ax.plot(qtiles, syn_fut_med, color='#F18F01', linewidth=1.8,
             label='Syn future median')
     # Buffer-pooled observed
-    ax.plot(qtiles, fin_pres_qtiles, label='Present obs (buffer)',
+    ax.plot(qtiles, fin_pres_qtiles, label='Present obs',
             color='#2E86AB', linewidth=1.8, linestyle='-', marker='o', markersize=5, zorder=4)
-    ax.plot(qtiles, fin_fut_qtiles, label='Future obs (buffer)',
+    ax.plot(qtiles, fin_fut_qtiles, label='Future obs',
             color='#E50C0C', linewidth=1.8, linestyle='--', marker='s', markersize=5, zorder=4)
     # P99 attribution annotation
     idx99 = np.searchsorted(qtiles, 0.99)
@@ -381,7 +381,7 @@ for loc in range(len(locs_names)):
                 f'P99 Δ: {total:+.2f} mm/h\n'
                 f'Expld: {expl:+.2f} ({pct_e:.0f}%)\n'
                 f'Strct: {struct:+.2f} ({pct_s:.0f}%)',
-                transform=ax.transAxes, fontsize=7,
+                transform=ax.transAxes, fontsize=10,
                 verticalalignment='bottom', horizontalalignment='right',
                 bbox=dict(boxstyle='square,pad=0.3', facecolor='wheat', alpha=0.75))
 
@@ -396,7 +396,8 @@ for loc in range(len(locs_names)):
 
     # Legend on first panel only
     if loc == 0:
-        ax.legend(frameon=True, fancybox=True, fontsize=7, loc='upper left')
+        ax.legend(frameon=False, fontsize=10, loc='upper left',
+                  bbox_to_anchor=(0.0, 0.88))
 
     # Grid and ticks
     ax.grid(True, which='both', linestyle=':', linewidth=0.5, alpha=0.7)

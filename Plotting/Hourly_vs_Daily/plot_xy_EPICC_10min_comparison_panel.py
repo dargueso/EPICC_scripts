@@ -80,7 +80,8 @@ def _setup_ax(ax, nrow, ncol, q_axis, all_vals):
         nice_ticks = [t for t in candidates if vmin * 0.7 <= t <= vmax * 1.4]
         if nice_ticks:
             ax.set_yticks(nice_ticks)
-            ax.set_ylim(nice_ticks[0] * 0.75, nice_ticks[-1] * 1.3)
+            ax.set_ylim(nice_ticks[0] * 0.75,
+                        max(nice_ticks[-1] * 1.3, vmax * 1.15))
     ax.yaxis.set_major_formatter(FuncFormatter(lambda x, _: f'{x:g}'))
 
     span = q_axis[-1] - q_axis[0]
@@ -114,9 +115,9 @@ def _combined_p99_annotation(ax, obs_pres_buf, obs_fut_buf,
 
     ax.text(0.97, 0.04,
             f'P99 total Δ : {total:+.2f} mm/h\n'
-            f'Daily →10min :  Expld {d_e:+.2f} ({d_pe:.0f}%)   Strct {d_s:+.2f} ({d_ps:.0f}%)\n'
-            f'Hourly→10min :  Expld {e_e:+.2f} ({e_pe:.0f}%)   Strct {e_s:+.2f} ({e_ps:.0f}%)',
-            transform=ax.transAxes, fontsize=7,
+            f'Daily →10min :  Expld {d_pe:.0f}%   Strct {d_ps:.0f}%\n'
+            f'Hourly→10min :  Expld {e_pe:.0f}%   Strct {e_ps:.0f}%',
+            transform=ax.transAxes, fontsize=10,
             verticalalignment='bottom', horizontalalignment='right',
             bbox=dict(boxstyle='square,pad=0.4', facecolor='wheat', alpha=0.75))
 
@@ -161,7 +162,7 @@ for loc_idx, loc_name in enumerate(LOCATIONS):
     # Panel label + location name
     ax.set_title(string.ascii_lowercase[loc_idx], size='x-large',
                  weight='bold', loc='left')
-    ax.text(0.03, 0.98, loc_name, fontsize=9, transform=ax.transAxes,
+    ax.text(0.03, 0.98, loc_name, fontsize=13, transform=ax.transAxes,
             va='top', ha='left')
 
     # Observed lines (buffer pooled, no center pixel)
@@ -193,8 +194,8 @@ for loc_idx, loc_name in enumerate(LOCATIONS):
     _setup_ax(ax, nrow, ncol, q_axis, all_vals)
 
     if loc_idx == 0:
-        ax.legend(fontsize=7, loc='upper left', frameon=True,
-                  fancybox=True, ncol=1)
+        ax.legend(fontsize=10, loc='upper left', frameon=False,
+                  ncol=1, bbox_to_anchor=(0.0, 0.88))
 
 fig.suptitle(
     f'10-min extreme precipitation — buffer={BUFFER}\n'
