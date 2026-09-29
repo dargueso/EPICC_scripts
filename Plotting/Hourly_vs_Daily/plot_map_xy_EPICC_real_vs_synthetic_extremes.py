@@ -178,7 +178,7 @@ print(f"\n{'='*62}\n")
 
 locs_x_idx = [559,423,569,795,638,821,1091,989]#,433,866,335]
 locs_y_idx = [258,250,384,527,533,407,174,425]#,254,506,119]
-locs_names = ['Mallorca','Turis','Pyrenees','Rosiglione', 'Ardeche','Corte','Catania',"L'Aquila"]#,'Valencia','Barga','Almeria']
+locs_names = ['Mallorca','Turis','Pyrenees','Rossiglione', 'Ardeche','Corte','Catania',"L'Aquila"]#,'Valencia','Barga','Almeria']
 
 fig = plt.figure(figsize=(15, 20), constrained_layout=False)
 # Create main GridSpec with separate spacing control
@@ -195,7 +195,7 @@ gs_row1 = gs_main[1].subgridspec(1, 4, wspace=0.1)
 #####################################################################
 #####################################################################
 
-zarr_path_present = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5/UIB_01H_RAIN.zarr'
+zarr_path_present = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5/UIB_01H_RAIN_fulltime.zarr'
 zarr_path_future  = f'/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5_CMIP6anom/UIB_01H_RAIN.zarr'
 
 try:

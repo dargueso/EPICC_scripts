@@ -93,7 +93,7 @@ subregs = np.zeros_like(lm_is.values)
 #####################################################################
 #####################################################################
 
-qtile = 95
+qtile = 99
 
 # --- Colormap selection: 'custom' | 'rain' | 'haline' (cmocean) or 'icefire' (seaborn) ---
 PRECIP_CMAP = 'custom'
@@ -118,7 +118,7 @@ _CUSTOM_RGB = np.array([
 #     daily  -> divide by 24   (mm day-1 -> mm hr-1)
 #     hourly -> unchanged      (already mm hr-1)
 #     10 min -> multiply by 6  (mm (10 min)-1 -> mm hr-1)
-CONVERT_TO_MM_HR = False
+CONVERT_TO_MM_HR = True
 
 if PRECIP_CMAP == 'custom':
     # 12 colours: colour[0] (white) → 0–2 mm interval,

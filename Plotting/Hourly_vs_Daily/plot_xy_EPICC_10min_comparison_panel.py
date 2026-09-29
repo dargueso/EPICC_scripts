@@ -31,7 +31,7 @@ mpl.rcParams['hatch.linewidth'] = 0.8
 # Configuration
 # =============================================================================
 
-LOCATIONS = ['Mallorca', 'Turis', 'Pyrenees', 'Rosiglione',
+LOCATIONS = ['Mallorca', 'Turis', 'Pyrenees', 'Rossiglione',
              'Ardeche', 'Corte', 'Catania', "L'Aquila"]
 
 BUFFER = 5
@@ -156,6 +156,35 @@ for loc_idx, loc_name in enumerate(LOCATIONS):
     ci_D_fut     = ci_from_boot(m['D_fut_boot_buf'])
     ci_E_fut     = ci_from_boot(m['E_fut_boot_buf'])
 
+    # ------------------------------------------------------------------
+    # Print per-location statistics for manuscript
+    # ------------------------------------------------------------------
+    print(f"\n{'='*72}")
+    print(f"  {loc_name}  (buf={BUFFER}, CI={cl_lo}–{cl_hi})")
+    print(f"{'='*72}")
+    print(f"  {'Quantile':>10}  {'Pres obs':>10}  {'Fut obs':>10}  "
+          f"{'Syn D med':>10}  {'Syn E med':>10}  {'Δ obs':>8}")
+    for iq, q in enumerate(q_axis):
+        delta = obs_fut_buf[iq] - obs_pres_buf[iq]
+        print(f"  {q:>10.4f}  {obs_pres_buf[iq]:>10.4f}  {obs_fut_buf[iq]:>10.4f}  "
+              f"{ci_D_fut[I_MED, iq]:>10.4f}  {ci_E_fut[I_MED, iq]:>10.4f}  {delta:>+8.4f}")
+
+    idx99 = np.searchsorted(q_axis, 0.99)
+    if idx99 < len(q_axis) and np.isclose(q_axis[idx99], 0.99, atol=0.001):
+        op    = float(obs_pres_buf[idx99])
+        of    = float(obs_fut_buf[idx99])
+        total = of - op
+        print(f"\n  P99 Attribution  (total Δ = {total:+.3f} mm/h):")
+        print(f"  {'Method':22s}  {'Explained':>14}  {'Structural':>14}")
+        for label, ci_fut in [('Daily→10min  (D)', ci_D_fut),
+                               ('Hourly→10min (E)', ci_E_fut)]:
+            expl   = float(ci_fut[I_MED, idx99]) - op
+            struct = of - float(ci_fut[I_MED, idx99])
+            pct_e  = 100.0 * expl   / abs(total) if total != 0 else 0.0
+            pct_s  = 100.0 * struct / abs(total) if total != 0 else 0.0
+            print(f"  {label:22s}  {expl:>+8.3f} mm/h ({pct_e:>5.1f}%)  "
+                  f"{struct:>+8.3f} mm/h ({pct_s:>5.1f}%)")
+
     gs_row = gs_row0 if nrow == 0 else gs_row1
     ax = fig.add_subplot(gs_row[0, ncol])
 
@@ -196,12 +225,6 @@ for loc_idx, loc_name in enumerate(LOCATIONS):
     if loc_idx == 0:
         ax.legend(fontsize=10, loc='upper left', frameon=False,
                   ncol=1, bbox_to_anchor=(0.0, 0.88))
-
-fig.suptitle(
-    f'10-min extreme precipitation — buffer={BUFFER}\n'
-    f'Orange: synthetic future from daily   '
-    f'Purple: synthetic future from hourly',
-    fontsize=12, fontweight='bold')
 
 outfile = os.path.join(PATH_OUT, f'10min_comparison_panel_buf{BUFFER}.png')
 fig.savefig(outfile, dpi=150, bbox_inches='tight', facecolor='white')

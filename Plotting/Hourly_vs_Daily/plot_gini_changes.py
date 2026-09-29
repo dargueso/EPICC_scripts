@@ -42,7 +42,7 @@ MASK_FILE  = '/home/dargueso/postprocessed/EPICC/EPICC_2km_ERA5/my_coastal_med_m
 MASK_VALUE = 2
 
 # Spatial buffer around each point location (half-width in grid cells)
-BUFFER = 10
+BUFFER = 5
 
 # Number of bootstrap resamples for confidence intervals
 N_BOOTSTRAP = 1000
@@ -55,7 +55,7 @@ LOCATIONS = [
     (258,  559, 'Mallorca'),
     (250,  423, 'Turis'),
     (384,  569, 'Pyrenees'),
-    (527,  795, 'Rosiglione'),
+    (527,  795, 'Rossiglione'),
     (533,  638, 'Ardeche'),
     (407,  821, 'Corte'),
     (174, 1091, 'Catania'),

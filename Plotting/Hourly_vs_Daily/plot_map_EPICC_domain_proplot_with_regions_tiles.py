@@ -68,7 +68,7 @@ mbounds = None
 
 locs_x_idx = [559,423,569,795,638,821,1091,989]#,335,433,866]
 locs_y_idx = [258,250,384,527,533,407,174,425]#,119,254,506]
-locs_names = ['Mallorca','Turis','Pyrenees','Rosiglione', 'Ardeche','Corte','Catania',"L'Aquila"]#'Almeria','Valencia','Barga']
+locs_names = ['Mallorca','Turis','Pyrenees','Rossiglione', 'Ardeche','Corte','Catania',"L'Aquila"]#'Almeria','Valencia','Barga']
 
 
 
