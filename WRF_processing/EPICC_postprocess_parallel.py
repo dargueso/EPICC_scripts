@@ -130,6 +130,7 @@ def postproc_var_byday(wrun, varn, date):
                     ncfile.variables[varname] = fwrfgeo.variables[varname]
 
         varout, atts = cvars.compute_WRFvar(ncfile, varn)
+        accum_dt = float(getattr(ncfile, "PREC_ACC_DT", cfg.acc_dt))
         otimes = wrftime2date(filesin[0].split())[:]
         if patt == "wrf3hrly":
             fwrf2d.close()
@@ -157,6 +158,7 @@ def postproc_var_byday(wrun, varn, date):
                         ncfile.variables[varname] = fwrfgeo.variables[varname]
 
             xFragment, atts = cvars.compute_WRFvar(ncfile, varn)
+            accum_dt = float(getattr(ncfile, "PREC_ACC_DT", cfg.acc_dt))
 
             if len(tFragment) == 1:
                 if len(xFragment.shape) == 3:
@@ -192,6 +194,13 @@ def postproc_var_byday(wrun, varn, date):
         "lon": lon,
         "times": otimes,
     }
+    if varn in ("RAIN", "PRNC"):
+        # PREC_ACC_NC is the rain of the LAST PREC_ACC_DT minutes: the value
+        # stamped t covers (t - PREC_ACC_DT, t]. Stated in the file as time_bnds,
+        # so the aggregation (create_multiple_freq_files_parallel.py) and anyone
+        # reading the 10-min data can see the convention.
+        start = [ti - dt.timedelta(minutes=accum_dt) for ti in otimes]
+        varinfo["bounds"] = np.stack([np.array(start), np.array(otimes)], axis=1)
 
     cvars.create_netcdf(varinfo, fileout)
 

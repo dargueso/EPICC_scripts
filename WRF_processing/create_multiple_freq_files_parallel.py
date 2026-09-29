@@ -120,18 +120,64 @@ def create_hourly_files_from_pp(fullpathin,fullpathout,yearmonth,patt_inst,varn)
     print(fin)
     subprocess.call(f"ncrcat {fin} {fout}",shell=True)
 
+# Variables accumulated over the LAST output interval (WRF PREC_ACC_NC over
+# prec_acc_dt): the value stamped t is rain from t-dt to t.
+ACCUMULATED = ('RAIN', 'PRNC')
+
+
 def create_hourly_files(fullpathout,yearmonth,patt,varn):
 
-    """Create hourly files from 10min files"""
+    """Create hourly files from 10min files
+
+    Accumulated variables (RAIN, PRNC) are stamped at the END of their 10-min
+    interval, so a plain `cdo hoursum` (grouping stamps HH:00..HH:50) gives
+    rain from HH-1:50 to HH:50, 10 min early. Checked against RAINNC in the
+    EPICC wrfout of 2020-01-10: stamps HH:10..HH+1:00 reproduce the exact
+    hourly total, HH:00..HH:50 do not. So for those variables: append the
+    first value of the next month (needed for the hour 23:00-00:00), move
+    every stamp back by 10 min (to the START of its interval), keep this
+    month, then sum. The last hour of the record has no closing value and
+    comes out incomplete.
+    Instantaneous variables are averaged as before.
+    """
 
     fin = f'{fullpathout}/{patt}_{varn}_{yearmonth}.nc'
     fout = fin.replace("10MIN_%s" %(varn),"01H_%s" %(varn))
     print("Input: ", fin)
     print("Output: ", fout)
-    if varn == 'RAIN':
-        subprocess.call(f"cdo hoursum {fin} {fout}",shell=True)
+    if varn in ACCUMULATED:
+        month = int(yearmonth[5:7])
+        nextym = (pd.Timestamp(f"{yearmonth}-01") + pd.offsets.MonthBegin(1)).strftime("%Y-%m")
+        fnext = f'{fullpathout}/{patt}_{varn}_{nextym}.nc'
+        if os.path.exists(fnext):
+            src = f"-mergetime {fin} -seltimestep,1 {fnext}"
+        else:
+            print(f"WARNING: {fnext} missing, the last hour of {yearmonth} is incomplete")
+            src = fin
+        subprocess.call(f"cdo hoursum -selmon,{month} -shifttime,-10min {src} {fout}",shell=True)
+        # shifttime moves input time_bnds too: set the true clock-hour bounds
+        set_hour_bounds(fout)
     else:
         subprocess.call(f"cdo hourmean {fin} {fout}",shell=True)
+
+def set_hour_bounds(fout):
+    """Set time_bnds to [HH:00, HH+1:00) for each hourly time stamp."""
+    import netCDF4 as nc
+    with nc.Dataset(fout, 'r+') as f:
+        t = f.variables['time']
+        cal = getattr(t, 'calendar', 'standard')
+        stamps = pd.to_datetime([str(x) for x in nc.num2date(t[:], t.units, cal)]).round('s')
+        start = stamps.floor('1h')
+        end = start + pd.Timedelta('1h')
+        bname = getattr(t, 'bounds', 'time_bnds')
+        if bname not in f.variables:
+            if 'bnds' not in f.dimensions:
+                f.createDimension('bnds', 2)
+            f.createVariable(bname, 'd', ('time', 'bnds'))
+            t.bounds = bname
+        f.variables[bname][:] = np.stack(
+            [nc.date2num(list(x.to_pydatetime()), t.units, cal) for x in (start, end)], axis=1)
+
 
 def create_3hourly_files_from_pp(fullpathin,fullpathout,yearmonth,patt_inst,varn):
 

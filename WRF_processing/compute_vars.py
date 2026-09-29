@@ -139,6 +139,15 @@ def create_netcdf(var, filename):
         units="seconds since 1949-12-01 00:00:00",
         calendar="standard",
     )
+    # Optional interval each value covers. Accumulated rain (PREC_ACC_NC) is
+    # END-stamped: the value at t covers (t - PREC_ACC_DT, t].
+    if var.get("bounds") is not None:
+        outfile.createDimension("bnds", 2)
+        outbnds = outfile.createVariable("time_bnds", "d", ("time", "bnds"), zlib=True, complevel=5)
+        outbnds[:] = np.stack(
+            [nc.date2num(list(var["bounds"][:, k]), units="seconds since 1949-12-01 00:00:00",
+                         calendar="standard") for k in (0, 1)], axis=1)
+        setattr(outtime, "bounds", "time_bnds")
 
     outlat[:] = var["lat"][:]
     outlon[:] = var["lon"][:]
@@ -188,18 +197,29 @@ def compute_PRNC(ncfile):
 
 
 def compute_RAIN(ncfile):
-    """Function to calculate non-convective precipitation flux from a wrf output
+    """Function to calculate accumulated precipitation from a wrf output
     It also provides variable attribute CF-Standard
+
+    PREC_ACC_NC (plus PREC_ACC_C when a cumulus scheme is on) is the rain
+    accumulated over the LAST prec_acc_dt minutes: the value stamped t is rain
+    from t - prec_acc_dt to t. It is the rain of the whole output interval only
+    if prec_acc_dt equals the output interval (the EPICC wrfprec files: 10 min;
+    NOT the hourly wrfout, which also has PREC_ACC_DT = 10). And it is
+    END-stamped: see create_hourly_files in create_multiple_freq_files_parallel.py.
     """
+    times = ncfile.variables["Times"][:]
+    if len(times) > 1:
+        t = [np.datetime64(b"".join(x).decode().replace("_", "T")) for x in times[:2]]
+        interval = float((t[1] - t[0]) / np.timedelta64(1, "m"))
+        accum_dt = float(getattr(ncfile, "PREC_ACC_DT", cfg.acc_dt))
+        if abs(interval - accum_dt) > 1e-6:
+            raise ValueError(f"PREC_ACC_DT = {accum_dt} min but records every {interval} min: "
+                             "PREC_ACC_NC would be only part of each interval")
 
     ## Computing diagnostic
-    if "PREC_ACC" in ncfile.variables.keys():
-        pr_acc = ncfile.variables["PREC_ACC_NC"][:] + ncfile.variables["PREC_ACC"][:]
-    else:
-        prnc_acc = ncfile.variables["PREC_ACC_NC"][:]
-
-    ## Deacumulating over prac_acc_dt (namelist entry)
-    rain = prnc_acc
+    rain = ncfile.variables["PREC_ACC_NC"][:]
+    if "PREC_ACC_C" in ncfile.variables.keys():
+        rain = rain + ncfile.variables["PREC_ACC_C"][:]
 
     atts = {
         "standard_name": "Accumulated rainfall",
