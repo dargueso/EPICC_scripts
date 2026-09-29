@@ -35,11 +35,11 @@ wrun = cfg.wrf_runs[0]
 freq = '01H'
 # locs_x_idx = [559,423,569,795,638,821,1091,866,335,433,989]
 # locs_y_idx = [258,250,384,527,533,407,174,506,119,254,425]
-# locs_names = ['Mallorca','Turis','Pyrenees','Rosiglione', 'Ardeche','Corte','Catania','Barga','Almeria','Valencia',"L'Aquila"]
+# locs_names = ['Mallorca','Turis','Pyrenees','Rossiglione', 'Ardeche','Corte','Catania','Barga','Almeria','Valencia',"L'Aquila"]
 
 locs_x_idx = [559,423,569,795,638,821,1091,989]#,433,866,335]
 locs_y_idx = [258,250,384,527,533,407,174,425]#,254,506,119]
-locs_names = ['Mallorca','Turis','Pyrenees','Rosiglione', 'Ardeche','Corte','Catania',"L'Aquila"]#,'Valencia','Barga','Almeria']
+locs_names = ['Mallorca','Turis','Pyrenees','Rossiglione', 'Ardeche','Corte','Catania',"L'Aquila"]#,'Valencia','Barga','Almeria']
 
 
 

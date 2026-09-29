@@ -40,7 +40,7 @@ mpl.rcParams["font.size"] = 12
 #         '10min'  for the 10-min pipeline plots.
 FREQ = 'hourly'
 
-LOCATIONS = ['Mallorca', 'Catania', 'Turis', 'Rosiglione',
+LOCATIONS = ['Mallorca', 'Catania', 'Turis', 'Rossiglione',
              'Ardeche', 'Corte', "L'Aquila", 'Pyrenees']
 
 # buf=0 will be skipped gracefully if the npz has not been generated yet

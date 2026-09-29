@@ -23,8 +23,8 @@ WRUN = "EPICC_2km_ERA5_CMIP6anom"
 # Frequency to extract (change as needed)
 FREQ = '01H'  # Options: '10MIN', '01H', 'DAY'
 
-loc_lats = {'Mallorca': 39.639, 'Barcelona': 41.385, 'Valencia': 39.469,'Rosiglione': 44.55, 'Catania': 37.51 }
-loc_lons = {'Mallorca': 2.647, 'Barcelona': 2.173, 'Valencia': -0.376,'Rosiglione': 8.64, 'Catania': 15.08}
+loc_lats = {'Mallorca': 39.639, 'Barcelona': 41.385, 'Valencia': 39.469,'Rossiglione': 44.55, 'Catania': 37.51 }
+loc_lons = {'Mallorca': 2.647, 'Barcelona': 2.173, 'Valencia': -0.376,'Rossiglione': 8.64, 'Catania': 15.08}
 
 # Target location
 TARGET_LAT = loc_lats['Catania']

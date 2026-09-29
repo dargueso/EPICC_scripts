@@ -27,7 +27,7 @@ mpl.rcParams["font.size"] = 13
 # Configuration
 ###########################################################################
 
-LOCATIONS = ['Mallorca', 'Catania', 'Turis', 'Rosiglione',
+LOCATIONS = ['Mallorca', 'Catania', 'Turis', 'Rossiglione',
              'Ardeche', 'Corte', "L'Aquila", 'Pyrenees']
 
 BUFFER = 5   # buffer size to use (single value)

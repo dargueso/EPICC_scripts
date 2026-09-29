@@ -30,7 +30,7 @@ mpl.rcParams["font.size"] = 12
 # Configuration
 ###########################################################################
 
-LOCATIONS = ['Mallorca', 'Catania', 'Turis', 'Rosiglione',
+LOCATIONS = ['Mallorca', 'Catania', 'Turis', 'Rossiglione',
              'Ardeche', 'Corte', "L'Aquila", 'Pyrenees']
 
 BUFFERS = [0, 1, 3, 5, 10, 15, 20]

@@ -62,15 +62,15 @@ WRUN_PRESENT = 'EPICC_2km_ERA5'
 WRUN_FUTURE  = 'EPICC_2km_ERA5_CMIP6anom'
 
 loc_lats = {'Mallorca':   39.6353, 'Barcelona': 41.385,  'Valencia':   39.469,
-            'Rosiglione': 44.5584, 'Catania':   37.5055, 'Turis':      39.3867,
+            'Rossiglione': 44.5584, 'Catania':   37.5055, 'Turis':      39.3867,
             'Pyrenees':   41.9771, 'Ardeche':   44.7585, 'Corte':      42.3002,
             "L'Aquila":   42.3577}
 loc_lons = {'Mallorca':   2.6360,  'Barcelona':  2.173,  'Valencia':   -0.376,
-            'Rosiglione': 8.6722,  'Catania':   15.0935, 'Turis':      -0.6195,
+            'Rossiglione': 8.6722,  'Catania':   15.0935, 'Turis':      -0.6195,
             'Pyrenees':   2.8245,  'Ardeche':    4.5673, 'Corte':       9.1565,
             "L'Aquila":  13.4068}
 
-LOCATIONS = ['Mallorca', 'Catania', 'Turis', 'Rosiglione', 'Ardeche',
+LOCATIONS = ['Mallorca', 'Catania', 'Turis', 'Rossiglione', 'Ardeche',
              'Corte', "L'Aquila", 'Pyrenees']
 BUFFERS   = [0, 1,2, 3,4, 5,6,7,8,9, 10, 15, 20]
 

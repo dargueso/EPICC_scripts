@@ -49,7 +49,7 @@ buffer= 50
 
 locs_x_idx = [559,423,569,795,638]
 locs_y_idx = [258,250,384,527,533]
-locs_names = ['Mallorca','Turis','Pyrenees','Rosiglione', 'Ardeche']
+locs_names = ['Mallorca','Turis','Pyrenees','Rossiglione', 'Ardeche']
 
 #region_sq[80:669,193:1169]=1
 

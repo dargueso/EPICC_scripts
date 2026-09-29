@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 
 locs_x_idx = [559,423,569,795,638,821,1091,335,989]#,433,866]
 locs_y_idx = [258,250,384,527,533,407,174,119,425]#,254,506]
-locs_names = ['Mallorca','Turis','Pyrenees','Rosiglione', 'Ardeche','Corte','Catania','Almeria',"L'Aquila"]#,'Valencia','Barga']
+locs_names = ['Mallorca','Turis','Pyrenees','Rossiglione', 'Ardeche','Corte','Catania','Almeria',"L'Aquila"]#,'Valencia','Barga']
 
 
 #Loading synthetic future qtiles

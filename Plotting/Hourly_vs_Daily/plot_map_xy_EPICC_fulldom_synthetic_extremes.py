@@ -67,7 +67,7 @@ LOCATIONS = [
     (258, 559, 'Mallorca'),
     (250, 423, 'Turis'),
     (384, 569, 'Pyrenees'),
-    (527, 795, 'Rosiglione'),
+    (527, 795, 'Rossiglione'),
     (533, 638, 'Ardeche'),
     (407, 821, 'Corte'),
     (174,1091, 'Catania'),
