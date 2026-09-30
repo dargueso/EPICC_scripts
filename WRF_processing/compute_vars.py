@@ -113,6 +113,11 @@ def create_netcdf(var, filename):
             setattr(outlev, "long_name", "Clouds level")
             setattr(outlev, "units", "")
             setattr(outlev, "_CoordinateAxisType", "z")
+        elif var["varname"] == "CAPE2D":
+            setattr(outlev, "standard_name", "cape2d_variable")
+            setattr(outlev, "long_name", "0: MCAPE (J kg-1), 1: MCIN (J kg-1), 2: LCL (m), 3: LFC (m)")
+            setattr(outlev, "units", "")
+            setattr(outlev, "_CoordinateAxisType", "z")
         else:
             setattr(outlev, "standard_name", "model-level")
             setattr(outlev, "long_name", "Model level")
@@ -563,11 +568,22 @@ def compute_CAPE2D(ncfile):
         missing=const.missingval,
         meta=False,
     )
+    # wrf.cape_2d puts the four fields on the LEADING axis: (4, ntime, y, x),
+    # or (4, y, x) for a single time. create_netcdf writes (time, lev, y, x),
+    # so the variable axis must sit behind time. Before 2026-09-30 the array
+    # was written as returned, which made "time" index the variable and "lev"
+    # the time of day; the CAPE2D files produced until then (EPICC, 2024-11)
+    # have the axes swapped and must be read accordingly
+    # (MCS-tracking/Plotting/cape_utils.py) or regenerated.
+    if cape2d.ndim == 3:
+        cape2d = cape2d[:, np.newaxis]
+    cape2d = np.ma.transpose(cape2d, (1, 0, 2, 3))
 
     atts = {
         "standard_name": "cape2d_variables",
         "long_name": "mcape mcin lcl lfc",
         "units": "SI",
+        "level_description": "0: MCAPE (J kg-1), 1: MCIN (J kg-1), 2: LCL (m), 3: LFC (m)",
     }
 
     return cape2d, atts
