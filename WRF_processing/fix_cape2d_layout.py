@@ -39,7 +39,18 @@ NWORKERS = 6
 
 
 def convert(fin):
-    """Write the corrected file next to fin, verify it, move the original aside."""
+    """Write the corrected file next to fin, verify it, move the original aside.
+
+    Never raises: a failure comes back as a message, so one bad file does not
+    take the pool down with it. Files already in the new layout are skipped.
+    """
+    try:
+        return _convert(fin)
+    except Exception as e:
+        return f"FAILED {os.path.basename(fin)}: {e!r}"
+
+
+def _convert(fin):
     d = os.path.dirname(fin)
     old_dir = f"{d}_oldlayout"
     fout = fin + ".fixed.tmp"
@@ -48,11 +59,15 @@ def convert(fin):
         v = src.variables["CAPE2D"]
         v.set_auto_mask(False)
         nt, nl, ny, nx = v.shape
+        if nl == NVAR:
+            return f"{os.path.basename(fin)}: already converted"
         assert nl == NPERDAY and nt % NPERDAY == 0, f"{fin}: unexpected shape {v.shape}"
         fill = v._FillValue
         first = v[:NPERDAY, 0]                       # (8, y, x): records of day 0 at step 0
         used = [bool((first[i] != fill).any()) for i in range(NPERDAY)]
-        assert used == [True] * NVAR + [False] * (NPERDAY - NVAR), f"{fin}: record pattern {used}"
+        # LCL and LFC (records 2, 3) are always set; MCAPE/MCIN can be fill
+        # everywhere at a stable 00 UTC (2015-12, 2016-02); records 4-7 never hold data
+        assert used[2:] == [True, True] + [False] * (NPERDAY - NVAR), f"{fin}: record pattern {used}"
 
         if os.path.exists(fout):
             os.remove(fout)
@@ -126,10 +141,13 @@ def main():
             if f.startswith("UIB_03H_CAPE2D_") and f.endswith(".nc") and (not months or f[15:22] in months):
                 files.append(f"{d}/{f}")
     logging.info("%d files", len(files))
+    done = fails = 0
     with Pool(NWORKERS) as pool:
         for msg in pool.imap_unordered(convert, files):
             logging.info(msg)
-    logging.info("done")
+            fails += msg.startswith("FAILED")
+            done += " steps, " in msg or "already converted" in msg
+    logging.info("done: %d in the new layout, %d failed", done, fails)
 
 
 if __name__ == "__main__":
