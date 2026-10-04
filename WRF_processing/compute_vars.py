@@ -118,6 +118,18 @@ def create_netcdf(var, filename):
             setattr(outlev, "long_name", "0: MCAPE (J kg-1), 1: MCIN (J kg-1), 2: LCL (m), 3: LFC (m)")
             setattr(outlev, "units", "")
             setattr(outlev, "_CoordinateAxisType", "z")
+        elif var["varname"] in ("WAZ", "TKZ", "PZ"):
+            vcoord = getattr(cfg, "zlevels_vcoord", "agl").lower()
+            setattr(outlev, "standard_name", "height")
+            setattr(
+                outlev,
+                "long_name",
+                "Height above ground level" if vcoord == "agl" else "Height above mean sea level",
+            )
+            setattr(outlev, "units", "m")
+            setattr(outlev, "positive", "up")
+            setattr(outlev, "_CoordinateAxisType", "z")
+            outlev[:] = np.asarray(cfg.zlevels_m, dtype=float)
         else:
             setattr(outlev, "standard_name", "model-level")
             setattr(outlev, "long_name", "Model level")
@@ -321,6 +333,86 @@ def compute_WA(ncfile):
     }
 
     return wa, atts
+
+
+###########################################################
+###########################################################
+def _zlevels_config():
+    """Fixed heights (m) and reference for the on-the-fly height interpolation
+    (WAZ, TKZ, PZ): cfg.zlevels_m and cfg.zlevels_vcoord ("agl" or "msl")."""
+    levels_m = np.asarray(cfg.zlevels_m, dtype=float)
+    vcoord = getattr(cfg, "zlevels_vcoord", "agl").lower()
+    if vcoord not in ("agl", "msl"):
+        raise ValueError(
+            "cfg.zlevels_vcoord must be 'agl' or 'msl', got %r" % (cfg.zlevels_vcoord,)
+        )
+    return levels_m, vcoord
+
+
+def _interp_to_zlevels(ncfile, wrfvar, field_type, standard_name, long_name, units):
+    """Compute a wrf-python diagnostic on mass points and interpolate it on the
+    fly to the fixed heights of _zlevels_config(). Points below the terrain
+    (msl) or above the top are set to const.missingval.
+    Returns (values[time, lev, y, x], atts)."""
+    levels_m, vcoord = _zlevels_config()
+
+    field = wrf.getvar(ncfile, wrfvar, wrf.ALL_TIMES)
+    # wrf.vinterp expects height levels in km for ght_agl / ght_msl
+    out = wrf.vinterp(
+        ncfile,
+        field,
+        vert_coord="ght_%s" % vcoord,
+        interp_levels=levels_m / 1000.0,
+        field_type=field_type,
+        timeidx=wrf.ALL_TIMES,
+    )
+    out = np.ma.filled(np.asarray(out), const.missingval)
+
+    # Keep (time, lev, y, x) even when the file holds a single time step
+    if out.ndim == 3:
+        out = np.expand_dims(out, axis=0)
+
+    ref = "above ground level" if vcoord == "agl" else "above mean sea level"
+    atts = {
+        "standard_name": standard_name,
+        "long_name": "%s at fixed heights %s" % (long_name, ref),
+        "units": units,
+        "hgt": ", ".join("%g m" % z for z in levels_m) + " " + ref,
+        "vert_coord": "ght_%s" % vcoord,
+    }
+    return out, atts
+
+
+def compute_WAZ(ncfile):
+    """Function to calculate vertical wind at fixed heights from WRF outputs.
+    W is destaggered to mass points (wrf-python "wa") and interpolated on the
+    fly to cfg.zlevels_m (metres), above ground ("agl") or above mean sea
+    level ("msl") according to cfg.zlevels_vcoord.
+    It also provides variable attributes CF-Standard
+    """
+    return _interp_to_zlevels(
+        ncfile, "wa", "none", "vertical_wind_speed", "Vertical wind speed", "m s-1"
+    )
+
+
+def compute_TKZ(ncfile):
+    """Function to calculate air temperature (K) at fixed heights from WRF
+    outputs (wrf-python "tk" interpolated on the fly, see compute_WAZ).
+    It also provides variable attributes CF-Standard
+    """
+    return _interp_to_zlevels(
+        ncfile, "tk", "tk", "air_temperature", "Air temperature", "K"
+    )
+
+
+def compute_PZ(ncfile):
+    """Function to calculate pressure (Pa) at fixed heights from WRF outputs
+    (wrf-python "pres" interpolated on the fly in log-pressure, see compute_WAZ).
+    It also provides variable attributes CF-Standard
+    """
+    return _interp_to_zlevels(
+        ncfile, "pres", "pres", "air_pressure", "Air pressure", "Pa"
+    )
 
 
 ###########################################################

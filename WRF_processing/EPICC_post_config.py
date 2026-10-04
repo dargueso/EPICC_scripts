@@ -24,6 +24,12 @@ nproc_y = 48
 
 variables = ["PSL"]
 
+# Fixed heights (metres) for the on-the-fly height interpolation of
+# WAZ (vertical wind), TKZ (temperature, K) and PZ (pressure, Pa).
+# zlevels_vcoord: "agl" = above ground level, "msl" = above mean sea level
+zlevels_m = [500, 1000, 1500, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 11000, 12000, 13000]
+zlevels_vcoord = "msl"
+
 #### Requested output variables (DO NOT CHANGE THIS LINE) ####
 
 # TAS
@@ -61,7 +67,9 @@ variables = ["PSL"]
 # CLDFRA
 # U10MET
 # V10MET
-# W5L
+# WAZ
+# TKZ
+# PZ
 # OMEGA
 # PW
 # TVAVG
