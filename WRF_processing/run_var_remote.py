@@ -52,6 +52,7 @@ def parse_args():
     p.add_argument("--path_out", default=os.path.expanduser("~/postprocessed/EPICC/temp"))
     p.add_argument("--overwrite", action="store_true")
     p.add_argument("--months", nargs="+", type=int, metavar="M", help="keep only these calendar months (e.g. 8 9 10 11)")
+    p.add_argument("--stop-at", metavar="HH:MM", help="submit no new day after this local time (in-flight days finish); days left over are reported as deferred")
     p.add_argument("--dates", nargs="+", metavar="YYYY-MM-DD", help="process only these days (ignores --syear/--eyear)")
     return p.parse_args()
 
@@ -72,6 +73,8 @@ def process_day(args, date):
 
     if not args.overwrite and output_ok(fileout, args.var):
         return (sdate, "skip")
+    if args.deadline is not None and dt.datetime.now() >= args.deadline:
+        return (sdate, "deferred (past stop time)")
 
     filesin = sorted(glob(f"{fullpathin}/{args.patt}_{args.dom}_{sdate}*"))
     if not filesin:
@@ -141,17 +144,24 @@ def main():
         date_list = [d1 + dt.timedelta(days=i) for i in range((d2 - d1).days)]
     if args.months:
         date_list = [d for d in date_list if d.month in args.months]
-    print(f"{args.var} {args.wrun}: {len(date_list)} days, {args.njobs} workers", flush=True)
+    args.deadline = None
+    if args.stop_at:
+        h, m = (int(x) for x in args.stop_at.split(":"))
+        args.deadline = dt.datetime.now().replace(hour=h, minute=m, second=0, microsecond=0)
+        if args.deadline <= dt.datetime.now():
+            args.deadline += dt.timedelta(days=1)
+    print(f"{args.var} {args.wrun}: {len(date_list)} days, {args.njobs} workers"
+          + (f", no new day after {args.deadline:%Y-%m-%d %H:%M}" if args.deadline else ""), flush=True)
 
     results = Parallel(n_jobs=args.njobs, verbose=0, return_as="generator")(
         delayed(process_day)(args, date) for date in date_list
     )
-    nerr = 0
+    nerr = ndef = 0
     for sdate, status in results:
-        if status.startswith("ERROR"):
-            nerr += 1
+        nerr += status.startswith("ERROR")
+        ndef += status.startswith("deferred")
         print(f"{dt.datetime.now():%Y-%m-%d %H:%M:%S} {sdate}: {status}", flush=True)
-    print(f"finished, {nerr} errors", flush=True)
+    print(f"finished, {nerr} errors, {ndef} deferred", flush=True)
 
 
 if __name__ == "__main__":
